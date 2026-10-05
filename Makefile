@@ -1,11 +1,11 @@
 # Единая точка входа: `make check` — полный прогон всех гейтов.
 
 COMPOSE_DEV := docker compose -f compose.dev.yaml
-COMPOSE_E2E := docker compose -p life-e2e -f deploy/compose.yaml --env-file deploy/e2e.env
+COMPOSE_E2E := docker compose -p life-e2e -f deploy/compose.yaml -f deploy/compose.build.yaml --env-file deploy/e2e.env
 OPENAPI_TMP := frontend/node_modules/.tmp
 
 .PHONY: install db dev-backend dev-frontend admin-invite api-client version stand stand-down \
-        check check-version check-backend check-api-client check-frontend e2e clean
+        check check-version check-backend check-api-client check-frontend e2e check-deploy clean
 
 install: ## Поставить зависимости бэкенда и фронтенда
 	cd backend && uv sync
@@ -34,7 +34,7 @@ version: ## Поднять версию: make version V=0.1.0
 	cd backend && uv version $(V)
 	cd frontend && npm pkg set version=$(V)
 
-check: check-version check-backend check-api-client check-frontend e2e ## Полный прогон
+check: check-version check-backend check-api-client check-frontend e2e check-deploy ## Полный прогон
 
 check-version:
 	cd backend && uv run python ../scripts/check_version.py
@@ -66,6 +66,9 @@ stand-down: ## Погасить стенд вместе с его данными
 
 e2e: stand ## Сквозной смоук против собранного стенда
 	cd frontend && pnpm e2e; status=$$?; cd .. && $(COMPOSE_E2E) down -v; exit $$status
+
+check-deploy: ## Серверные скрипты на Ubuntu 24.04: установка, бэкап, обновление, восстановление
+	deploy/test/run.sh
 
 clean: ## Убрать всё, что оставил прогон
 	-$(COMPOSE_E2E) down -v

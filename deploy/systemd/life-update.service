@@ -1,0 +1,9 @@
+[Unit]
+Description=project_life: обновление на новые образы
+Wants=network-online.target
+After=network-online.target docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/life/bin/life-update

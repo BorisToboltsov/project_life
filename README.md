@@ -5,7 +5,7 @@
 приглашениям, данные каждого пользователя закрыты от остальных.
 
 **Состояние:** готовы вход по приглашениям, профиль и замеры тела — вес, шея, талия,
-бёдра (фазы 1–2); выкладка на сервер ждёт сервера. Что будет дальше — в [docs/ROADMAP.md](docs/ROADMAP.md).
+бёдра (фазы 1–2); выкладка на свой сервер описана в [docs/INSTALL.md](docs/INSTALL.md). Что будет дальше — в [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Что запланировано
 
@@ -29,6 +29,7 @@ make admin-invite    # ссылка, по которой регистрируе�
 ## Документация
 
 - [docs/GUIDE.md](docs/GUIDE.md) — руководство пользователя и администратора.
+- [docs/INSTALL.md](docs/INSTALL.md) — установка на сервер, обновление, бэкапы.
 - [docs/ROADMAP.md](docs/ROADMAP.md) — фазы и их состояние.
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — как всё устроено.
 - [docs/INVARIANTS.md](docs/INVARIANTS.md) — контракты кодовой базы.

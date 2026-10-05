@@ -86,3 +86,43 @@ jobs:
           name: playwright-report
           path: frontend/playwright-report
           retention-days: 7
+
+  deploy-check:
+    name: Скрипты выкладки
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: make check-deploy
+
+  publish:
+    name: Публикация образов
+    # Образы выходят только из main и только после всех гейтов. Сервер забирает их сам
+    # (docs/adr/0005-deployment.md): доступа к серверу у GitHub нет.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [backend, frontend, contract, e2e, deploy-check]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      REGISTRY: ghcr.io/boristoboltsov
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Вход в реестр
+        run: echo "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+      - name: Сборка и публикация
+        run: |
+          version="$(sed -n 's/^version = "\(.*\)"/\1/p' backend/pyproject.toml | head -n 1)"
+          # latest — то, что ставит сервер; тег с версией и коммитом — для отката.
+          tag="$version-${GITHUB_SHA::7}"
+          for part in backend web; do
+            context="$([ "$part" = web ] && echo frontend || echo backend)"
+            image="$REGISTRY/project_life-$part"
+            docker build \
+              --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
+              --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+              --label "org.opencontainers.image.version=$version" \
+              --tag "$image:$tag" --tag "$image:latest" "$context"
+            docker push --all-tags "$image"
+          done

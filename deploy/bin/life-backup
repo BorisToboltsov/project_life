@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Бэкап базы: pg_dump → gzip → шифрование age открытым ключом из .env.
+# Закрытого ключа на сервере нет, поэтому прочитать бэкап может только его владелец.
+# Запускается таймером life-backup.timer, перед каждым обновлением и вручную:
+#   /opt/life/bin/life-backup [метка]
+set -euo pipefail
+
+LIFE_HOME="${LIFE_HOME:-/opt/life}"
+cd "$LIFE_HOME"
+label="${1:-manual}"
+
+setting() { sed -n "s/^$1=//p" .env | tail -n 1; }
+
+recipient="$(setting BACKUP_RECIPIENT)"
+keep_days="$(setting BACKUP_KEEP_DAYS)"
+remote="$(setting BACKUP_REMOTE)"
+
+if [ -z "$recipient" ]; then
+  echo "life-backup: в .env не задан BACKUP_RECIPIENT — нешифрованный бэкап не делается" >&2
+  exit 1
+fi
+
+umask 077
+mkdir -p backups
+target="backups/life-$(date -u +%Y%m%dT%H%M%SZ)-$label.sql.gz.age"
+trap 'rm -f "$target.part"' EXIT
+
+# --clean --if-exists: дамп сам удаляет прежние объекты, поэтому восстанавливается одной командой.
+docker compose --progress quiet --env-file .env -f compose.yaml exec -T db \
+  pg_dump --username life --dbname life --no-owner --clean --if-exists \
+  | gzip \
+  | age --recipient "$recipient" --output "$target.part"
+mv "$target.part" "$target"
+
+find backups -name 'life-*.sql.gz.age' -mtime "+${keep_days:-30}" -delete
+
+if [ -n "$remote" ]; then
+  rclone copy "$target" "$remote"
+fi
+
+echo "$LIFE_HOME/$target"
