@@ -10,7 +10,7 @@ def test_test_environment_does_not_pool_connections() -> None:
 
 
 def test_other_environments_pool_connections(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(db, "get_settings", lambda: Settings(environment="prod"))
+    monkeypatch.setattr(db, "get_settings", lambda: Settings(environment="dev"))
 
     engine = db.create_engine()
 

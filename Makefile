@@ -4,7 +4,7 @@ COMPOSE_DEV := docker compose -f compose.dev.yaml
 COMPOSE_E2E := docker compose -p life-e2e -f deploy/compose.yaml --env-file deploy/e2e.env
 OPENAPI_TMP := frontend/node_modules/.tmp
 
-.PHONY: install db dev-backend dev-frontend api-client version stand stand-down \
+.PHONY: install db dev-backend dev-frontend admin-invite api-client version stand stand-down \
         check check-version check-backend check-api-client check-frontend e2e clean
 
 install: ## Поставить зависимости бэкенда и фронтенда
@@ -17,6 +17,9 @@ db: ## Поднять базу для разработки и тестов
 
 dev-backend: db ## Бэкенд с автоперезагрузкой на :8000
 	cd backend && uv run alembic upgrade head && uv run uvicorn app.main:app --reload
+
+admin-invite: db ## Ссылка-приглашение для первого администратора (база разработки)
+	cd backend && uv run alembic upgrade head && uv run python -m app.cli invite --admin
 
 dev-frontend: ## Фронтенд на :5173, /api проксируется на бэкенд
 	cd frontend && pnpm dev

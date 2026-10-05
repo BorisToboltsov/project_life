@@ -8,6 +8,8 @@ export default defineConfig({
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : 'list',
   use: {
     baseURL: process.env.E2E_BASE_URL ?? 'http://localhost:8080',
+    locale: 'ru-RU',
+    timezoneId: 'Europe/Moscow',
     trace: 'retain-on-failure',
   },
   projects: [
