@@ -264,6 +264,81 @@ export interface paths {
         patch: operations["update_profile_api_me_patch"];
         trace?: never;
     };
+    "/api/measurements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Measurements
+         * @description История показателя, новые записи первыми; период — по местной дате, включительно.
+         */
+        get: operations["list_measurements_api_measurements_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/measurements/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Summarize Measurements */
+        get: operations["summarize_measurements_api_measurements_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/measurements/{measurement_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Save Measurement
+         * @description Создаёт запись или заменяет свою же: повтор запроса не плодит дубли (ADR 0002).
+         */
+        put: operations["save_measurement_api_measurements__measurement_id__put"];
+        post?: never;
+        /** Delete Measurement */
+        delete: operations["delete_measurement_api_measurements__measurement_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/metric-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Metric Types */
+        get: operations["list_metric_types_api_metric_types_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -386,6 +461,72 @@ export interface components {
             /** Password */
             password: string;
         };
+        /** MeasurementIn */
+        MeasurementIn: {
+            /**
+             * Local Date
+             * Format: date
+             */
+            local_date: string;
+            /**
+             * Measured At
+             * Format: date-time
+             */
+            measured_at: string;
+            metric: components["schemas"]["Metric"];
+            unit: components["schemas"]["Unit"];
+            /** Value */
+            value: number | string;
+        };
+        /** MeasurementOut */
+        MeasurementOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Local Date
+             * Format: date
+             */
+            local_date: string;
+            /**
+             * Measured At
+             * Format: date-time
+             */
+            measured_at: string;
+            metric: components["schemas"]["Metric"];
+            original_unit: components["schemas"]["Unit"];
+            /** Original Value */
+            original_value: number;
+            unit: components["schemas"]["Unit"];
+            /** Value */
+            value: number;
+        };
+        /**
+         * Metric
+         * @enum {string}
+         */
+        Metric: "weight" | "neck" | "waist" | "hips";
+        /**
+         * MetricSummary
+         * @description Последнее измерение показателя и предыдущее — для сравнения.
+         */
+        MetricSummary: {
+            latest: components["schemas"]["MeasurementOut"] | null;
+            metric: components["schemas"]["Metric"];
+            previous: components["schemas"]["MeasurementOut"] | null;
+        };
+        /** MetricTypeOut */
+        MetricTypeOut: {
+            code: components["schemas"]["Metric"];
+            /** Max Value */
+            max_value: number;
+            /** Min Value */
+            min_value: number;
+            quantity: components["schemas"]["Quantity"];
+            unit: components["schemas"]["Unit"];
+        };
         /** PasswordChangeIn */
         PasswordChangeIn: {
             /** Current Password */
@@ -437,6 +578,11 @@ export interface components {
             timezone?: string | null;
             unit_system?: components["schemas"]["UnitSystem"] | null;
         };
+        /**
+         * Quantity
+         * @enum {string}
+         */
+        Quantity: "mass" | "length";
         /** RegisterIn */
         RegisterIn: {
             /**
@@ -482,6 +628,11 @@ export interface components {
             /** Token */
             token: string;
         };
+        /**
+         * Unit
+         * @enum {string}
+         */
+        Unit: "kg" | "lb" | "cm" | "in";
         /**
          * UnitSystem
          * @enum {string}
@@ -1239,6 +1390,215 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_measurements_api_measurements_get: {
+        parameters: {
+            query: {
+                metric: components["schemas"]["Metric"];
+                from?: string | null;
+                to?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeasurementOut"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    summarize_measurements_api_measurements_summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricSummary"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    save_measurement_api_measurements__measurement_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                measurement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MeasurementIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeasurementOut"];
+                };
+            };
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeasurementOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_measurement_api_measurements__measurement_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                measurement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_metric_types_api_metric_types_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricTypeOut"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };

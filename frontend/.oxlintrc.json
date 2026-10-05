@@ -64,7 +64,7 @@
   },
   "overrides": [
     {
-      "files": ["**/*.test.ts", "**/*.test.tsx", "e2e/**"],
+      "files": ["**/*.test.ts", "**/*.test.tsx", "src/test/**", "e2e/**"],
       "rules": {
         "i18next/no-literal-string": "off"
       }

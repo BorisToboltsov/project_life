@@ -6,6 +6,10 @@ import i18n from '@/i18n'
 
 import { resetApp } from './app'
 
+vi.mock('@/components/chart/LineChart', async () => ({
+  default: (await import('./chartStub')).ChartStub,
+}))
+
 // jsdom не умеет прокручивать окно, а роутер делает это при каждом переходе.
 window.scrollTo = () => {}
 

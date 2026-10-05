@@ -39,19 +39,33 @@ export function FieldMessage({
   return null
 }
 
-export function TextField({ label, error, hint, ...props }: ComponentProps<'input'> & FieldChrome) {
+export function TextField({
+  label,
+  error,
+  hint,
+  suffix,
+  ...props
+}: ComponentProps<'input'> &
+  FieldChrome & { /** Подпись внутри поля справа, например единица. */ suffix?: string }) {
   const id = useId()
   const described = error || hint ? `${id}-message` : undefined
   return (
     <div className="grid gap-1.5">
       <Label htmlFor={id}>{label}</Label>
-      <Input
-        id={id}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={described}
-        className="h-11 text-base"
-        {...props}
-      />
+      <div className="relative">
+        <Input
+          id={id}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={described}
+          className={suffix ? 'h-11 pr-16 text-base' : 'h-11 text-base'}
+          {...props}
+        />
+        {suffix && (
+          <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm text-muted-foreground">
+            {suffix}
+          </span>
+        )}
+      </div>
       <FieldMessage id={`${id}-message`} error={error} hint={hint} />
     </div>
   )

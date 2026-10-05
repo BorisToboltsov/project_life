@@ -3,17 +3,12 @@ import { z } from 'zod'
 import type { Schemas } from '@/api/client'
 import type { User } from '@/auth/session'
 import { message } from '@/components/form/validation'
-import { isRealDate, localDateToIso } from '@/lib/dates'
+import { isRealDate, today } from '@/lib/dates'
 import { cmToFeetInches, feetInchesToCm } from '@/lib/units'
 
 export type HeightMode = User['unit_system']
 
 export const BIRTH_DATE_MIN = '1900-01-01'
-
-/** Сегодняшняя дата пользователя в виде `ГГГГ-ММ-ДД`. */
-export function today(): string {
-  return localDateToIso(new Date())
-}
 
 const HEIGHT_MIN_CM = 30
 const HEIGHT_MAX_CM = 275

@@ -10,6 +10,7 @@ import { FormError, SelectField, TextField } from '@/components/form/fields'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { LANGUAGE_NAMES, LANGUAGES } from '@/i18n'
+import { today } from '@/lib/dates'
 import { attempt, type ErrorKey } from '@/lib/errors'
 
 import {
@@ -18,7 +19,6 @@ import {
   profileDefaults,
   profileSchema,
   type ProfileValues,
-  today,
 } from './profileValues'
 
 function timezones(current: string): string[] {

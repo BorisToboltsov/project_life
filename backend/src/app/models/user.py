@@ -3,10 +3,11 @@ from decimal import Decimal
 from enum import StrEnum
 from uuid import UUID, uuid7
 
-from sqlalchemy import CheckConstraint, Enum, Numeric, String, func
+from sqlalchemy import Numeric, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
+from app.models.columns import choice, one_of
 
 
 class Role(StrEnum):
@@ -27,21 +28,6 @@ class UnitSystem(StrEnum):
 class Sex(StrEnum):
     MALE = "male"
     FEMALE = "female"
-
-
-def _values(enum: type[StrEnum]) -> list[str]:
-    return [member.value for member in enum]
-
-
-def choice(enum: type[StrEnum]) -> Enum:
-    """Перечисление как varchar: добавить значение — миграция без ALTER TYPE."""
-    return Enum(enum, native_enum=False, length=16, values_callable=_values)
-
-
-def one_of(column: str, enum: type[StrEnum]) -> CheckConstraint:
-    """CHECK для колонки-перечисления: база не примет значение мимо приложения."""
-    allowed = ", ".join(f"'{value}'" for value in _values(enum))
-    return CheckConstraint(f"{column} IN ({allowed})", name=column)
 
 
 class User(Base):

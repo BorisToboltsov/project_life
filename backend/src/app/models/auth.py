@@ -5,7 +5,8 @@ from sqlalchemy import BigInteger, ForeignKey, Identity, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
-from app.models.user import Role, choice, one_of
+from app.models.columns import choice, one_of
+from app.models.user import Role
 
 # Токены хранятся только как SHA-256: утечка базы не даёт готовых ссылок и сессий.
 TOKEN_HASH = String(64)

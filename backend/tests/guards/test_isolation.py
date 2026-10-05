@@ -10,6 +10,9 @@
 import re
 import uuid
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from typing import Any
 
 import pytest
 from fastapi.routing import APIRoute, iter_route_contexts
@@ -33,10 +36,50 @@ PUBLIC: set[Route] = {
     ("POST", "/api/auth/password-reset"),
 }
 
-# Сценарий владения: создаёт запись от имени владельца и возвращает путь к ней.
-# Гейт обращается по этому пути от имени другого пользователя и ждёт 404.
-OwnershipCase = Callable[[AsyncClient, Account], Awaitable[str]]
-OWNERSHIP: dict[Route, OwnershipCase] = {}
+
+@dataclass(frozen=True)
+class Probe:
+    """Запрос к записи владельца, который гейт повторит от имени другого пользователя."""
+
+    path: str
+    json: dict[str, Any] | None = None
+
+
+# Сценарий владения: создаёт запись от имени владельца и описывает запрос к ней.
+# Гейт выполняет этот запрос от имени другого пользователя и ждёт 404.
+OwnershipCase = Callable[[AsyncClient, Account], Awaitable[Probe]]
+
+
+def _measurement_body() -> dict[str, Any]:
+    now = datetime.now(UTC)
+    return {
+        "metric": "weight",
+        "value": 72.4,
+        "unit": "kg",
+        "measured_at": now.isoformat(),
+        "local_date": now.date().isoformat(),
+    }
+
+
+async def _own_measurement(client: AsyncClient, owner: Account) -> str:
+    path = f"/api/measurements/{uuid.uuid7()}"
+    created = await client.put(path, headers=owner.headers, json=_measurement_body())
+    assert created.status_code == 201
+    return path
+
+
+async def _replace_measurement(client: AsyncClient, owner: Account) -> Probe:
+    return Probe(await _own_measurement(client, owner), _measurement_body())
+
+
+async def _delete_measurement(client: AsyncClient, owner: Account) -> Probe:
+    return Probe(await _own_measurement(client, owner))
+
+
+OWNERSHIP: dict[Route, OwnershipCase] = {
+    ("PUT", "/api/measurements/{measurement_id}"): _replace_measurement,
+    ("DELETE", "/api/measurements/{measurement_id}"): _delete_measurement,
+}
 
 
 def all_routes() -> list[Route]:
@@ -110,8 +153,25 @@ async def test_foreign_record_looks_missing(
     client: AsyncClient, make_user: MakeUser, method: str, path: str
 ) -> None:
     owner, stranger = await make_user(), await make_user()
-    record_path = await OWNERSHIP[method, path](client, owner)
+    probe = await OWNERSHIP[method, path](client, owner)
 
-    response = await client.request(method, record_path, headers=stranger.headers)
+    response = await client.request(method, probe.path, headers=stranger.headers, json=probe.json)
 
     assert response.status_code == 404, f"{method} {path} отдаёт чужую запись"
+    assert response.json() == {"detail": "not_found"}
+
+
+@pytest.mark.parametrize(("method", "path"), OWNED)
+async def test_record_id_must_be_a_client_uuid7(
+    client: AsyncClient, make_user: MakeUser, method: str, path: str
+) -> None:
+    """Инвариант I8: ключ пользовательской записи — UUIDv7 от клиента, другой не принимается."""
+    owner = await make_user()
+    probe = await OWNERSHIP[method, path](client, owner)
+    with_other_version = re.sub(r"[^/]+$", str(uuid.uuid4()), probe.path)
+
+    response = await client.request(
+        method, with_other_version, headers=owner.headers, json=probe.json
+    )
+
+    assert response.status_code == 422, f"{method} {path} принимает ключ не версии 7"

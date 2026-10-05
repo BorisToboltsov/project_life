@@ -8,12 +8,16 @@ import {
   type RouterHistory,
 } from '@tanstack/react-router'
 
+import { type Metric, METRICS } from '@/api/measurements'
 import { session, type SessionState } from '@/auth/session'
 import { AdminPage } from '@/pages/admin/AdminPage'
 import { InvitePage } from '@/pages/auth/InvitePage'
 import { LoginPage } from '@/pages/auth/LoginPage'
 import { ResetPage } from '@/pages/auth/ResetPage'
 import { HomePage } from '@/pages/HomePage'
+import { MeasurementEditPage } from '@/pages/measurements/MeasurementEditPage'
+import { MeasurementEntryPage } from '@/pages/measurements/MeasurementEntryPage'
+import { MeasurementsPage } from '@/pages/measurements/MeasurementsPage'
 import { ProfilePage } from '@/pages/profile/ProfilePage'
 
 import { AppShell } from './AppShell'
@@ -45,6 +49,26 @@ const appRoute = createRoute({
   },
 })
 
+/** Показатель из адреса; незнакомое значение уводит на вес. */
+function metricParam(value: string): Metric {
+  if (METRICS.includes(value as Metric)) return value as Metric
+  throw redirect({ to: '/measurements/$metric', params: { metric: 'weight' } })
+}
+
+const measurementsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/measurements/$metric',
+  params: { parse: ({ metric }) => ({ metric: metricParam(metric) }) },
+  component: MeasurementsPage,
+})
+
+const measurementEditRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/measurements/$metric/$id',
+  params: { parse: ({ metric, id }) => ({ metric: metricParam(metric), id }) },
+  component: MeasurementEditPage,
+})
+
 const routeTree = rootRoute.addChildren([
   guestRoute.addChildren([
     createRoute({ getParentRoute: () => guestRoute, path: '/login', component: LoginPage }),
@@ -53,6 +77,20 @@ const routeTree = rootRoute.addChildren([
   ]),
   appRoute.addChildren([
     createRoute({ getParentRoute: () => appRoute, path: '/', component: HomePage }),
+    createRoute({
+      getParentRoute: () => appRoute,
+      path: '/measurements',
+      beforeLoad: () => {
+        throw redirect({ to: '/measurements/$metric', params: { metric: 'weight' } })
+      },
+    }),
+    createRoute({
+      getParentRoute: () => appRoute,
+      path: '/measurements/new',
+      component: MeasurementEntryPage,
+    }),
+    measurementsRoute,
+    measurementEditRoute,
     createRoute({ getParentRoute: () => appRoute, path: '/profile', component: ProfilePage }),
     createRoute({
       getParentRoute: () => appRoute,

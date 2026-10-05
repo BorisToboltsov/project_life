@@ -1,5 +1,5 @@
 import { Link, type LinkProps, Outlet } from '@tanstack/react-router'
-import { House, type LucideIcon, ShieldCheck, UserRound } from 'lucide-react'
+import { House, type LucideIcon, Ruler, ShieldCheck, UserRound } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { useUser } from '@/auth/useSession'
@@ -23,6 +23,7 @@ export function AppShell() {
 
   const items: NavItem[] = [
     { to: '/', icon: House, label: 'nav.home' },
+    { to: '/measurements', icon: Ruler, label: 'nav.measurements' },
     { to: '/profile', icon: UserRound, label: 'nav.profile' },
     ...(user.role === 'admin'
       ? [{ to: '/admin', icon: ShieldCheck, label: 'nav.admin' } satisfies NavItem]
@@ -41,7 +42,8 @@ export function AppShell() {
             <li key={to} className="flex-1 md:flex-none">
               <Link
                 to={to}
-                activeOptions={{ exact: true }}
+                // Главная активна только на своём адресе, разделы — и на вложенных экранах.
+                activeOptions={{ exact: to === '/' }}
                 className="flex min-h-14 flex-col items-center justify-center gap-1 text-xs md:min-h-10 md:flex-row md:justify-start md:gap-3 md:rounded-lg md:px-3 md:text-sm"
                 activeProps={{ className: 'font-medium text-primary md:bg-muted' }}
                 inactiveProps={{ className: 'text-muted-foreground' }}
