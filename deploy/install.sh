@@ -67,16 +67,21 @@ chmod 600 "$LIFE_HOME/.env"
 
 "$LIFE_HOME/bin/life-update"
 
-# Таймеры — после первого запуска: только что включённый таймер срабатывает сразу.
+# Таймер systemd один — ежедневный бэкап. Приложение обновляет администратор командой
+# life-update; таймер автообновления из прежних версий убирается.
 if command -v systemctl >/dev/null && [ -d /run/systemd/system ]; then
-  install -m 644 "$source_dir"/systemd/life-*.service "$source_dir"/systemd/life-*.timer /etc/systemd/system/
+  systemctl disable --now life-update.timer >/dev/null 2>&1 || true
+  rm -f /etc/systemd/system/life-update.timer /etc/systemd/system/life-update.service
+  install -m 644 "$source_dir"/systemd/life-backup.service "$source_dir"/systemd/life-backup.timer /etc/systemd/system/
   systemctl daemon-reload
-  systemctl enable --now life-update.timer life-backup.timer
+  systemctl enable --now life-backup.timer
 fi
 
 cat <<DONE
 
 Готово. Приложение: $(sed -n 's/^PUBLIC_URL=//p' "$LIFE_HOME/.env")
+Обновить на новую версию:
+  $LIFE_HOME/bin/life-update
 Ссылка для первого администратора:
   cd $LIFE_HOME && docker compose exec backend python -m app.cli invite --admin
 DONE

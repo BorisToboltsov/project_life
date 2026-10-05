@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
-# Обновление приложения: если в реестре появились новые образы, делает бэкап базы и
-# перезапускает контейнеры на них. Меняются только образы — compose.yaml и эти скрипты
-# обновляются вручную, через deploy/install.sh.
-# Запускается таймером life-update.timer и вручную: /opt/life/bin/life-update
+# Обновление приложения — запускает администратор: /opt/life/bin/life-update
+# Скачивает образы; если они новее работающих, делает бэкап базы и перезапускает
+# контейнеры на них. Само по себе приложение не обновляется.
+# Меняются только образы — compose.yaml и эти скрипты обновляет deploy/install.sh.
 set -euo pipefail
 
 LIFE_HOME="${LIFE_HOME:-/opt/life}"
 cd "$LIFE_HOME"
 
-# --progress quiet: таймер запускает скрипт каждые пять минут, журналу не нужен ход загрузки.
+# --progress quiet: вывод скрипта — его собственные строки, без хода загрузки образов.
 compose() { docker compose --progress quiet --env-file .env -f compose.yaml "$@"; }
 log() { printf '%s life-update: %s\n' "$(date -u +%FT%TZ)" "$*"; }
 
-# Одновременно работает один экземпляр: таймер и ручной запуск не должны поднимать
-# контейнеры наперегонки. Второй ждёт первого и затем обычно не находит, что обновлять.
+# Одновременно работает один экземпляр: два запуска не должны поднимать контейнеры
+# наперегонки. Второй ждёт первого и затем обычно не находит, что обновлять.
 exec 9>"$LIFE_HOME/.update.lock"
 flock 9
 
@@ -27,7 +27,10 @@ running="$(compose ps --quiet | while read -r container; do
   docker inspect --format '{{.Image}}' "$container"
 done | sort -u)"
 
+version() { compose exec -T backend python -c 'import app; print(app.__version__)'; }
+
 if [ -n "$running" ] && [ -z "$(comm -23 <(printf '%s\n' "$wanted") <(printf '%s\n' "$running"))" ]; then
+  log "обновлять нечего, работает версия $(version)"
   exit 0
 fi
 
@@ -41,4 +44,4 @@ fi
 log "запускаю контейнеры"
 compose up --detach --wait --remove-orphans
 docker image prune --force >/dev/null
-log "работает версия $(compose exec -T backend python -c 'import app; print(app.__version__)')"
+log "работает версия $(version)"

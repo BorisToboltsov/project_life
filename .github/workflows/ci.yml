@@ -96,8 +96,9 @@ jobs:
 
   publish:
     name: Публикация образов
-    # Образы выходят только из main и только после всех гейтов. Сервер забирает их сам
-    # (docs/adr/0005-deployment.md): доступа к серверу у GitHub нет.
+    # Образы выходят только из main и только после всех гейтов. На сервер их ставит
+    # администратор командой life-update (docs/adr/0005-deployment.md): публикация сама
+    # ничего не обновляет, доступа к серверу у GitHub нет.
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [backend, frontend, contract, e2e, deploy-check]
     runs-on: ubuntu-latest
