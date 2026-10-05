@@ -69,12 +69,18 @@ sed -i 's/^BACKUP_RECIPIENT=.*/BACKUP_RECIPIENT=/' .env
 /opt/life/bin/life-backup manual 2>/dev/null && fail "сделан нешифрованный бэкап"
 sed -i "s/^BACKUP_RECIPIENT=.*/BACKUP_RECIPIENT=$recipient/" .env
 
-step "новый образ в реестре: бэкап, затем обновление, данные на месте"
+step "новый образ в реестре: бэкап, затем обновление, данные на месте — даже при двух запусках разом"
 docker tag "$REGISTRY/life-backend:next" "$REGISTRY/life-backend:latest"
 docker push --quiet "$REGISTRY/life-backend:latest" >/dev/null
-/opt/life/bin/life-update
+# Два запуска разом — как таймер и администратор одновременно: работает один, второй ждёт.
+/opt/life/bin/life-update &
+first=$!
+/opt/life/bin/life-update &
+second=$!
+wait "$first" || fail "первый из одновременных запусков завершился ошибкой"
+wait "$second" || fail "второй из одновременных запусков завершился ошибкой"
 [ "$(image_of backend)" != "$before" ] || fail "контейнер остался на старом образе"
-[ "$(backups pre-update)" = 1 ] || fail "перед обновлением не сделан бэкап"
+[ "$(backups pre-update)" = 1 ] || fail "перед обновлением должен быть ровно один бэкап"
 curl --fail --silent "$APP/api/health" | grep -q '"status":"ok"' || fail "после обновления приложение не отвечает"
 [ "$(users_in docker compose exec -T db)" = 1 ] || fail "данные потеряны при обновлении"
 

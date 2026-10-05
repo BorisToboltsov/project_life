@@ -65,13 +65,14 @@ ENV
 fi
 chmod 600 "$LIFE_HOME/.env"
 
+"$LIFE_HOME/bin/life-update"
+
+# Таймеры — после первого запуска: только что включённый таймер срабатывает сразу.
 if command -v systemctl >/dev/null && [ -d /run/systemd/system ]; then
   install -m 644 "$source_dir"/systemd/life-*.service "$source_dir"/systemd/life-*.timer /etc/systemd/system/
   systemctl daemon-reload
   systemctl enable --now life-update.timer life-backup.timer
 fi
-
-"$LIFE_HOME/bin/life-update"
 
 cat <<DONE
 

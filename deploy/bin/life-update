@@ -12,6 +12,11 @@ cd "$LIFE_HOME"
 compose() { docker compose --progress quiet --env-file .env -f compose.yaml "$@"; }
 log() { printf '%s life-update: %s\n' "$(date -u +%FT%TZ)" "$*"; }
 
+# Одновременно работает один экземпляр: таймер и ручной запуск не должны поднимать
+# контейнеры наперегонки. Второй ждёт первого и затем обычно не находит, что обновлять.
+exec 9>"$LIFE_HOME/.update.lock"
+flock 9
+
 compose pull
 
 # Какие образы нужны по compose.yaml и на каких сейчас работают контейнеры.
