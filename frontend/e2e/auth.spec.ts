@@ -1,37 +1,6 @@
-import { execSync } from 'node:child_process'
+import { expect, test } from '@playwright/test'
 
-import { expect, type Page, test } from '@playwright/test'
-
-const PASSWORD = 'correct horse battery'
-const COMPOSE = 'docker compose -p life-e2e -f ../deploy/compose.yaml --env-file ../deploy/e2e.env'
-
-/** Первого администратора заводят из командной строки сервера — так же, как на живом стенде. */
-function adminInviteLink(): string {
-  return execSync(`${COMPOSE} exec -T backend python -m app.cli invite --admin`).toString().trim()
-}
-
-async function register(page: Page, link: string, name: string, email: string) {
-  await page.goto(link)
-  await page.getByLabel('Как к вам обращаться').fill(name)
-  await page.getByLabel('Электронная почта').fill(email)
-  await page.getByLabel('Пароль').fill(PASSWORD)
-  await page.getByRole('checkbox').check()
-  await page.getByRole('button', { name: 'Зарегистрироваться' }).click()
-  await expect(page.getByRole('heading', { name: `Здравствуйте, ${name}!` })).toBeVisible()
-}
-
-async function login(page: Page, email: string, password = PASSWORD) {
-  await page.goto('/login')
-  await page.getByLabel('Электронная почта').fill(email)
-  await page.getByLabel('Пароль').fill(password)
-  await page.getByRole('button', { name: 'Войти' }).click()
-}
-
-async function logout(page: Page) {
-  await page.getByRole('link', { name: 'Профиль' }).click()
-  await page.getByRole('button', { name: 'Выйти', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Вход' })).toBeVisible()
-}
+import { adminInviteLink, login, logout, PASSWORD, register } from './steps.ts'
 
 test('администратор приглашает пользователя, тот регистрируется и ведёт профиль', async ({
   page,

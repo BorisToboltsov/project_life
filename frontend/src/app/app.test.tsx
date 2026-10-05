@@ -29,7 +29,7 @@ describe('защита маршрутов', () => {
       within(nav)
         .getAllByRole('link')
         .map((link) => link.textContent),
-    ).toEqual(['Главная', 'Профиль'])
+    ).toEqual(['Главная', 'Замеры', 'Профиль'])
   })
 
   it('администратору показывает управление', async () => {

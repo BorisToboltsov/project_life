@@ -4,10 +4,13 @@ import {
   displayToIso,
   formatDateInput,
   formatDateTime,
+  isoToDayMonth,
   isoToDisplay,
   isoToLocalDate,
   isRealDate,
   localDateToIso,
+  shiftDays,
+  today,
 } from './dates'
 
 describe('formatDateTime', () => {
@@ -107,5 +110,22 @@ describe('дата для календаря', () => {
 
   it('непонятная строка — нет даты', () => {
     expect(isoToLocalDate('17/05/1990')).toBeUndefined()
+  })
+})
+
+describe('вспомогательные даты', () => {
+  it('сегодня — местная дата устройства', () => {
+    expect(today()).toBe(localDateToIso(new Date()))
+  })
+
+  it('подпись оси — день/месяц', () => {
+    expect(isoToDayMonth('2026-10-05')).toBe('05/10')
+  })
+
+  it('сдвиг на дни переходит через границы месяца и года', () => {
+    expect(shiftDays('2026-10-05', -30)).toBe('2026-09-05')
+    expect(shiftDays('2026-01-01', -1)).toBe('2025-12-31')
+    expect(shiftDays('2024-02-28', 2)).toBe('2024-03-01')
+    expect(shiftDays('не дата', 5)).toBe('не дата')
   })
 })

@@ -1,15 +1,11 @@
 // Даты в интерфейсе всегда идут в порядке «день, месяц, год» (инвариант I7) — на любом
 // языке и независимо от настроек браузера.
 
-/**
- * Локаль форматирования для языка интерфейса. Английский — британский: в американском
- * месяц стоит перед днём, а время 12-часовое.
- */
-const LOCALES: Record<string, string> = { ru: 'ru-RU', en: 'en-GB' }
+import { intlLocale } from './locale'
 
 /** Дата и время в языке интерфейса и часовом поясе пользователя (ADR 0003). */
 export function formatDateTime(iso: string, language: string, timeZone: string): string {
-  return new Intl.DateTimeFormat(LOCALES[language] ?? language, {
+  return new Intl.DateTimeFormat(intlLocale(language), {
     dateStyle: 'medium',
     timeStyle: 'short',
     timeZone,
@@ -83,4 +79,22 @@ export function localDateToIso(date: Date): string {
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
+}
+
+/** Сегодняшняя дата пользователя в виде `ГГГГ-ММ-ДД`. */
+export function today(): string {
+  return localDateToIso(new Date())
+}
+
+/** `ГГГГ-ММ-ДД` → `ДД/ММ` — подпись на оси графика. */
+export function isoToDayMonth(iso: string): string {
+  return isoToDisplay(iso).slice(0, 5)
+}
+
+/** Дата, отстоящая от `iso` на `days` дней (отрицательные — в прошлое). */
+export function shiftDays(iso: string, days: number): string {
+  const date = isoToLocalDate(iso)
+  if (!date) return iso
+  date.setDate(date.getDate() + days)
+  return localDateToIso(date)
 }

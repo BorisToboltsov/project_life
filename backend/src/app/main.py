@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, FastAPI
 
 from app import __version__
-from app.api import admin, auth, health, me
+from app.api import admin, auth, health, me, measurements
 from app.api.deps import current_user, require_admin
 from app.config import get_settings
 from app.errors import error_responses
@@ -29,6 +29,7 @@ def create_app() -> FastAPI:
     )
     private.include_router(auth.private)
     private.include_router(me.router)
+    private.include_router(measurements.router)
 
     admin_only = APIRouter(
         prefix="/api", dependencies=[Depends(require_admin)], responses=error_responses(401, 403)

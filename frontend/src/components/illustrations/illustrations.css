@@ -1,0 +1,232 @@
+/* Анимированные подсказки «как измерять». Рисунок — контуром цвета текста, лента и стрелка
+   весов — цветом бренда. Без анимации (prefers-reduced-motion) виден итоговый кадр:
+   лента намотана, человек стоит на весах. */
+
+.illus {
+  color: var(--muted-foreground, #737373);
+  --illus-fill: var(--muted, #f5f5f5);
+  --illus-paper: var(--background, #fff);
+  --illus-accent: var(--brand, #0f766e);
+  display: block;
+  overflow: visible;
+}
+
+.illus-body {
+  fill: var(--illus-fill);
+  stroke: currentColor;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.illus-line {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.illus-paper {
+  fill: var(--illus-paper);
+  stroke: currentColor;
+  stroke-width: 2;
+}
+
+/* Лента: полоса цвета бренда, поверх неё — штрихи-деления. Длина пути нормирована
+   (pathLength="1"), поэтому «намотка» — это сдвиг штриха от 1 до 0. */
+.illus-tape {
+  fill: none;
+  stroke: var(--illus-accent);
+  stroke-width: 8;
+  stroke-linecap: butt;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+  animation: illus-wrap 4.5s ease-in-out infinite;
+}
+
+.illus-ticks {
+  fill: none;
+  stroke: var(--illus-paper);
+  stroke-width: 3.5;
+  stroke-dasharray: 0.012 0.05;
+  opacity: 0.9;
+  animation: illus-ticks 4.5s ease-in-out infinite;
+}
+
+/* Свободный конец ленты: появляется, когда лента сомкнулась. */
+.illus-tab {
+  fill: var(--illus-paper);
+  stroke: var(--illus-accent);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: illus-tab 4.5s ease-in-out infinite;
+}
+
+@keyframes illus-wrap {
+  0%,
+  10% {
+    stroke-dashoffset: 1;
+    opacity: 1;
+  }
+  45%,
+  88% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  96%,
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+}
+
+@keyframes illus-ticks {
+  0%,
+  42% {
+    opacity: 0;
+  }
+  50%,
+  88% {
+    opacity: 0.9;
+  }
+  96%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes illus-tab {
+  0%,
+  43% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+  55%,
+  88% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  96%,
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+
+/* Весы: ступни встают по очереди, платформа чуть проседает, стрелка качается и замирает. */
+.illus-foot {
+  fill: currentColor;
+  fill-opacity: 0.28;
+  stroke: currentColor;
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+  animation: illus-step 5s ease-out infinite;
+}
+
+.illus-foot-second {
+  animation-name: illus-step-second;
+}
+
+.illus-scale {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: illus-press 5s ease-out infinite;
+}
+
+.illus-needle {
+  stroke: var(--illus-accent);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  transform-box: view-box;
+  transform-origin: 60px 33px;
+  transform: rotate(28deg);
+  animation: illus-needle 5s ease-in-out infinite;
+}
+
+@keyframes illus-step {
+  0%,
+  6% {
+    opacity: 0;
+    transform: translateY(26px);
+  }
+  18%,
+  86% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  96%,
+  100% {
+    opacity: 0;
+    transform: translateY(0);
+  }
+}
+
+@keyframes illus-step-second {
+  0%,
+  20% {
+    opacity: 0;
+    transform: translateY(26px);
+  }
+  32%,
+  86% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  96%,
+  100% {
+    opacity: 0;
+    transform: translateY(0);
+  }
+}
+
+@keyframes illus-press {
+  0%,
+  16%,
+  24%,
+  30%,
+  38%,
+  100% {
+    transform: scale(1);
+  }
+  19%,
+  33% {
+    transform: scale(0.975);
+  }
+}
+
+@keyframes illus-needle {
+  0%,
+  32% {
+    transform: rotate(-62deg);
+  }
+  44% {
+    transform: rotate(46deg);
+  }
+  52% {
+    transform: rotate(16deg);
+  }
+  60% {
+    transform: rotate(34deg);
+  }
+  68%,
+  88% {
+    transform: rotate(28deg);
+  }
+  98%,
+  100% {
+    transform: rotate(-62deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .illus * {
+    animation: none !important;
+  }
+}

@@ -3,6 +3,8 @@ import { vi } from 'vitest'
 export interface ApiCall {
   method: string
   path: string
+  /** Параметры строки запроса. */
+  query: Record<string, string>
   body: unknown
   authorization: string | null
 }
@@ -24,7 +26,8 @@ export function sequence(...routes: Route[]): Route {
 }
 
 /**
- * Подменяет fetch таблицей «МЕТОД путь → ответ» и возвращает журнал вызовов.
+ * Подменяет fetch таблицей «МЕТОД путь → ответ» и возвращает журнал вызовов. Путь может
+ * кончаться на `/*` — тогда он подходит к любому продолжению (идентификатор записи).
  * Запрос мимо таблицы получает 404 — тест увидит его как отказ, а не как зависание.
  */
 export function mockApi(routes: Record<string, Route>): ApiCall[] {
@@ -33,14 +36,20 @@ export function mockApi(routes: Record<string, Route>): ApiCall[] {
     'fetch',
     vi.fn(async (request: Request) => {
       const text = await request.text()
+      const url = new URL(request.url)
       const call: ApiCall = {
         method: request.method,
-        path: new URL(request.url).pathname,
+        path: url.pathname,
+        query: Object.fromEntries(url.searchParams),
         body: text ? JSON.parse(text) : undefined,
         authorization: request.headers.get('Authorization'),
       }
       calls.push(call)
-      const route = routes[`${call.method} ${call.path}`]
+      const key = `${call.method} ${call.path}`
+      const wildcard = Object.keys(routes).find(
+        (pattern) => pattern.endsWith('/*') && key.startsWith(pattern.slice(0, -1)),
+      )
+      const route = routes[key] ?? (wildcard ? routes[wildcard] : undefined)
       return route ? route(call) : new Response(null, { status: 404 })
     }),
   )
@@ -48,5 +57,9 @@ export function mockApi(routes: Record<string, Route>): ApiCall[] {
 }
 
 export function callsTo(calls: ApiCall[], route: string): ApiCall[] {
-  return calls.filter((call) => `${call.method} ${call.path}` === route)
+  const prefix = route.endsWith('/*') ? route.slice(0, -1) : null
+  return calls.filter((call) => {
+    const key = `${call.method} ${call.path}`
+    return prefix ? key.startsWith(prefix) : key === route
+  })
 }
