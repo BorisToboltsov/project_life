@@ -48,10 +48,14 @@ curl --fail --silent --output /dev/null "$APP/api/auth/register" \
   || fail "регистрация не прошла"
 [ "$(users_in docker compose exec -T db)" = 1 ] || fail "пользователь не появился в базе"
 
-step "повторный запуск без новых образов ничего не трогает"
+step "автообновления нет: в установке нет таймера, который запускал бы life-update"
+[ -z "$(find /src/deploy/systemd -name '*update*')" ] || fail "в deploy/systemd остался юнит обновления"
+grep -rqE 'enable[^|]*life-update' /src/deploy/install.sh && fail "установщик включает таймер обновления"
+
+step "повторный запуск без новых образов ничего не трогает и говорит об этом"
 before="$(image_of backend)"
 started="$(docker inspect --format '{{.State.StartedAt}}' "$(docker compose ps --quiet backend)")"
-/opt/life/bin/life-update
+/opt/life/bin/life-update | grep -q 'обновлять нечего' || fail "life-update не сообщил, что обновлять нечего"
 [ "$(image_of backend)" = "$before" ] || fail "образ сменился без причины"
 [ "$(docker inspect --format '{{.State.StartedAt}}' "$(docker compose ps --quiet backend)")" = "$started" ] \
   || fail "контейнер перезапущен без причины"
@@ -72,7 +76,7 @@ sed -i "s/^BACKUP_RECIPIENT=.*/BACKUP_RECIPIENT=$recipient/" .env
 step "новый образ в реестре: бэкап, затем обновление, данные на месте — даже при двух запусках разом"
 docker tag "$REGISTRY/life-backend:next" "$REGISTRY/life-backend:latest"
 docker push --quiet "$REGISTRY/life-backend:latest" >/dev/null
-# Два запуска разом — как таймер и администратор одновременно: работает один, второй ждёт.
+# Два запуска разом — например, из двух сеансов: работает один, второй ждёт.
 /opt/life/bin/life-update &
 first=$!
 /opt/life/bin/life-update &

@@ -137,6 +137,6 @@ make stand          # собрать и поднять стенд на http://lo
 make stand-down     # погасить его вместе с данными
 ```
 
-После зелёного CI в `main` образы публикуются в GitHub Container Registry, и сервер
-забирает их сам. Файлы `deploy/` на сервер попадают только через `deploy/install.sh` —
-см. [docs/INSTALL.md](docs/INSTALL.md).
+После зелёного CI в `main` образы публикуются в GitHub Container Registry. На сервер они
+попадают только вручную — командой `life-update`; файлы `deploy/` — через
+`deploy/install.sh`. См. [docs/INSTALL.md](docs/INSTALL.md).
