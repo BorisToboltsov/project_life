@@ -4,8 +4,8 @@
 на компьютере и ставится на телефон как PWA. Рассчитано на семью и друзей: вход по
 приглашениям, данные каждого пользователя закрыты от остальных.
 
-**Состояние:** идёт фаза 0 — каркас разработки. Что будет дальше — в
-[docs/ROADMAP.md](docs/ROADMAP.md).
+**Состояние:** готовы вход по приглашениям и профиль (фаза 1); выкладка на сервер ждёт
+сервера. Что будет дальше — в [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Что запланировано
 
@@ -21,16 +21,20 @@
 make install
 make dev-backend     # в одном терминале
 make dev-frontend    # в другом; приложение — на http://localhost:5173
+make admin-invite    # ссылка, по которой регистрируется первый администратор
 ```
 
 Полный прогон всех проверок — `make check`.
 
 ## Документация
 
+- [docs/GUIDE.md](docs/GUIDE.md) — руководство пользователя и администратора.
 - [docs/ROADMAP.md](docs/ROADMAP.md) — фазы и их состояние.
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — как всё устроено.
 - [docs/INVARIANTS.md](docs/INVARIANTS.md) — контракты кодовой базы.
 - [docs/TESTS.md](docs/TESTS.md) — тесты и гейты.
+- [docs/DESIGN.md](docs/DESIGN.md) — визуальный язык.
+- [SECURITY.md](SECURITY.md) — модель угроз и принятые риски.
 - [docs/adr/](docs/adr/) — принятые решения и их альтернативы.
 - [CHANGELOG.md](CHANGELOG.md) — что менялось по версиям.
 

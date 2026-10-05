@@ -1,8 +1,9 @@
 from collections.abc import AsyncIterator
+from datetime import datetime
 from typing import Annotated
 
 from fastapi import Depends
-from sqlalchemy import MetaData
+from sqlalchemy import DateTime, MetaData
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -26,6 +27,8 @@ NAMING_CONVENTION = {
 
 class Base(DeclarativeBase):
     metadata = MetaData(naming_convention=NAMING_CONVENTION)
+    # Любой момент времени хранится как timestamptz (ADR 0003).
+    type_annotation_map = {datetime: DateTime(timezone=True)}  # noqa: RUF012
 
 
 def create_engine() -> AsyncEngine:

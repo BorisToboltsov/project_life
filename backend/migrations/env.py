@@ -6,12 +6,15 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import NullPool
 
+from app import models
 from app.config import get_settings
 from app.db import Base
 
 if not logging.getLogger().handlers:
     logging.basicConfig(level=logging.INFO, format="%(levelname)-5.5s [%(name)s] %(message)s")
 
+# Модели регистрируются в метаданных при импорте пакета app.models.
+assert models.User.metadata is Base.metadata  # noqa: S101
 target_metadata = Base.metadata
 
 

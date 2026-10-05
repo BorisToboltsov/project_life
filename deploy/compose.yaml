@@ -8,6 +8,8 @@ x-backend: &backend
   environment:
     LIFE_ENVIRONMENT: prod
     LIFE_DATABASE_URL: postgresql+psycopg://life:${POSTGRES_PASSWORD:?}@db:5432/life
+    LIFE_JWT_SECRET: ${JWT_SECRET:?}
+    LIFE_PUBLIC_URL: ${PUBLIC_URL:?}
 
 services:
   db:

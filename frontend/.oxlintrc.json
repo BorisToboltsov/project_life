@@ -32,6 +32,25 @@
             "placeholder",
             "title"
           ]
+        },
+        "callees": {
+          "exclude": [
+            "i18n(ext)?",
+            "t",
+            "require",
+            "addEventListener",
+            "removeEventListener",
+            "postMessage",
+            "getElementById",
+            "dispatch",
+            "commit",
+            "includes",
+            "indexOf",
+            "endsWith",
+            "startsWith",
+            "register",
+            "form.register"
+          ]
         }
       }
     ],

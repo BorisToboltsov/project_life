@@ -1,20 +1,35 @@
 import { expect, test } from '@playwright/test'
 
-test('приложение открывается и видит сервер', async ({ page }) => {
+test('приложение открывается на экране входа', async ({ page }) => {
   await page.goto('/')
 
-  await expect(page.getByRole('heading', { name: 'project_life' })).toBeVisible()
-  await expect(page.getByRole('status')).toContainText(/версия \d+\.\d+\.\d+|version \d+\.\d+\.\d+/)
+  await expect(page).toHaveURL(/\/login$/)
+  await expect(page.getByRole('heading', { name: 'Вход' })).toBeVisible()
+})
+
+test('страница грузится без ошибок в консоли и нарушений политики безопасности', async ({
+  page,
+}) => {
+  const problems: string[] = []
+  page.on('console', (message) => {
+    if (message.type() === 'error') problems.push(message.text())
+  })
+  page.on('pageerror', (error) => problems.push(error.message))
+
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: 'Вход' })).toBeVisible()
+
+  expect(problems).toEqual([])
 })
 
 test('язык переключается и сохраняется после перезагрузки', async ({ page }) => {
   await page.goto('/')
 
   await page.getByRole('button', { name: 'English' }).click()
-  await expect(page.getByRole('status')).toContainText('Server is up')
+  await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible()
 
   await page.reload()
-  await expect(page.getByRole('status')).toContainText('Server is up')
+  await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible()
 })
 
 test('приложение устанавливается: есть манифест и service worker', async ({ page }) => {
@@ -29,4 +44,14 @@ test('приложение устанавливается: есть манифе
     return ready.active?.state
   })
   expect(['activating', 'activated']).toContain(registration)
+})
+
+test('сервер жив и отдаёт версию', async ({ request }) => {
+  const health = await request.get('/api/health')
+
+  expect(health.ok()).toBe(true)
+  expect(await health.json()).toMatchObject({
+    status: 'ok',
+    version: expect.stringMatching(/^\d+\.\d+\.\d+$/),
+  })
 })
