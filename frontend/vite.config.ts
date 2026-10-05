@@ -43,6 +43,9 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['src/test/setup.ts'],
     include: ['src/**/*.test.{ts,tsx}'],
+    // Тесты экранов поднимают приложение целиком и печатают в поля по символу: на
+    // загруженной машине или в CI пяти секунд по умолчанию им не хватает.
+    testTimeout: 15_000,
     coverage: {
       provider: 'v8',
       include: ['src/**/*.{ts,tsx}'],

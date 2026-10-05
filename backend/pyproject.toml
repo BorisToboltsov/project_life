@@ -1,6 +1,6 @@
 [project]
 name = "project-life"
-version = "0.2.0"
+version = "0.2.1"
 description = "Учёт питания, тренировок и показателей здоровья — бэкенд"
 requires-python = ">=3.14"
 dependencies = [

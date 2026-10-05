@@ -1,0 +1,8 @@
+[Unit]
+Description=project_life: бэкап базы
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/life/bin/life-backup daily

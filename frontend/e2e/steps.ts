@@ -3,7 +3,8 @@ import { execSync } from 'node:child_process'
 import { expect, type Page } from '@playwright/test'
 
 export const PASSWORD = 'correct horse battery'
-const COMPOSE = 'docker compose -p life-e2e -f ../deploy/compose.yaml --env-file ../deploy/e2e.env'
+// Стенд уже запущен; имени проекта достаточно, чтобы найти его контейнеры.
+const COMPOSE = 'docker compose -p life-e2e'
 
 /** Первого администратора заводят из командной строки сервера — так же, как на живом стенде. */
 export function adminInviteLink(): string {

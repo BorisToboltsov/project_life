@@ -1,0 +1,9 @@
+# Дополнение к compose.yaml: собирать образы из исходников, а не брать из реестра.
+# Используется стендом для e2e (make stand); на сервере этого файла нет.
+services:
+  migrate:
+    build: ../backend
+  backend:
+    build: ../backend
+  web:
+    build: ../frontend

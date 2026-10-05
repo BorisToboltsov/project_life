@@ -1,10 +1,18 @@
-# Стенд целиком: база, миграции, бэкенд и веб-сервер со статикой фронтенда.
-# Настройки — в .env рядом с этим файлом (образец: .env.example).
+# Приложение на сервере: база, миграции, бэкенд и веб-сервер со статикой фронтенда.
+# Образы берутся из реестра; настройки — в .env рядом с этим файлом (образец: .env.example).
+# Собрать образы из исходников (стенд для e2e) — добавить compose.build.yaml.
 name: life
+
+x-logging: &logging
+  # Логи контейнеров ограничены по размеру: без этого они со временем съедают диск.
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
 
 x-backend: &backend
   image: ${BACKEND_IMAGE:-ghcr.io/boristoboltsov/project_life-backend}:${IMAGE_TAG:-latest}
-  build: ../backend
+  logging: *logging
   environment:
     LIFE_ENVIRONMENT: prod
     LIFE_DATABASE_URL: postgresql+psycopg://life:${POSTGRES_PASSWORD:?}@db:5432/life
@@ -15,6 +23,7 @@ services:
   db:
     image: postgres:18
     restart: unless-stopped
+    logging: *logging
     environment:
       POSTGRES_USER: life
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
@@ -50,14 +59,14 @@ services:
 
   web:
     image: ${WEB_IMAGE:-ghcr.io/boristoboltsov/project_life-web}:${IMAGE_TAG:-latest}
-    build: ../frontend
     restart: unless-stopped
+    logging: *logging
     environment:
       SITE_ADDRESS: ${SITE_ADDRESS:?}
     ports:
+      # Только TCP: HTTP/3 выключен, UDP-порты приложение не занимает.
       - "${HTTP_PORT:-80}:80"
       - "${HTTPS_PORT:-443}:443"
-      - "${HTTPS_PORT:-443}:443/udp"
     volumes:
       - caddy_data:/data
       - caddy_config:/config

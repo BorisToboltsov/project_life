@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Обновление приложения: если в реестре появились новые образы, делает бэкап базы и
+# перезапускает контейнеры на них. Меняются только образы — compose.yaml и эти скрипты
+# обновляются вручную, через deploy/install.sh.
+# Запускается таймером life-update.timer и вручную: /opt/life/bin/life-update
+set -euo pipefail
+
+LIFE_HOME="${LIFE_HOME:-/opt/life}"
+cd "$LIFE_HOME"
+
+# --progress quiet: таймер запускает скрипт каждые пять минут, журналу не нужен ход загрузки.
+compose() { docker compose --progress quiet --env-file .env -f compose.yaml "$@"; }
+log() { printf '%s life-update: %s\n' "$(date -u +%FT%TZ)" "$*"; }
+
+compose pull
+
+# Какие образы нужны по compose.yaml и на каких сейчас работают контейнеры.
+wanted="$(compose config --images | while read -r image; do
+  docker image inspect --format '{{.Id}}' "$image"
+done | sort -u)"
+running="$(compose ps --quiet | while read -r container; do
+  docker inspect --format '{{.Image}}' "$container"
+done | sort -u)"
+
+if [ -n "$running" ] && [ -z "$(comm -23 <(printf '%s\n' "$wanted") <(printf '%s\n' "$running"))" ]; then
+  exit 0
+fi
+
+# База уже работает — значит, в ней могут быть данные: сначала бэкап, потом миграции.
+# Не удался бэкап — обновления не будет.
+if [ -n "$(compose ps --quiet db)" ]; then
+  log "есть новые образы, делаю бэкап перед обновлением"
+  "$LIFE_HOME/bin/life-backup" pre-update >/dev/null
+fi
+
+log "запускаю контейнеры"
+compose up --detach --wait --remove-orphans
+docker image prune --force >/dev/null
+log "работает версия $(compose exec -T backend python -c 'import app; print(app.__version__)')"
