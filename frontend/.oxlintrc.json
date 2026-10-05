@@ -1,0 +1,62 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["react", "typescript", "oxc", "jsx-a11y", "vitest"],
+  "jsPlugins": ["eslint-plugin-i18next"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error"
+  },
+  "rules": {
+    "react/rules-of-hooks": "error",
+    "react/exhaustive-deps": "error",
+    "react/only-export-components": [
+      "error",
+      {
+        "allowConstantExport": true
+      }
+    ],
+    "react/react-in-jsx-scope": "off",
+    "i18next/no-literal-string": [
+      "error",
+      {
+        "mode": "jsx-only",
+        "jsx-attributes": {
+          "include": [
+            "alt",
+            "aria-label",
+            "aria-description",
+            "aria-placeholder",
+            "aria-roledescription",
+            "aria-valuetext",
+            "label",
+            "placeholder",
+            "title"
+          ]
+        }
+      }
+    ],
+    "vitest/valid-expect": [
+      "error",
+      {
+        "maxArgs": 2
+      }
+    ],
+    "jsx-a11y/prefer-tag-over-role": "off"
+  },
+  "overrides": [
+    {
+      "files": ["**/*.test.ts", "**/*.test.tsx", "e2e/**"],
+      "rules": {
+        "i18next/no-literal-string": "off"
+      }
+    }
+  ],
+  "ignorePatterns": [
+    "dist",
+    "coverage",
+    "src/api/schema.d.ts",
+    "src/components/ui",
+    "playwright-report",
+    "test-results"
+  ]
+}

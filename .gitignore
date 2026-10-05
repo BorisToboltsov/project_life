@@ -1,0 +1,16 @@
+# Секреты и локальные настройки
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.coverage
+
+# Редакторы и ОС
+.idea/
+.vscode/
+.DS_Store
