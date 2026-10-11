@@ -7,9 +7,10 @@ from sqlalchemy import select
 from app.api.deps import AdminUser
 from app.db import SessionDep
 from app.errors import ApiError, ErrorCode, error_responses
-from app.models import Invite, User
+from app.models import ErrorReport, Invite, User
 from app.schemas import (
     AdminUserOut,
+    ErrorReportOut,
     InviteCreated,
     InviteCreateIn,
     InviteOut,
@@ -70,4 +71,24 @@ async def revoke_invite(invite_id: UUID, db: SessionDep) -> None:
     if invite is None or invite.used_at is not None:
         raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND)
     await db.delete(invite)
+    await db.commit()
+
+
+@router.get("/errors")
+async def list_errors(db: SessionDep) -> list[ErrorReportOut]:
+    """Сбои приложения, по одному на место в коде; недавние первыми."""
+    reports = await db.scalars(
+        select(ErrorReport).order_by(ErrorReport.last_seen.desc(), ErrorReport.id.desc())
+    )
+    return [ErrorReportOut.model_validate(report) for report in reports]
+
+
+@router.delete(
+    "/errors/{report_id}", status_code=status.HTTP_204_NO_CONTENT, responses=error_responses(404)
+)
+async def delete_error(report_id: UUID, db: SessionDep) -> None:
+    report = await db.get(ErrorReport, report_id)
+    if report is None:
+        raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND)
+    await db.delete(report)
     await db.commit()

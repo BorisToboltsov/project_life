@@ -18,7 +18,7 @@ from pydantic import (
 )
 
 from app.metrics import CATALOG, Metric, Quantity, Unit, quantity_of, to_canonical
-from app.models import Language, Role, Sex, UnitSystem
+from app.models import ErrorSource, Language, Role, Sex, UnitSystem
 
 
 def _known_timezone(value: str) -> str:
@@ -242,3 +242,50 @@ class MetricSummary(BaseModel):
     metric: Metric
     latest: MeasurementOut | None
     previous: MeasurementOut | None
+
+
+# Отчёт об ошибке с клиента (инвариант I9). У каждого поля жёсткая форма: свободный текст —
+# сообщение исключения, адрес страницы — в неё не укладывается.
+ErrorKind = Annotated[str, StringConstraints(pattern=r"^[A-Za-z_$][A-Za-z0-9_$.]*$", max_length=80)]
+# Шаблон маршрута: сегменты без цифр, параметр — `$имя`. Настоящий адрес с идентификатором
+# записи сюда не пройдёт.
+RouteTemplate = Annotated[
+    str,
+    StringConstraints(pattern=r"^/(\$?[A-Za-z_-]+(/\$?[A-Za-z_-]+)*)?$", max_length=120),
+]
+ScriptFile = Annotated[
+    str,
+    StringConstraints(pattern=r"^[A-Za-z0-9_.@/-]+\.(js|mjs|jsx|ts|tsx)$", max_length=160),
+]
+FunctionName = Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9_$.<>]*$", max_length=80)]
+AppVersion = Annotated[str, StringConstraints(pattern=r"^[0-9]+\.[0-9]+\.[0-9]+$", max_length=20)]
+# Сборка фронтенда — одна длинная строка, поэтому номер колонки бывает очень большим.
+Position = Annotated[int, Field(ge=0, le=1_000_000_000)]
+
+
+class ErrorFrameIn(Strict):
+    file: ScriptFile
+    line: Position
+    column: Position
+    function: FunctionName = ""
+
+
+class ErrorReportIn(Strict):
+    kind: ErrorKind
+    route: RouteTemplate | None = None
+    frames: Annotated[list[ErrorFrameIn], Field(max_length=30)]
+    version: AppVersion
+
+
+class ErrorReportOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    source: ErrorSource
+    kind: str
+    place: str | None
+    stack: str
+    version: str
+    count: int
+    first_seen: datetime
+    last_seen: datetime

@@ -4,6 +4,43 @@
  */
 
 export interface paths {
+    "/api/admin/errors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Errors
+         * @description Сбои приложения, по одному на место в коде; недавние первыми.
+         */
+        get: operations["list_errors_api_admin_errors_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/errors/{report_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Error */
+        delete: operations["delete_error_api_admin_errors__report_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/invites": {
         parameters: {
             query?: never;
@@ -229,6 +266,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/errors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Report Error
+         * @description Сбой приложения на устройстве пользователя. Кто его прислал, не записывается.
+         */
+        post: operations["report_error_api_errors_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -367,10 +424,69 @@ export interface components {
          * @enum {string}
          */
         ErrorCode: "not_authenticated" | "forbidden" | "not_found" | "invalid_credentials" | "too_many_attempts" | "invite_invalid" | "reset_invalid" | "email_taken" | "wrong_password";
+        /** ErrorFrameIn */
+        ErrorFrameIn: {
+            /** Column */
+            column: number;
+            /** File */
+            file: string;
+            /**
+             * Function
+             * @default
+             */
+            function: string;
+            /** Line */
+            line: number;
+        };
+        /** ErrorReportIn */
+        ErrorReportIn: {
+            /** Frames */
+            frames: components["schemas"]["ErrorFrameIn"][];
+            /** Kind */
+            kind: string;
+            /** Route */
+            route?: string | null;
+            /** Version */
+            version: string;
+        };
+        /** ErrorReportOut */
+        ErrorReportOut: {
+            /** Count */
+            count: number;
+            /**
+             * First Seen
+             * Format: date-time
+             */
+            first_seen: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Kind */
+            kind: string;
+            /**
+             * Last Seen
+             * Format: date-time
+             */
+            last_seen: string;
+            /** Place */
+            place: string | null;
+            source: components["schemas"]["ErrorSource"];
+            /** Stack */
+            stack: string;
+            /** Version */
+            version: string;
+        };
         /** ErrorResponse */
         ErrorResponse: {
             detail: components["schemas"]["ErrorCode"];
         };
+        /**
+         * ErrorSource
+         * @enum {string}
+         */
+        ErrorSource: "backend" | "frontend";
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -682,6 +798,100 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    list_errors_api_admin_errors_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorReportOut"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_error_api_admin_errors__report_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_invites_api_admin_invites_get: {
         parameters: {
             query?: never;
@@ -1278,6 +1488,46 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    report_error_api_errors_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ErrorReportIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -168,6 +168,17 @@ export const en: Dictionary = {
     resetCreate: 'Password reset link',
     resetLink: 'Password reset link: {{name}}',
     resetLinkHint: 'Copy and send it now: the link is shown only once and is valid for a day.',
+    errorsTitle: 'Errors',
+    errorsHint:
+      'Crashes of the app and the server. A report holds only the place in the code: no error text and no user data.',
+    errorsEmpty: 'No errors.',
+    errorSeen: 'Last seen {{date}} · {{times}} in total · version {{version}}',
+    errorStack: 'Stack trace',
+    errorDelete: 'Delete',
+  },
+  errorSources: {
+    backend: 'Server',
+    frontend: 'App',
   },
   errors: {
     not_authenticated: 'Your session has expired. Sign in again.',
