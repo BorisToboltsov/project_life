@@ -171,6 +171,38 @@ describe('добавление в приём пищи', () => {
     )
   })
 
+  it('ведёт к сканеру штрихкода для этого приёма пищи', async () => {
+    mockApi({ ...DAY, [SUGGESTIONS]: json(200, nothing) })
+    await renderApp(PAGE, anna)
+
+    expect(await screen.findByRole('link', { name: 'Сканировать штрихкод' })).toHaveAttribute(
+      'href',
+      `${PAGE}/scan`,
+    )
+  })
+
+  it('продукт, найденный сканером, ждёт количества первым — с числом из этого приёма', async () => {
+    const scanned = { ...kefir, barcode: '46012340' }
+    mockApi({
+      ...DAY,
+      [`GET /api/products/${kefir.id}`]: json(200, scanned),
+      [SUGGESTIONS]: json(200, {
+        in_meal: [{ ...scanned, amount: 250 }],
+        frequent: [],
+        recent: [{ ...scanned, amount: 200 }],
+      }),
+    })
+    await renderApp(`${PAGE}?scanned=${kefir.id}`, anna)
+
+    const found = await screen.findByRole('list', { name: 'По штрихкоду' })
+    // Количество — из прошлого раза в этом же приёме пищи, а не из последнего вообще.
+    expect(within(found).getByLabelText('Сколько, мл')).toHaveValue('250')
+    // Форма одна, хотя продукт есть ещё в двух списках.
+    expect(screen.getAllByLabelText('Сколько, мл')).toHaveLength(1)
+    // Состав внёс человек: об Open Food Facts речи нет.
+    expect(screen.queryByText(/Open Food Facts/)).not.toBeInTheDocument()
+  })
+
   it('в приём пищи, которого нет в дне, не вносит', async () => {
     const calls = mockApi({ ...DAY, [SUGGESTIONS]: json(200, suggestions) })
     await renderApp(`/diary/${DATE}/add/0199b7a0-0000-7000-8000-0000000000ff`, anna)
@@ -221,6 +253,7 @@ describe('новый продукт по пути в приём пищи', () =>
       protein_g: 12.3,
       fat_g: 6.2,
       carbs_g: 61.8,
+      barcode: null,
     })
     expect(router.state.location.search).toEqual({ product: id })
     expect(callsTo(calls, `GET /api/products/${id}`)).toHaveLength(1)

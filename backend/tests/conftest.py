@@ -1,10 +1,12 @@
 import os
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from itertools import count
 from pathlib import Path
+from typing import Any
 
+import httpx
 import psycopg
 import pytest
 from alembic import command
@@ -20,6 +22,8 @@ TEST_DATABASE_URL = os.environ.get(
 # Выставляется до первого импорта app.*: настройки и движок создаются при импорте.
 os.environ["LIFE_ENVIRONMENT"] = "test"
 os.environ["LIFE_DATABASE_URL"] = TEST_DATABASE_URL
+# Наружу тесты не ходят: Open Food Facts выключен, пока тест не подменит его фикстурой `off`.
+os.environ["LIFE_OFF_URL"] = ""
 
 PASSWORD = "correct horse battery"
 
@@ -132,3 +136,53 @@ def make_user() -> MakeUser:
         return Account(str(user.id), user.email, PASSWORD, {"Authorization": f"Bearer {token}"})
 
     return make
+
+
+@dataclass
+class OffStub:
+    """Подменный Open Food Facts: ответы задаёт тест, запросы приложения записываются."""
+
+    # Штрихкод → продукт, как его отдаёт сервис; неизвестный штрихкод — «не найдено».
+    products: dict[str, dict[str, Any]] = field(default_factory=dict[str, dict[str, Any]])
+    # Ответ на любой запрос вместо обычного: сбой сервиса или сети.
+    broken: httpx.Response | Exception | None = None
+    # Что происходит в приложении, пока сервис думает над ответом.
+    meanwhile: Callable[[], Awaitable[object]] | None = None
+    requests: list[httpx.Request] = field(default_factory=list[httpx.Request])
+
+    async def respond(self, request: httpx.Request) -> httpx.Response:
+        self.requests.append(request)
+        if self.meanwhile is not None:
+            await self.meanwhile()
+        if isinstance(self.broken, Exception):
+            raise self.broken
+        if self.broken is not None:
+            return self.broken
+        barcode = request.url.path.rsplit("/", 1)[-1]
+        if barcode not in self.products:
+            return httpx.Response(
+                404, json={"code": barcode, "status": 0, "status_verbose": "product not found"}
+            )
+        return httpx.Response(
+            200, json={"code": barcode, "status": 1, "product": self.products[barcode]}
+        )
+
+    def connect(self) -> None:
+        """Ставит приложению клиент, который ходит сюда; пределы частоты у него с нуля."""
+        from app.main import app
+        from app.services.open_food_facts import OpenFoodFacts, get_open_food_facts
+
+        source = OpenFoodFacts("https://off.test", httpx.MockTransport(self.respond))
+        app.dependency_overrides[get_open_food_facts] = lambda: source
+
+
+@pytest.fixture
+def off() -> Iterator[OffStub]:
+    """Включает поиск в Open Food Facts и подменяет сам сервис."""
+    from app.main import app
+    from app.services.open_food_facts import get_open_food_facts
+
+    stub = OffStub()
+    stub.connect()
+    yield stub
+    del app.dependency_overrides[get_open_food_facts]

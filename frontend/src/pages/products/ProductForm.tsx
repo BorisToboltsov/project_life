@@ -9,26 +9,34 @@ import { FormError, SelectField, TextField } from '@/components/form/fields'
 import { useAutoKcal } from '@/components/form/useAutoKcal'
 import { numberOf } from '@/components/form/validation'
 import { Button } from '@/components/ui/button'
+import { normalizeBarcode } from '@/lib/barcode'
 import type { ErrorKey } from '@/lib/errors'
 import { uuidv7 } from '@/lib/uuid'
 
-import { productDefaults, productSchema, type ProductValues } from './productValues'
+import {
+  productDefaults,
+  productSchema,
+  type ProductSeed,
+  type ProductValues,
+} from './productValues'
 
 /** Калории продукта хранятся с точностью до десятой. */
 const KCAL_DIGITS = 1
 
 /**
- * Форма продукта каталога: название, единица и состав на 100 таких единиц. Без `product`
- * создаёт новый. Калории считаются по белкам, жирам и углеводам, пока их не ввели сами: на
- * упаковке число бывает другим. `onSaved` получает ключ сохранённого продукта, `cancel` —
- * ссылка «Отмена».
+ * Форма продукта каталога: название, единица, состав на 100 таких единиц и штрихкод. Без
+ * `product` создаёт новый; `draft` — что о новом уже известно по штрихкоду. Калории
+ * считаются по белкам, жирам и углеводам, пока их не ввели сами: на упаковке число бывает
+ * другим. `onSaved` получает ключ сохранённого продукта, `cancel` — ссылка «Отмена».
  */
 export function ProductForm({
   product,
+  draft,
   onSaved,
   cancel,
 }: {
   product?: Product
+  draft?: ProductSeed
   onSaved: (id: string) => void | Promise<void>
   cancel: ReactNode
 }) {
@@ -37,7 +45,7 @@ export function ProductForm({
   const [failure, setFailure] = useState<ErrorKey>()
   // Ключ нового продукта живёт, пока открыта форма: повторная отправка не создаст дубль.
   const id = useRef(product?.id ?? uuidv7())
-  const defaults = productDefaults(product)
+  const defaults = productDefaults(product ?? draft)
   const form = useForm<ProductValues>({
     resolver: zodResolver(productSchema),
     defaultValues: defaults,
@@ -61,6 +69,7 @@ export function ProductForm({
       protein_g: numberOf(values.protein, 2),
       fat_g: numberOf(values.fat, 2),
       carbs_g: numberOf(values.carbs, 2),
+      barcode: normalizeBarcode(values.barcode),
     })
     if (result.failure) {
       setFailure(result.failure)
@@ -123,6 +132,14 @@ export function ProductForm({
         />
       </div>
       <p className="text-sm text-muted-foreground">{t('products.kcalHint')}</p>
+      <TextField
+        label={t('products.barcode')}
+        inputMode="numeric"
+        autoComplete="off"
+        hint={t('products.barcodeHint')}
+        error={errors.barcode?.message}
+        {...form.register('barcode')}
+      />
       <div className="flex gap-3">
         <Button type="submit" className="h-11" disabled={isSubmitting}>
           {t('common.save')}

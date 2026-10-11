@@ -6,6 +6,7 @@ import { useSession } from '@/auth/useSession'
 import { Button } from '@/components/ui/button'
 
 import type { AppRouter } from './router'
+import { UpdatePrompt } from './UpdatePrompt'
 
 function Centered({ children }: { children: React.ReactNode }) {
   return (
@@ -15,7 +16,17 @@ function Centered({ children }: { children: React.ReactNode }) {
   )
 }
 
+/** Приложение целиком: предложение обновиться — поверх любого экрана. */
 export function App({ router }: { router: AppRouter }) {
+  return (
+    <>
+      <UpdatePrompt />
+      <Screen router={router} />
+    </>
+  )
+}
+
+function Screen({ router }: { router: AppRouter }) {
   const { t } = useTranslation()
   const state = useSession()
 

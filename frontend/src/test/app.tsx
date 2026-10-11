@@ -3,17 +3,23 @@ import { createMemoryHistory } from '@tanstack/react-router'
 import { render } from '@testing-library/react'
 
 import { App } from '@/app/App'
+import { appUpdate } from '@/app/appUpdate'
 import { caughtErrorHandler, installErrorReporting } from '@/app/errorReporting'
 import { bindSession, createAppRouter } from '@/app/router'
 import { session, type User } from '@/auth/session'
 
 import { sessionOf } from './fixtures'
 
+// В приложении экраны подгружаются при переходе. В тестах они загружены заранее: первый
+// разбор модуля занимает секунды, и ожидание экрана упиралось бы в него, а не в поведение.
+import.meta.glob(['../pages/**/*.tsx', '!../pages/**/*.test.tsx'], { eager: true })
+
 const cleanups: (() => void)[] = []
 
 /** Состояние сессии живёт в модуле — между тестами его нужно вернуть к «не вошёл». */
 export function resetApp(): void {
   for (const cleanup of cleanups.splice(0)) cleanup()
+  appUpdate.reset()
   localStorage.clear()
   void session.bootstrap()
 }

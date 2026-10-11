@@ -3,10 +3,18 @@
 from app.models.auth import Invite, LoginFailure, PasswordReset, RefreshToken
 from app.models.error_report import ErrorReport, ErrorSource
 from app.models.measurement import Measurement
-from app.models.nutrition import FoodEntry, Meal, NutritionGoal, Product, preset_meals
+from app.models.nutrition import (
+    BarcodeMiss,
+    FoodEntry,
+    Meal,
+    NutritionGoal,
+    Product,
+    preset_meals,
+)
 from app.models.user import Language, Role, Sex, UnitSystem, User
 
 __all__ = [
+    "BarcodeMiss",
     "ErrorReport",
     "ErrorSource",
     "FoodEntry",

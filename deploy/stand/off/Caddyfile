@@ -1,0 +1,20 @@
+# Подменный Open Food Facts для стенда (make stand, make e2e): прогон не ходит в настоящий
+# сервис. Что ответить, решает начало штрихкода, так что тест может брать свежий
+# штрихкод на каждый прогон:
+#   4601… — продукт с полным составом;
+#   4602… — продукт без состава: приложение попросит его дополнить;
+#   всё остальное — «не найдено», тем же ответом, что у настоящего сервиса.
+:80 {
+	root * /srv
+	header Content-Type application/json
+
+	@complete path_regexp ^/api/v2/product/4601\d+$
+	rewrite @complete /complete.json
+	@incomplete path_regexp ^/api/v2/product/4602\d+$
+	rewrite @incomplete /incomplete.json
+
+	@unknown not path /complete.json /incomplete.json
+	respond @unknown `{"status":0,"status_verbose":"product not found"}` 404
+
+	file_server
+}

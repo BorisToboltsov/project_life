@@ -556,6 +556,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/products/lookup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Lookup Barcode
+         * @description Продукт по штрихкоду: свой каталог → память о ненайденном → Open Food Facts.
+         *
+         *     Полный продукт из источника сразу сохраняется в каталог, неполный возвращается
+         *     черновиком для формы создания (ADR 0009).
+         */
+        post: operations["lookup_barcode_api_products_lookup_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/products/{product_id}": {
         parameters: {
             query?: never;
@@ -570,6 +593,7 @@ export interface paths {
          * @description Создаёт продукт или заменяет свой: повтор запроса не плодит дубли (ADR 0002).
          *
          *     Записи дневника хранят снимок состава — правка продукта их не меняет (инвариант I10).
+         *     Штрихкод, который уже носит другой продукт, — отказ 409.
          */
         put: operations["save_product_api_products__product_id__put"];
         post?: never;
@@ -604,6 +628,19 @@ export interface components {
              */
             id: string;
             role: components["schemas"]["Role"];
+        };
+        /** BarcodeLookupIn */
+        BarcodeLookupIn: {
+            /** Barcode */
+            barcode: string;
+        };
+        /** BarcodeLookupOut */
+        BarcodeLookupOut: {
+            /** Barcode */
+            barcode: string;
+            draft?: components["schemas"]["ProductDraftOut"] | null;
+            product?: components["schemas"]["ProductOut"] | null;
+            status: components["schemas"]["LookupStatus"];
         };
         /** CopyItem */
         CopyItem: {
@@ -663,7 +700,7 @@ export interface components {
          * @description Коды ошибок API. Текст для пользователя подбирает фронтенд по коду.
          * @enum {string}
          */
-        ErrorCode: "not_authenticated" | "forbidden" | "not_found" | "invalid_credentials" | "too_many_attempts" | "invite_invalid" | "reset_invalid" | "email_taken" | "wrong_password" | "product_not_found" | "meal_not_found";
+        ErrorCode: "not_authenticated" | "forbidden" | "not_found" | "invalid_credentials" | "too_many_attempts" | "invite_invalid" | "reset_invalid" | "email_taken" | "wrong_password" | "product_not_found" | "meal_not_found" | "barcode_taken";
         /** ErrorFrameIn */
         ErrorFrameIn: {
             /** Column */
@@ -870,6 +907,12 @@ export interface components {
             /** Password */
             password: string;
         };
+        /**
+         * LookupStatus
+         * @description Чем кончился поиск по штрихкоду (ADR 0009).
+         * @enum {string}
+         */
+        LookupStatus: "found" | "draft" | "not_found" | "unavailable";
         /** MealIn */
         MealIn: {
             /** Name */
@@ -1043,8 +1086,28 @@ export interface components {
              */
             expires_at: string;
         };
+        /**
+         * ProductDraftOut
+         * @description Что известно о продукте, которого нет в каталоге: значения для формы создания.
+         *     `null` — источник этого не знает.
+         */
+        ProductDraftOut: {
+            /** Carbs G */
+            carbs_g: number | null;
+            /** Fat G */
+            fat_g: number | null;
+            /** Kcal */
+            kcal: number | null;
+            /** Name */
+            name: string | null;
+            /** Protein G */
+            protein_g: number | null;
+            unit: components["schemas"]["ProductUnit"];
+        };
         /** ProductIn */
         ProductIn: {
+            /** Barcode */
+            barcode?: string | null;
             /** Carbs G */
             carbs_g: number | string;
             /** Fat G */
@@ -1059,6 +1122,8 @@ export interface components {
         };
         /** ProductOut */
         ProductOut: {
+            /** Barcode */
+            barcode: string | null;
             /** Carbs G */
             carbs_g: number;
             /** Editable */
@@ -1076,8 +1141,15 @@ export interface components {
             name: string;
             /** Protein G */
             protein_g: number;
+            source: components["schemas"]["ProductSource"];
             unit: components["schemas"]["ProductUnit"];
         };
+        /**
+         * ProductSource
+         * @description Откуда продукт в каталоге: внесён человеком или взят из Open Food Facts (ADR 0009).
+         * @enum {string}
+         */
+        ProductSource: "user" | "open_food_facts";
         /**
          * ProductUnit
          * @description В чём измеряется продукт: состав задан на 100 таких единиц, в них же вносится порция.
@@ -1150,6 +1222,8 @@ export interface components {
         SuggestionOut: {
             /** Amount */
             amount: number;
+            /** Barcode */
+            barcode: string | null;
             /** Carbs G */
             carbs_g: number;
             /** Editable */
@@ -1167,6 +1241,7 @@ export interface components {
             name: string;
             /** Protein G */
             protein_g: number;
+            source: components["schemas"]["ProductSource"];
             unit: components["schemas"]["ProductUnit"];
         };
         /** SuggestionsOut */
@@ -2750,6 +2825,57 @@ export interface operations {
             };
         };
     };
+    lookup_barcode_api_products_lookup_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BarcodeLookupIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BarcodeLookupOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     read_product_api_products__product_id__get: {
         parameters: {
             query?: never;
@@ -2843,6 +2969,15 @@ export interface operations {
             };
             /** @description Forbidden */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

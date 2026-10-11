@@ -1,11 +1,12 @@
 [project]
 name = "project-life"
-version = "0.3.1"
+version = "0.4.0"
 description = "Учёт питания, тренировок и показателей здоровья — бэкенд"
 requires-python = ">=3.14"
 dependencies = [
     "alembic>=1.20.0",
     "fastapi>=0.142.2",
+    "httpx>=0.28.1",
     "psycopg[binary]>=3.3.6",
     "pwdlib[argon2]>=0.3.1",
     "pydantic-settings>=2.15.0",
@@ -25,7 +26,6 @@ module-name = "app"
 
 [dependency-groups]
 dev = [
-    "httpx>=0.28.1",
     "pyright>=1.1.414",
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",

@@ -27,7 +27,28 @@ OATMEAL = {
     "fat_g": 6.2,
     "carbs_g": 61.8,
 }
+# Чем API дополняет продукт, который человек завёл без штрихкода.
+BY_HAND = {"barcode": None, "source": "user"}
 PRESETS = ("breakfast", "lunch", "dinner", "snack")
+
+# Штрихкоды с верной контрольной цифрой.
+EAN_13 = "4600000000008"
+EAN_8 = "46012340"
+# Один и тот же код: UPC-A и он же как EAN-13.
+UPC_A = "036000291452"
+UPC_A_AS_EAN_13 = "0036000291452"
+# Продукт, как его отдаёт Open Food Facts: состав на 100 г полный.
+OFF_COTTAGE_CHEESE = {
+    "product_name": "Творог 5 %",
+    "brands": "Простоквашино, Danone",
+    "quantity": "200 г",
+    "nutriments": {
+        "energy-kcal_100g": 121,
+        "proteins_100g": 17.2,
+        "fat_100g": 5,
+        "carbohydrates_100g": 1.8,
+    },
+}
 
 
 async def put_product(
@@ -43,6 +64,12 @@ async def add_product(client: AsyncClient, account: Account, **fields: Any) -> s
     response = await put_product(client, account, {**COTTAGE_CHEESE, **fields})
     assert response.status_code == 201, response.text
     return response.json()["id"]
+
+
+async def lookup(client: AsyncClient, account: Account, barcode: str) -> Response:
+    return await client.post(
+        "/api/products/lookup", headers=account.headers, json={"barcode": barcode}
+    )
 
 
 async def read_day(client: AsyncClient, account: Account, day: Any = TODAY) -> dict[str, Any]:

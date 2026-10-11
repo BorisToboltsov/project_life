@@ -7,6 +7,7 @@ from app.db import SessionDep
 from app.errors import ApiError, ErrorCode
 from app.models import Role, User
 from app.security.tokens import decode_access_token
+from app.services.open_food_facts import OpenFoodFacts, get_open_food_facts
 
 _bearer = HTTPBearer(auto_error=False)
 
@@ -36,3 +37,5 @@ async def require_admin(user: CurrentUser) -> User:
 
 
 AdminUser = Annotated[User, Depends(require_admin)]
+
+OpenFoodFactsDep = Annotated[OpenFoodFacts, Depends(get_open_food_facts)]

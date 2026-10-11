@@ -7,6 +7,7 @@ from httpx import AsyncClient
 
 from tests.conftest import Account, MakeUser
 from tests.nutrition import (
+    BY_HAND,
     COTTAGE_CHEESE,
     OATMEAL,
     PRESETS,
@@ -470,6 +471,7 @@ async def test_suggestions_are_recent_and_frequent_products(
     assert suggestions["in_meal"] == []
     assert suggestions["recent"][1] == {
         **COTTAGE_CHEESE,
+        **BY_HAND,
         "id": cheese,
         "editable": True,
         "amount": 200,
