@@ -1,7 +1,9 @@
-"""Гейт дневника питания (инвариант I10): прошлые дни не зависят от каталога.
+"""Гейт дневника питания (инвариант I10): прошлые дни не зависят от каталога и от списка
+приёмов пищи.
 
-Запись дневника хранит снимок продукта — название и состав на 100 г. Что бы ни случилось
-с продуктом позже — правка, удаление, — уже внесённый день показывает то же, что показывал.
+Запись дневника хранит снимок продукта — название, единицу и состав на 100 единиц. Что бы
+ни случилось с продуктом позже — правка, удаление, — уже внесённый день показывает то же,
+что показывал. Приём пищи, убранный из списка, остаётся в днях, где в нём есть записи.
 """
 
 from typing import Any
@@ -39,11 +41,14 @@ async def test_editing_a_product_does_not_change_past_days(
     user, product_id, _ = await a_logged_day(client, make_user)
     before = await read_day(client, user, YESTERDAY)
 
-    edited = await put_product(client, user, {**OATMEAL, "name": "Исправлено"}, product_id)
+    edited = await put_product(
+        client, user, {**OATMEAL, "name": "Исправлено", "unit": "ml"}, product_id
+    )
 
     assert edited.status_code == 200
     assert await read_day(client, user, YESTERDAY) == before
     assert before["totals"]["kcal"] == 181.5
+    assert before["meals"][0]["entries"][0]["unit"] == "g"
 
 
 async def test_deleting_a_product_does_not_change_past_days(
@@ -67,7 +72,7 @@ async def test_editing_the_amount_keeps_the_snapshot(
     client: AsyncClient, make_user: MakeUser
 ) -> None:
     user, product_id, entry_id = await a_logged_day(client, make_user)
-    await put_product(client, user, {**OATMEAL, "name": "Исправлено"}, product_id)
+    await put_product(client, user, {**OATMEAL, "name": "Исправлено", "unit": "ml"}, product_id)
 
     # Тот же продукт и `null` вместо него оставляют снимок прежним.
     same = await put_entry(client, user, product_id, 200, day=YESTERDAY, entry_id=entry_id)
@@ -75,6 +80,7 @@ async def test_editing_the_amount_keeps_the_snapshot(
 
     assert (same.json()["product_name"], same.json()["kcal"]) == (COTTAGE_CHEESE["name"], 242)
     assert (kept.json()["product_name"], kept.json()["kcal"]) == (COTTAGE_CHEESE["name"], 121)
+    assert (same.json()["unit"], kept.json()["unit"]) == ("g", "g")
 
 
 async def test_entry_of_a_deleted_product_can_still_be_edited(
@@ -93,7 +99,7 @@ async def test_copy_carries_the_snapshot_not_the_catalog(
     client: AsyncClient, make_user: MakeUser
 ) -> None:
     user, product_id, entry_id = await a_logged_day(client, make_user)
-    await put_product(client, user, {**OATMEAL, "name": "Исправлено"}, product_id)
+    await put_product(client, user, {**OATMEAL, "name": "Исправлено", "unit": "ml"}, product_id)
 
     copied = await client.post(
         "/api/diary/copy",
@@ -107,4 +113,23 @@ async def test_copy_carries_the_snapshot_not_the_catalog(
     assert copied.status_code == 204
     today = await read_day(client, user)
     assert today["totals"] == (await read_day(client, user, YESTERDAY))["totals"]
-    assert today["meals"][0]["entries"][0]["product_name"] == "Творог 5 %"
+    [copy] = today["meals"][0]["entries"]
+    assert (copy["product_name"], copy["unit"]) == ("Творог 5 %", "g")
+
+
+async def test_removing_a_meal_does_not_change_past_days(
+    client: AsyncClient, make_user: MakeUser
+) -> None:
+    user, _, _ = await a_logged_day(client, make_user)
+    before = await read_day(client, user, YESTERDAY)
+    breakfast = before["meals"][0]
+
+    removed = await client.delete(f"/api/diary/meals/{breakfast['id']}", headers=user.headers)
+
+    assert removed.status_code == 204
+    after = await read_day(client, user, YESTERDAY)
+    # Приём на месте со всеми записями — отмечен только тем, что убран из списка.
+    assert after == {**before, "meals": [{**breakfast, "archived": True}, *before["meals"][1:]]}
+    assert after["totals"]["kcal"] == 181.5
+    # А в день, где в нём ничего нет, он больше не попадает.
+    assert breakfast["id"] not in {meal["id"] for meal in (await read_day(client, user))["meals"]}

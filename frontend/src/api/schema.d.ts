@@ -341,16 +341,45 @@ export interface paths {
         };
         /**
          * Read Goal
-         * @description Действующая цель на день; `null`, пока она не задана.
+         * @description Действующая цель на день; `null`, пока она не задана или если её сняли.
          */
         get: operations["read_goal_api_diary_goal_get"];
         /**
          * Save Goal
          * @description Задаёт цель с сегодняшнего дня. Прошлые дни остаются со своей прежней целью.
+         *
+         *     Показатель без значения — цели по нему нет; без всех четырёх цель с этого дня снята.
          */
         put: operations["save_goal_api_diary_goal_put"];
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/diary/meals/{meal_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Save Meal
+         * @description Добавляет в список пользователя приём пищи или даёт своему новое название: повтор
+         *     запроса не плодит дубли (ADR 0002). Убранный приём этим же запросом возвращается в
+         *     список. Новый приём встаёт в конец дня.
+         */
+        put: operations["save_meal_api_diary_meals__meal_id__put"];
+        post?: never;
+        /**
+         * Delete Meal
+         * @description Убирает приём пищи из списка. Записи в нём остаются: дни, где он был, показывают
+         *     его по-прежнему (инвариант I10).
+         */
+        delete: operations["delete_meal_api_diary_meals__meal_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -365,7 +394,8 @@ export interface paths {
         };
         /**
          * Suggest Products
-         * @description Продукты, которые пользователь вносил недавно и вносит часто, с прошлой граммовкой.
+         * @description Продукты, которые пользователь вносит: чаще всего в приём пищи `meal_id`, недавно и
+         *     часто вообще. У каждого — количество, внесённое в прошлый раз.
          */
         get: operations["suggest_products_api_diary_suggestions_get"];
         put?: never;
@@ -588,6 +618,22 @@ export interface components {
              */
             source_id: string;
         };
+        /** DayMealOut */
+        DayMealOut: {
+            /** Archived */
+            archived: boolean;
+            /** Entries */
+            entries: components["schemas"]["FoodEntryOut"][];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string | null;
+            preset: components["schemas"]["MealPreset"] | null;
+            totals: components["schemas"]["NutrientsOut"];
+        };
         /** DiaryCopyIn */
         DiaryCopyIn: {
             /** Items */
@@ -597,7 +643,8 @@ export interface components {
              * Format: date
              */
             to_date: string;
-            to_meal?: components["schemas"]["Meal"] | null;
+            /** To Meal Id */
+            to_meal_id?: string | null;
         };
         /** DiaryDayOut */
         DiaryDayOut: {
@@ -608,7 +655,7 @@ export interface components {
              */
             local_date: string;
             /** Meals */
-            meals: components["schemas"]["MealOut"][];
+            meals: components["schemas"]["DayMealOut"][];
             totals: components["schemas"]["NutrientsOut"];
         };
         /**
@@ -616,7 +663,7 @@ export interface components {
          * @description Коды ошибок API. Текст для пользователя подбирает фронтенд по коду.
          * @enum {string}
          */
-        ErrorCode: "not_authenticated" | "forbidden" | "not_found" | "invalid_credentials" | "too_many_attempts" | "invite_invalid" | "reset_invalid" | "email_taken" | "wrong_password" | "product_not_found";
+        ErrorCode: "not_authenticated" | "forbidden" | "not_found" | "invalid_credentials" | "too_many_attempts" | "invite_invalid" | "reset_invalid" | "email_taken" | "wrong_password" | "product_not_found" | "meal_not_found";
         /** ErrorFrameIn */
         ErrorFrameIn: {
             /** Column */
@@ -682,14 +729,18 @@ export interface components {
         ErrorSource: "backend" | "frontend";
         /** FoodEntryIn */
         FoodEntryIn: {
-            /** Amount G */
-            amount_g: number | string;
+            /** Amount */
+            amount: number | string;
             /**
              * Local Date
              * Format: date
              */
             local_date: string;
-            meal: components["schemas"]["Meal"];
+            /**
+             * Meal Id
+             * Format: uuid
+             */
+            meal_id: string;
             /** Product Id */
             product_id: string | null;
         };
@@ -698,8 +749,8 @@ export interface components {
          * @description Запись дневника; нутриенты — съеденной порции, по снимку продукта.
          */
         FoodEntryOut: {
-            /** Amount G */
-            amount_g: number;
+            /** Amount */
+            amount: number;
             /** Carbs G */
             carbs_g: number;
             /** Fat G */
@@ -716,13 +767,18 @@ export interface components {
              * Format: date
              */
             local_date: string;
-            meal: components["schemas"]["Meal"];
+            /**
+             * Meal Id
+             * Format: uuid
+             */
+            meal_id: string;
             /** Product Id */
             product_id: string | null;
             /** Product Name */
             product_name: string;
             /** Protein G */
             protein_g: number;
+            unit: components["schemas"]["ProductUnit"];
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -814,18 +870,33 @@ export interface components {
             /** Password */
             password: string;
         };
+        /** MealIn */
+        MealIn: {
+            /** Name */
+            name: string;
+        };
         /**
-         * Meal
+         * MealOut
+         * @description Приём пищи из списка пользователя.
+         */
+        MealOut: {
+            /** Archived */
+            archived: boolean;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string | null;
+            preset: components["schemas"]["MealPreset"] | null;
+        };
+        /**
+         * MealPreset
+         * @description Приёмы пищи, с которыми начинает каждый пользователь; название подбирает интерфейс.
          * @enum {string}
          */
-        Meal: "breakfast" | "lunch" | "dinner" | "snack";
-        /** MealOut */
-        MealOut: {
-            /** Entries */
-            entries: components["schemas"]["FoodEntryOut"][];
-            meal: components["schemas"]["Meal"];
-            totals: components["schemas"]["NutrientsOut"];
-        };
+        MealPreset: "breakfast" | "lunch" | "dinner" | "snack";
         /** MeasurementIn */
         MeasurementIn: {
             /**
@@ -903,37 +974,40 @@ export interface components {
             /** Protein G */
             protein_g: number;
         };
-        /** NutritionGoalIn */
+        /**
+         * NutritionGoalIn
+         * @description Цель на день. `null` — цели по этому показателю нет; все четыре `null` снимают цель.
+         */
         NutritionGoalIn: {
             /** Carbs G */
-            carbs_g: number;
+            carbs_g: number | null;
             /** Fat G */
-            fat_g: number;
+            fat_g: number | null;
             /** Kcal */
-            kcal: number;
+            kcal: number | null;
             /**
              * Local Date
              * Format: date
              */
             local_date: string;
             /** Protein G */
-            protein_g: number;
+            protein_g: number | null;
         };
         /** NutritionGoalOut */
         NutritionGoalOut: {
             /** Carbs G */
-            carbs_g: number;
+            carbs_g: number | null;
             /**
              * Effective From
              * Format: date
              */
             effective_from: string;
             /** Fat G */
-            fat_g: number;
+            fat_g: number | null;
             /** Kcal */
-            kcal: number;
+            kcal: number | null;
             /** Protein G */
-            protein_g: number;
+            protein_g: number | null;
         };
         /** PasswordChangeIn */
         PasswordChangeIn: {
@@ -981,6 +1055,7 @@ export interface components {
             name: string;
             /** Protein G */
             protein_g: number | string;
+            unit: components["schemas"]["ProductUnit"];
         };
         /** ProductOut */
         ProductOut: {
@@ -1001,7 +1076,14 @@ export interface components {
             name: string;
             /** Protein G */
             protein_g: number;
+            unit: components["schemas"]["ProductUnit"];
         };
+        /**
+         * ProductUnit
+         * @description В чём измеряется продукт: состав задан на 100 таких единиц, в них же вносится порция.
+         * @enum {string}
+         */
+        ProductUnit: "g" | "ml";
         /**
          * ProfilePatch
          * @description Меняются только присланные поля.
@@ -1066,8 +1148,8 @@ export interface components {
         Sex: "male" | "female";
         /** SuggestionOut */
         SuggestionOut: {
-            /** Amount G */
-            amount_g: number;
+            /** Amount */
+            amount: number;
             /** Carbs G */
             carbs_g: number;
             /** Editable */
@@ -1085,11 +1167,14 @@ export interface components {
             name: string;
             /** Protein G */
             protein_g: number;
+            unit: components["schemas"]["ProductUnit"];
         };
         /** SuggestionsOut */
         SuggestionsOut: {
             /** Frequent */
             frequent: components["schemas"]["SuggestionOut"][];
+            /** In Meal */
+            in_meal: components["schemas"]["SuggestionOut"][];
             /** Recent */
             recent: components["schemas"]["SuggestionOut"][];
         };
@@ -2106,7 +2191,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NutritionGoalOut"];
+                    "application/json": components["schemas"]["NutritionGoalOut"] | null;
                 };
             };
             /** @description Unauthorized */
@@ -2129,9 +2214,120 @@ export interface operations {
             };
         };
     };
-    suggest_products_api_diary_suggestions_get: {
+    save_meal_api_diary_meals__meal_id__put: {
         parameters: {
             query?: never;
+            header?: never;
+            path: {
+                meal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MealIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MealOut"];
+                };
+            };
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MealOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_meal_api_diary_meals__meal_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                meal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    suggest_products_api_diary_suggestions_get: {
+        parameters: {
+            query?: {
+                meal_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -2154,6 +2350,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

@@ -16,8 +16,21 @@ export function numberIn(min: number, max: number, key: ValidationKey) {
   }, message(key))
 }
 
+/** То же, но поле можно оставить пустым. */
+export function optionalNumberIn(min: number, max: number, key: ValidationKey) {
+  return z.string().refine((text) => {
+    const value = parseDecimal(text)
+    return text.trim() === '' || (value !== null && value >= min && value <= max)
+  }, message(key))
+}
+
 /** Число из проверенного поля, округлённое до точности, которую хранит сервер. */
 export function numberOf(text: string, digits: number): number {
   const factor = 10 ** digits
   return Math.round((parseDecimal(text) ?? 0) * factor) / factor
+}
+
+/** То же для поля, которое можно оставить пустым: пустое — `null`. */
+export function optionalNumberOf(text: string, digits: number): number | null {
+  return text.trim() === '' ? null : numberOf(text, digits)
 }

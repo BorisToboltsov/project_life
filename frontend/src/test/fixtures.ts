@@ -64,6 +64,7 @@ export function summaryOf(
 export const cottageCheese: Schemas['ProductOut'] = {
   id: '0199b7a0-0000-7000-8000-0000000000c1',
   name: 'Творог 5 %',
+  unit: 'g',
   kcal: 121,
   protein_g: 17.2,
   fat_g: 5,
@@ -74,6 +75,7 @@ export const cottageCheese: Schemas['ProductOut'] = {
 export const oatmeal: Schemas['ProductOut'] = {
   id: '0199b7a0-0000-7000-8000-0000000000c2',
   name: 'Овсяные хлопья',
+  unit: 'g',
   kcal: 352,
   protein_g: 12.3,
   fat_g: 6.2,
@@ -81,21 +83,56 @@ export const oatmeal: Schemas['ProductOut'] = {
   editable: false,
 }
 
-/** Запись дневника: `amount_g` граммов продукта; нутриенты считаются от его состава. */
+export const kefir: Schemas['ProductOut'] = {
+  id: '0199b7a0-0000-7000-8000-0000000000c3',
+  name: 'Кефир 1 %',
+  unit: 'ml',
+  kcal: 40,
+  protein_g: 3,
+  fat_g: 1,
+  carbs_g: 4,
+  editable: true,
+}
+
+function presetMeal(preset: Schemas['MealPreset'], number: number): Schemas['MealOut'] {
+  return { id: `0199b7a0-0000-7000-8000-0000000000a${number}`, preset, name: null, archived: false }
+}
+
+/** Приёмы пищи, с которыми начинает каждый пользователь. */
+export const meals = {
+  breakfast: presetMeal('breakfast', 1),
+  lunch: presetMeal('lunch', 2),
+  dinner: presetMeal('dinner', 3),
+  snack: presetMeal('snack', 4),
+}
+
+/** Свой приём пищи: его назвал пользователь. */
+export const secondBreakfast: Schemas['MealOut'] = {
+  id: '0199b7a0-0000-7000-8000-0000000000a5',
+  preset: null,
+  name: 'Второй завтрак',
+  archived: false,
+}
+
+/**
+ * Запись дневника: `amount` единиц продукта в завтраке; нутриенты считаются от его состава.
+ * Другой приём пищи — через `overrides.meal_id`.
+ */
 export function foodEntry(
   product: Schemas['ProductOut'],
-  amount_g: number,
+  amount: number,
   overrides: Partial<Schemas['FoodEntryOut']> = {},
 ): Schemas['FoodEntryOut'] {
   sequence += 1
-  const portion = (per100g: number) => Math.round(per100g * amount_g) / 100
+  const portion = (per100: number) => Math.round(per100 * amount) / 100
   return {
     id: `0199b7a0-0000-7000-8000-${String(sequence).padStart(12, '0')}`,
     local_date: '2026-10-11',
-    meal: 'breakfast',
+    meal_id: meals.breakfast.id,
     product_id: product.id,
     product_name: product.name,
-    amount_g,
+    amount,
+    unit: product.unit,
     kcal: portion(product.kcal),
     protein_g: portion(product.protein_g),
     fat_g: portion(product.fat_g),
@@ -123,18 +160,22 @@ export const dailyGoal: Schemas['NutritionGoalOut'] = {
   effective_from: '2026-10-01',
 }
 
-/** День дневника из записей: раскладывает их по приёмам пищи и считает итоги. */
+/**
+ * День дневника из записей: раскладывает их по приёмам пищи и считает итоги. Без `list` в
+ * дне четыре предустановленных приёма.
+ */
 export function diaryDay(
   local_date: string,
   entries: Schemas['FoodEntryOut'][] = [],
   goal: Schemas['NutritionGoalOut'] | null = null,
+  list: Schemas['MealOut'][] = Object.values(meals),
 ): Schemas['DiaryDayOut'] {
   const dated = entries.map((entry) => ({ ...entry, local_date }))
   return {
     local_date,
-    meals: (['breakfast', 'lunch', 'dinner', 'snack'] as const).map((meal) => {
-      const own = dated.filter((entry) => entry.meal === meal)
-      return { meal, entries: own, totals: totalsOf(own) }
+    meals: list.map((meal) => {
+      const own = dated.filter((entry) => entry.meal_id === meal.id)
+      return { ...meal, entries: own, totals: totalsOf(own) }
     }),
     totals: totalsOf(dated),
     goal,

@@ -79,7 +79,14 @@ async def _delete_measurement(client: AsyncClient, owner: Account) -> Probe:
 
 
 def _product_body() -> dict[str, Any]:
-    return {"name": "Творог 5 %", "kcal": 121, "protein_g": 17.2, "fat_g": 5, "carbs_g": 1.8}
+    return {
+        "name": "Творог 5 %",
+        "unit": "g",
+        "kcal": 121,
+        "protein_g": 17.2,
+        "fat_g": 5,
+        "carbs_g": 1.8,
+    }
 
 
 async def _own_product(client: AsyncClient, owner: Account) -> str:
@@ -99,11 +106,13 @@ async def _replace_product(client: AsyncClient, owner: Account) -> Probe:
 
 async def _food_entry_body(client: AsyncClient, owner: Account) -> dict[str, Any]:
     product = await _own_product(client, owner)
+    today = datetime.now(UTC).date().isoformat()
+    day = await client.get("/api/diary", params={"date": today}, headers=owner.headers)
     return {
-        "local_date": datetime.now(UTC).date().isoformat(),
-        "meal": "breakfast",
+        "local_date": today,
+        "meal_id": day.json()["meals"][0]["id"],
         "product_id": product.rsplit("/", 1)[1],
-        "amount_g": 150,
+        "amount": 150,
     }
 
 
@@ -119,11 +128,24 @@ async def _delete_food_entry(client: AsyncClient, owner: Account) -> Probe:
     return Probe((await _own_food_entry(client, owner)).path)
 
 
+async def _own_meal(client: AsyncClient, owner: Account) -> Probe:
+    path = f"/api/diary/meals/{uuid.uuid7()}"
+    created = await client.put(path, headers=owner.headers, json={"name": "Полдник"})
+    assert created.status_code == 201
+    return Probe(path, {"name": "Подменено"})
+
+
+async def _delete_meal(client: AsyncClient, owner: Account) -> Probe:
+    return Probe((await _own_meal(client, owner)).path)
+
+
 OWNERSHIP: dict[Route, OwnershipCase] = {
     ("PUT", "/api/measurements/{measurement_id}"): _replace_measurement,
     ("DELETE", "/api/measurements/{measurement_id}"): _delete_measurement,
     ("PUT", "/api/diary/entries/{entry_id}"): _own_food_entry,
     ("DELETE", "/api/diary/entries/{entry_id}"): _delete_food_entry,
+    ("PUT", "/api/diary/meals/{meal_id}"): _own_meal,
+    ("DELETE", "/api/diary/meals/{meal_id}"): _delete_meal,
 }
 
 # Общий каталог: запись видят все вошедшие, меняет её автор или администратор. Сценарий

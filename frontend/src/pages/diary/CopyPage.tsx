@@ -3,7 +3,7 @@ import { getRouteApi, Link, useNavigate } from '@tanstack/react-router'
 import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { copyEntries, DIARY_KEY, type Meal, useDiaryDay } from '@/api/nutrition'
+import { copyEntries, DIARY_KEY, useDiaryDay } from '@/api/nutrition'
 import { DateField } from '@/components/form/DateField'
 import { FormError } from '@/components/form/fields'
 import { Button } from '@/components/ui/button'
@@ -12,14 +12,20 @@ import type { ErrorKey } from '@/lib/errors'
 import { formatGrams, formatKcal } from '@/lib/nutrition'
 import { uuidv7 } from '@/lib/uuid'
 
+import { useMealName } from './mealName'
+import { MealNotFound } from './MealNotFound'
 import { DATE_MIN } from './values'
 
 const route = getRouteApi('/app/diary/$date/copy/$scope')
 
-/** Копирование приёма пищи или целого дня из другого дня в открытый. */
+/**
+ * Копирование приёма пищи или целого дня из другого дня в открытый. `scope` в адресе —
+ * ключ приёма пищи или `day`.
+ */
 export function CopyPage() {
   const { t, i18n } = useTranslation()
-  const { date, scope } = route.useParams() as { date: string; scope: Meal | 'day' }
+  const { date, scope } = route.useParams() as { date: string; scope: string }
+  const mealName = useMealName()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [from, setFrom] = useState(() => shiftDays(date, -1))
@@ -28,19 +34,23 @@ export function CopyPage() {
   // Ключи копий живут, пока открыт экран: повторная отправка после сбоя не создаст дубли.
   const ids = useRef(new Map<string, string>())
   const valid = isRealDate(from) && from >= DATE_MIN
+  const target = useDiaryDay(date)
   const source = useDiaryDay(valid ? from : date)
-  const entries = valid
+  const into = target.data?.meals.find((meal) => meal.id === scope)
+  // Что копируется: записи вместе с приёмом пищи, из которого они берутся.
+  const copied = valid
     ? (source.data?.meals ?? [])
-        .filter((meal) => scope === 'day' || meal.meal === scope)
-        .flatMap((meal) => meal.entries)
+        .filter((meal) => scope === 'day' || meal.id === scope)
+        .flatMap((meal) => meal.entries.map((entry) => ({ entry, meal })))
     : []
+  const entries = copied.map(({ entry }) => entry)
 
   async function copy() {
     setFailure(undefined)
     setCopying(true)
     const result = await copyEntries({
       to_date: date,
-      to_meal: scope === 'day' ? null : scope,
+      to_meal_id: scope === 'day' ? null : scope,
       items: entries.map((entry) => {
         const id = ids.current.get(entry.id) ?? uuidv7()
         ids.current.set(entry.id, id)
@@ -56,10 +66,17 @@ export function CopyPage() {
     await navigate({ to: '/diary/$date', params: { date } })
   }
 
+  if (scope !== 'day' && !into) {
+    return target.isPending ? (
+      <p className="text-muted-foreground">{t('common.loading')}</p>
+    ) : (
+      <MealNotFound date={date} />
+    )
+  }
   return (
     <div className="grid gap-4">
       <h1 className="text-2xl font-semibold">
-        {t('copy.title', { what: scope === 'day' ? t('copy.day') : t(`meals.${scope}`) })}
+        {t('copy.title', { what: into ? mealName(into) : t('copy.day') })}
       </h1>
       <p className="text-sm text-muted-foreground">
         {t('copy.into', { date: isoToDisplay(date) })}
@@ -70,14 +87,15 @@ export function CopyPage() {
         <p className="text-sm text-muted-foreground">{t('copy.empty')}</p>
       )}
       <ul aria-label={t('copy.preview')} className="grid gap-2">
-        {entries.map((entry) => (
+        {copied.map(({ entry, meal }) => (
           <li key={entry.id} className="rounded-lg border p-3">
             <p className="font-medium break-words">{entry.product_name}</p>
             <p className="text-sm text-muted-foreground">
-              {t(`meals.${entry.meal}`)}
+              {mealName(meal)}
               {' · '}
               {t('diary.entryLine', {
-                amount: formatGrams(entry.amount_g, i18n.language),
+                amount: formatGrams(entry.amount, i18n.language),
+                unit: t(`productUnits.${entry.unit}`),
                 kcal: formatKcal(entry.kcal, i18n.language),
               })}
             </p>

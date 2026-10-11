@@ -1,11 +1,12 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQueryClient } from '@tanstack/react-query'
 import { type ReactNode, useRef, useState } from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 
-import { type Product, PRODUCTS_KEY, saveProduct } from '@/api/nutrition'
-import { FormError, TextField } from '@/components/form/fields'
+import { type Product, PRODUCT_UNITS, PRODUCTS_KEY, saveProduct } from '@/api/nutrition'
+import { FormError, SelectField, TextField } from '@/components/form/fields'
+import { useAutoKcal } from '@/components/form/useAutoKcal'
 import { numberOf } from '@/components/form/validation'
 import { Button } from '@/components/ui/button'
 import type { ErrorKey } from '@/lib/errors'
@@ -13,9 +14,14 @@ import { uuidv7 } from '@/lib/uuid'
 
 import { productDefaults, productSchema, type ProductValues } from './productValues'
 
+/** Калории продукта хранятся с точностью до десятой. */
+const KCAL_DIGITS = 1
+
 /**
- * Форма продукта каталога: название и состав на 100 г. Без `product` создаёт новый.
- * `onSaved` получает ключ сохранённого продукта, `cancel` — ссылка «Отмена».
+ * Форма продукта каталога: название, единица и состав на 100 таких единиц. Без `product`
+ * создаёт новый. Калории считаются по белкам, жирам и углеводам, пока их не ввели сами: на
+ * упаковке число бывает другим. `onSaved` получает ключ сохранённого продукта, `cancel` —
+ * ссылка «Отмена».
  */
 export function ProductForm({
   product,
@@ -31,17 +37,27 @@ export function ProductForm({
   const [failure, setFailure] = useState<ErrorKey>()
   // Ключ нового продукта живёт, пока открыта форма: повторная отправка не создаст дубль.
   const id = useRef(product?.id ?? uuidv7())
+  const defaults = productDefaults(product)
   const form = useForm<ProductValues>({
     resolver: zodResolver(productSchema),
-    defaultValues: productDefaults(product),
+    defaultValues: defaults,
   })
-  const { errors, isSubmitting } = form.formState
+  const { errors, isSubmitting, isSubmitted } = form.formState
+  const unit = useWatch({ control: form.control, name: 'unit' })
+  const auto = useAutoKcal({
+    initial: defaults,
+    digits: KCAL_DIGITS,
+    read: form.getValues,
+    // После первой отправки поле перепроверяется: его ошибка не должна пережить расчёт.
+    write: (kcal) => form.setValue('kcal', kcal, { shouldValidate: isSubmitted }),
+  })
 
   async function submit(values: ProductValues) {
     setFailure(undefined)
     const result = await saveProduct(id.current, {
       name: values.name.trim(),
-      kcal: numberOf(values.kcal, 1),
+      unit: values.unit,
+      kcal: numberOf(values.kcal, KCAL_DIGITS),
       protein_g: numberOf(values.protein, 2),
       fat_g: numberOf(values.fat, 2),
       carbs_g: numberOf(values.carbs, 2),
@@ -55,6 +71,7 @@ export function ProductForm({
   }
 
   const number = { inputMode: 'decimal', autoComplete: 'off' } as const
+  const macro = { onChange: auto.follow }
 
   return (
     <form
@@ -69,33 +86,43 @@ export function ProductForm({
         error={errors.name?.message}
         {...form.register('name')}
       />
-      <p className="text-sm text-muted-foreground">{t('products.per100Hint')}</p>
+      <SelectField label={t('products.unit')} {...form.register('unit')}>
+        {PRODUCT_UNITS.map((option) => (
+          <option key={option} value={option}>
+            {t(`productUnitNames.${option}`)}
+          </option>
+        ))}
+      </SelectField>
+      <p className="text-sm text-muted-foreground">
+        {t('products.per100Hint', { unit: t(`productUnits.${unit}`) })}
+      </p>
       <div className="grid grid-cols-2 gap-4">
         <TextField
           label={t('products.kcal')}
           error={errors.kcal?.message}
           {...number}
-          {...form.register('kcal')}
+          {...form.register('kcal', auto.kcal)}
         />
         <TextField
           label={t('products.protein')}
           error={errors.protein?.message}
           {...number}
-          {...form.register('protein')}
+          {...form.register('protein', macro)}
         />
         <TextField
           label={t('products.fat')}
           error={errors.fat?.message}
           {...number}
-          {...form.register('fat')}
+          {...form.register('fat', macro)}
         />
         <TextField
           label={t('products.carbs')}
           error={errors.carbs?.message}
           {...number}
-          {...form.register('carbs')}
+          {...form.register('carbs', macro)}
         />
       </div>
+      <p className="text-sm text-muted-foreground">{t('products.kcalHint')}</p>
       <div className="flex gap-3">
         <Button type="submit" className="h-11" disabled={isSubmitting}>
           {t('common.save')}

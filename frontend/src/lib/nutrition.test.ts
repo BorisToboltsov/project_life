@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest'
 
-import { ageOn, formatGrams, formatKcal, share, suggestTargets } from './nutrition'
+import {
+  ACTIVITIES,
+  ageOn,
+  AIMS,
+  formatGrams,
+  formatKcal,
+  kcalFromMacros,
+  kcalIsTyped,
+  macrosEnergy,
+  share,
+  suggestTargets,
+} from './nutrition'
 
 describe('запись чисел', () => {
   it('калории — целыми, граммы — до десятой, в записи языка', () => {
@@ -16,6 +27,47 @@ describe('share', () => {
     expect(share(1050, 2100)).toBe(0.5)
     expect(share(2500, 2100)).toBe(1)
     expect(share(100, 0)).toBe(0)
+  })
+})
+
+describe('калории по БЖУ', () => {
+  const cheese = { protein: '17,2', fat: '5', carbs: '1.8' }
+
+  it('грамм белков и углеводов — 4 ккал, жиров — 9', () => {
+    expect(macrosEnergy({ protein: '130', fat: '70', carbs: '230' })).toBe(2070)
+    expect(macrosEnergy({ protein: '1', fat: '', carbs: '' })).toBe(4)
+    expect(macrosEnergy({ protein: '', fat: '1', carbs: 'много' })).toBe(9)
+    expect(macrosEnergy({ protein: '', fat: '', carbs: '' })).toBe(0)
+  })
+
+  it('поле калорий заполняется, когда набраны все три, с нужной точностью', () => {
+    expect(kcalFromMacros(cheese, 1)).toBe('121')
+    expect(kcalFromMacros({ protein: '12,3', fat: '6,2', carbs: '61,8' }, 1)).toBe('352.2')
+    expect(kcalFromMacros({ protein: '12,3', fat: '6,2', carbs: '61,8' }, 0)).toBe('352')
+    expect(kcalFromMacros({ protein: '0', fat: '0', carbs: '0' }, 1)).toBe('0')
+  })
+
+  it.each([
+    [{ ...cheese, carbs: '' }],
+    [{ ...cheese, fat: 'пять' }],
+    [{ ...cheese, protein: ',' }],
+    [{ protein: '', fat: '', carbs: '' }],
+  ])('пока БЖУ не набраны, считать не из чего: %o', (texts) => {
+    expect(kcalFromMacros(texts, 1)).toBe('')
+  })
+
+  it('число, у которого ещё набирают дробную часть, уже считается', () => {
+    expect(kcalFromMacros({ ...cheese, fat: '5,' }, 1)).toBe('121')
+    expect(kcalFromMacros({ ...cheese, fat: '5.' }, 1)).toBe('121')
+    expect(macrosEnergy({ protein: '17,', fat: '', carbs: '' })).toBe(68)
+  })
+
+  it('калории введены руками, если расходятся с расчётом', () => {
+    expect(kcalIsTyped({ ...cheese, kcal: '121' }, 1)).toBe(false)
+    expect(kcalIsTyped({ ...cheese, kcal: '' }, 1)).toBe(false)
+    expect(kcalIsTyped({ ...cheese, kcal: '145,5' }, 1)).toBe(true)
+    // Калории без БЖУ считать было не из чего — значит, их ввели.
+    expect(kcalIsTyped({ protein: '', fat: '', carbs: '', kcal: '2000' }, 0)).toBe(true)
   })
 })
 
@@ -46,9 +98,21 @@ describe('suggestTargets', () => {
   it('делит калории на белки, жиры и углеводы как 20 / 30 / 50', () => {
     const targets = suggestTargets(man, 'sedentary', 'maintain')
 
-    expect(targets).toEqual({ kcal: 2100, protein_g: 105, fat_g: 70, carbs_g: 263 })
-    // Углеводы — остаток, так что сумма сходится с калориями до округления грамма.
-    const kcal = targets.protein_g * 4 + targets.fat_g * 9 + targets.carbs_g * 4
-    expect(Math.abs(kcal - targets.kcal)).toBeLessThanOrEqual(2)
+    // Углеводы — остаток, округлённый вниз: 1050 ккал — это 262,5 г.
+    expect(targets).toEqual({ kcal: 2100, protein_g: 105, fat_g: 70, carbs_g: 262 })
+  })
+
+  it('белки, жиры и углеводы подсказки всегда помещаются в её калории', () => {
+    for (let weightKg = 40; weightKg <= 150; weightKg += 1) {
+      for (const activity of ACTIVITIES) {
+        for (const aim of AIMS) {
+          const targets = suggestTargets({ ...man, weightKg }, activity, aim)
+          const kcal = targets.protein_g * 4 + targets.fat_g * 9 + targets.carbs_g * 4
+
+          expect(kcal, `${weightKg} кг, ${activity}, ${aim}`).toBeLessThanOrEqual(targets.kcal)
+          expect(targets.kcal - kcal).toBeLessThan(4)
+        }
+      }
+    }
   })
 })

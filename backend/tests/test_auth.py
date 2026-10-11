@@ -71,6 +71,22 @@ async def test_register_creates_user_and_opens_session(
     assert user.password_hash != PASSWORD
 
 
+async def test_new_user_starts_with_the_preset_meals(client: AsyncClient, db: AsyncSession) -> None:
+    session = await client.post("/api/auth/register", json=registration(await issue_invite(db)))
+    headers = {"Authorization": f"Bearer {session.json()['access_token']}"}
+
+    day = await client.get(
+        "/api/diary", params={"date": str(datetime.now(UTC).date())}, headers=headers
+    )
+
+    assert [meal["preset"] for meal in day.json()["meals"]] == [
+        "breakfast",
+        "lunch",
+        "dinner",
+        "snack",
+    ]
+
+
 async def test_register_grants_the_role_of_the_invite(
     client: AsyncClient, db: AsyncSession
 ) -> None:

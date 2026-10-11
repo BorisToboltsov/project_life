@@ -2,7 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
-import { useForm } from 'react-hook-form'
+import { type Control, useForm, useWatch } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 
 import { useMeasurementSummary } from '@/api/measurements'
@@ -10,11 +10,13 @@ import { DIARY_KEY, type NutritionGoal, saveGoal, useNutritionGoal } from '@/api
 import type { User } from '@/auth/session'
 import { useUser } from '@/auth/useSession'
 import { FormError, SelectField, TextField } from '@/components/form/fields'
-import { numberOf } from '@/components/form/validation'
+import { useAutoKcal } from '@/components/form/useAutoKcal'
+import { optionalNumberOf } from '@/components/form/validation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { isoToDisplay, today } from '@/lib/dates'
 import type { ErrorKey } from '@/lib/errors'
+import { parseDecimal } from '@/lib/numbers'
 import {
   ACTIVITIES,
   type Activity,
@@ -23,6 +25,7 @@ import {
   AIMS,
   type Body,
   formatKcal,
+  macrosEnergy,
   suggestTargets,
   type Targets,
 } from '@/lib/nutrition'
@@ -97,38 +100,79 @@ function Hint({ body, onApply }: { body: Body | null; onApply: (targets: Targets
   )
 }
 
+/**
+ * Строка под полями: сколько калорий из цели уже занято белками, жирами и углеводами, а
+ * пока сравнивать нечего — как калории и БЖУ связаны.
+ */
+function Budget({ control }: { control: Control<GoalValues> }) {
+  const { t, i18n } = useTranslation()
+  const values = useWatch({ control })
+  const kcal = parseDecimal(values.kcal ?? '')
+  const used = macrosEnergy({
+    protein: values.protein ?? '',
+    fat: values.fat ?? '',
+    carbs: values.carbs ?? '',
+  })
+
+  // Без калорий предела нет, а без БЖУ считать нечего.
+  if (kcal === null || used === 0) {
+    return <p className="text-sm text-muted-foreground">{t('goal.kcalHint')}</p>
+  }
+  const format = (value: number) => formatKcal(value, i18n.language)
+  return used > kcal ? (
+    <p className="text-sm text-destructive">
+      {t('goal.budgetOver', { used: format(used), over: format(used - kcal) })}
+    </p>
+  ) : (
+    <p className="text-sm text-muted-foreground">
+      {t('goal.budgetLeft', { used: format(used), kcal: format(kcal), left: format(kcal - used) })}
+    </p>
+  )
+}
+
+function textOf(value: number | null | undefined): string {
+  return value == null ? '' : String(value)
+}
+
 function GoalForm({ goal, body }: { goal: NutritionGoal | null; body: Body | null }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [failure, setFailure] = useState<ErrorKey>()
-  const form = useForm<GoalValues>({
-    resolver: zodResolver(goalSchema),
-    defaultValues: {
-      kcal: goal ? String(goal.kcal) : '',
-      protein: goal ? String(goal.protein_g) : '',
-      fat: goal ? String(goal.fat_g) : '',
-      carbs: goal ? String(goal.carbs_g) : '',
-    },
+  const defaults: GoalValues = {
+    kcal: textOf(goal?.kcal),
+    protein: textOf(goal?.protein_g),
+    fat: textOf(goal?.fat_g),
+    carbs: textOf(goal?.carbs_g),
+  }
+  const form = useForm<GoalValues>({ resolver: zodResolver(goalSchema), defaultValues: defaults })
+  const { errors, isSubmitting, isSubmitted } = form.formState
+  // Калории считаются по БЖУ, пока их не ввели сами; введённые — предел для БЖУ.
+  const auto = useAutoKcal({
+    initial: defaults,
+    digits: 0,
+    read: form.getValues,
+    write: (kcal) => form.setValue('kcal', kcal),
   })
-  const { errors, isSubmitting } = form.formState
 
   function apply(targets: Targets) {
-    form.reset({
+    const values = {
       kcal: String(targets.kcal),
       protein: String(targets.protein_g),
       fat: String(targets.fat_g),
       carbs: String(targets.carbs_g),
-    })
+    }
+    form.reset(values)
+    auto.reset(values)
   }
 
   async function submit(values: GoalValues) {
     setFailure(undefined)
     const result = await saveGoal({
-      kcal: numberOf(values.kcal, 0),
-      protein_g: numberOf(values.protein, 0),
-      fat_g: numberOf(values.fat, 0),
-      carbs_g: numberOf(values.carbs, 0),
+      kcal: optionalNumberOf(values.kcal, 0),
+      protein_g: optionalNumberOf(values.protein, 0),
+      fat_g: optionalNumberOf(values.fat, 0),
+      carbs_g: optionalNumberOf(values.carbs, 0),
       local_date: today(),
     })
     if (result.failure) {
@@ -140,6 +184,13 @@ function GoalForm({ goal, body }: { goal: NutritionGoal | null; body: Body | nul
   }
 
   const number = { inputMode: 'numeric', autoComplete: 'off' } as const
+  const macro = {
+    onChange: () => {
+      auto.follow()
+      // Предел по калориям проверяется на их поле: после правки БЖУ оно перепроверяется.
+      if (isSubmitted) void form.trigger('kcal')
+    },
+  }
 
   return (
     <form
@@ -153,33 +204,35 @@ function GoalForm({ goal, body }: { goal: NutritionGoal | null; body: Body | nul
           {t('goal.since', { date: isoToDisplay(goal.effective_from) })}
         </p>
       )}
+      <p className="text-sm text-muted-foreground">{t('goal.partial')}</p>
       <FormError failure={failure} />
       <div className="grid grid-cols-2 gap-4">
         <TextField
           label={t('goal.kcal')}
           error={errors.kcal?.message}
           {...number}
-          {...form.register('kcal')}
+          {...form.register('kcal', auto.kcal)}
         />
         <TextField
           label={t('goal.protein')}
           error={errors.protein?.message}
           {...number}
-          {...form.register('protein')}
+          {...form.register('protein', macro)}
         />
         <TextField
           label={t('goal.fat')}
           error={errors.fat?.message}
           {...number}
-          {...form.register('fat')}
+          {...form.register('fat', macro)}
         />
         <TextField
           label={t('goal.carbs')}
           error={errors.carbs?.message}
           {...number}
-          {...form.register('carbs')}
+          {...form.register('carbs', macro)}
         />
       </div>
+      <Budget control={form.control} />
       <Card>
         <CardHeader>
           <CardTitle>{t('goal.hintTitle')}</CardTitle>

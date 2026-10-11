@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 
 import { callsTo, json, mockApi } from '@/test/api'
 import { renderApp } from '@/test/app'
-import { anna, cottageCheese, diaryDay, foodEntry } from '@/test/fixtures'
+import { anna, cottageCheese, diaryDay, foodEntry, kefir, meals } from '@/test/fixtures'
 
 const DATE = '2026-10-11'
 const DAY = 'GET /api/diary'
@@ -23,15 +23,43 @@ describe('правка записи дневника', () => {
     expect(amount).toHaveValue('150')
     await userEvent.clear(amount)
     await userEvent.type(amount, '200')
-    await userEvent.selectOptions(screen.getByLabelText('Приём пищи'), 'dinner')
+    await userEvent.selectOptions(screen.getByLabelText('Приём пищи'), 'Ужин')
     await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
 
     await waitFor(() => expect(router.state.location.pathname).toBe(`/diary/${DATE}`))
     expect(callsTo(calls, save)[0].body).toEqual({
       local_date: DATE,
-      meal: 'dinner',
+      meal_id: meals.dinner.id,
       product_id: cottageCheese.id,
-      amount_g: 200,
+      amount: 200,
+    })
+  })
+
+  describe('в дне с убранным приёмом пищи', () => {
+    const archived = { ...meals.snack, archived: true }
+    const drink = foodEntry(kefir, 250, { meal_id: archived.id })
+    const eaten = foodEntry(cottageCheese, 150)
+    const day = diaryDay(DATE, [drink, eaten], null, [meals.breakfast, meals.lunch, archived])
+    const options = () =>
+      [...screen.getByLabelText<HTMLSelectElement>('Приём пищи').options].map(
+        (option) => option.text,
+      )
+
+    it('жидкость правится в миллилитрах и остаётся в своём убранном приёме', async () => {
+      mockApi({ [DAY]: json(200, day) })
+      await renderApp(`/diary/${DATE}/entries/${drink.id}`, anna)
+
+      expect(await screen.findByLabelText('Сколько, мл')).toHaveValue('250')
+      expect(options()).toEqual(['Завтрак', 'Обед', 'Перекус'])
+      expect(screen.getByLabelText('Приём пищи')).toHaveValue(archived.id)
+    })
+
+    it('запись другого приёма в убранный не перенести', async () => {
+      mockApi({ [DAY]: json(200, day) })
+      await renderApp(`/diary/${DATE}/entries/${eaten.id}`, anna)
+
+      expect(await screen.findByLabelText('Сколько, г')).toHaveValue('150')
+      expect(options()).toEqual(['Завтрак', 'Обед'])
     })
   })
 
@@ -44,7 +72,7 @@ describe('правка записи дневника', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Сохранить' }))
 
     await waitFor(() => expect(callsTo(calls, save)).toHaveLength(1))
-    expect(callsTo(calls, save)[0].body).toMatchObject({ product_id: null, amount_g: 150 })
+    expect(callsTo(calls, save)[0].body).toMatchObject({ product_id: null, amount: 150 })
   })
 
   it('показывает ошибку поля и отказ сервера', async () => {
@@ -58,7 +86,7 @@ describe('правка записи дневника', () => {
     const amount = await screen.findByLabelText('Сколько, г')
     await userEvent.clear(amount)
     await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
-    expect(await screen.findByText('От 0,1 до 5000 г')).toBeInTheDocument()
+    expect(await screen.findByText('От 0,1 до 5000')).toBeInTheDocument()
 
     await userEvent.type(amount, '90')
     await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }))

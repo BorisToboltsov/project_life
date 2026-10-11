@@ -2,13 +2,24 @@ import { expect, type Page, test } from '@playwright/test'
 
 import { adminInviteLink, register } from './steps.ts'
 
-async function createProduct(page: Page, name: string, [kcal, protein, fat, carbs]: string[]) {
+/**
+ * Заводит продукт. Калории `null` — их не вводят: поле считается по белкам, жирам и
+ * углеводам, и в нём ждём `expected`.
+ */
+async function createProduct(
+  page: Page,
+  name: string,
+  [kcal, protein, fat, carbs]: [string | null, string, string, string],
+  { unit, expected }: { unit?: string; expected?: string } = {},
+) {
   await page.getByRole('link', { name: 'Создать продукт' }).click()
   await page.getByLabel('Название').fill(name)
-  await page.getByLabel('Калории, ккал').fill(kcal)
+  if (unit) await page.getByLabel('В чём измеряется').selectOption({ label: unit })
+  if (kcal !== null) await page.getByLabel('Калории, ккал').fill(kcal)
   await page.getByLabel('Белки, г').fill(protein)
   await page.getByLabel('Жиры, г').fill(fat)
   await page.getByLabel('Углеводы, г').fill(carbs)
+  if (expected) await expect(page.getByLabel('Калории, ккал')).toHaveValue(expected)
   await page.getByRole('button', { name: 'Сохранить' }).click()
 }
 
@@ -25,6 +36,7 @@ test('дневник питания: день внесён целиком, пр�
   const suffix = `${testInfo.project.name}-${Date.now()}`
   const oatmeal = `Овсянка ${suffix}`
   const cheese = `Творог ${suffix}`
+  const kefir = `Кефир ${suffix}`
   await register(page, adminInviteLink(), 'Борис', `diary-${suffix}@example.com`)
 
   // С главной — в сегодняшний день; продукт создаётся по пути в завтрак.
@@ -34,7 +46,8 @@ test('дневник питания: день внесён целиком, пр�
   await page.getByLabel('Сколько, г').fill('60')
   await page.getByRole('button', { name: 'Добавить', exact: true }).click()
   await expect(page.getByRole('status')).toHaveText(`Добавлено: ${oatmeal}, 60 г`)
-  await createProduct(page, cheese, ['121', '17,2', '5', '1,8'])
+  // Калории творога не вводим: они считаются по БЖУ — 17,2 × 4 + 5 × 9 + 1,8 × 4.
+  await createProduct(page, cheese, [null, '17,2', '5', '1,8'], { expected: '121' })
   await page.getByLabel('Сколько, г').fill('150')
   await page.getByRole('button', { name: 'Добавить', exact: true }).click()
   await expect(page.getByRole('status')).toHaveText(`Добавлено: ${cheese}, 150 г`)
@@ -46,12 +59,22 @@ test('дневник питания: день внесён целиком, пр�
   await expect(breakfast.first()).toContainText('60 г · 211 ккал')
   await expect(page.getByText('393 ккал', { exact: true }).first()).toBeVisible()
 
-  // Цель на день: съеденное показывается против неё.
+  // Цель на день хватит задать по одному показателю: остальные идут без неё.
   await page.getByRole('link', { name: 'Задать цель' }).click()
-  await page.getByLabel('Калории, ккал').fill('2100')
   await page.getByLabel('Белки, г').fill('130')
+  await page.getByRole('button', { name: 'Сохранить' }).click()
+  await expect(page.getByText('33,2 из 130 г')).toBeVisible()
+  await expect(page.getByRole('progressbar')).toHaveCount(1)
+
+  // Полная цель: калории — предел для белков, жиров и углеводов.
+  await page.getByRole('link', { name: 'Изменить цель' }).click()
+  await page.getByLabel('Калории, ккал').fill('2000')
   await page.getByLabel('Жиры, г').fill('70')
   await page.getByLabel('Углеводы, г').fill('230')
+  await expect(page.getByText(/БЖУ дают 2\s070 ккал — на 70 больше цели/)).toBeVisible()
+  await page.getByRole('button', { name: 'Сохранить' }).click()
+  await expect(page.getByText('Белки, жиры и углеводы не помещаются в эти калории')).toBeVisible()
+  await page.getByLabel('Калории, ккал').fill('2100')
   await page.getByRole('button', { name: 'Сохранить' }).click()
   await expect(page.getByText(/^393 из 2\s100 ккал$/)).toBeVisible()
   await expect(page.getByRole('progressbar', { name: 'Калории' })).toHaveAttribute(
@@ -106,6 +129,44 @@ test('дневник питания: день внесён целиком, пр�
   await page.reload()
   await expect(breakfast).toHaveCount(2)
   await expect(page.getByText(/^393 из 2\s100 ккал$/)).toBeVisible()
+
+  // Завтрак предлагает то, что в него уже вносили, — искать не нужно.
+  await page.getByRole('link', { name: 'Добавить: Завтрак' }).click()
+  const usual = page.getByRole('list', { name: 'Часто в этом приёме пищи' })
+  await expect(usual.getByRole('button', { name: new RegExp(oatmeal) })).toBeVisible()
+  await expect(usual.getByRole('button', { name: new RegExp(cheese) })).toBeVisible()
+  await page.getByRole('link', { name: 'Готово' }).click()
+
+  // Пятый приём пищи со своим названием; в него вносится напиток в миллилитрах.
+  await page.getByRole('link', { name: 'Добавить приём пищи' }).click()
+  await page.getByLabel('Название').fill('Полдник')
+  await page.getByRole('button', { name: 'Сохранить' }).click()
+  await page.getByRole('link', { name: 'Добавить: Полдник' }).click()
+  await createProduct(page, kefir, [null, '3', '1', '4'], { unit: 'Миллилитры', expected: '37' })
+  await page.getByLabel('Сколько, мл').fill('250')
+  await page.getByRole('button', { name: 'Добавить', exact: true }).click()
+  await expect(page.getByRole('status')).toHaveText(`Добавлено: ${kefir}, 250 мл`)
+  await page.getByRole('link', { name: 'Готово' }).click()
+  await expect(page.getByRole('list', { name: 'Полдник' }).getByRole('listitem')).toContainText(
+    '250 мл · 93 ккал',
+  )
+
+  // Приём пищи убирается из списка — и предустановленный тоже. Пустой исчезает из дня,
+  // а тот, где есть записи, остаётся в нём вместе с ними.
+  await page.getByRole('button', { name: 'Удалить приём пищи: Обед' }).click()
+  await page.getByRole('button', { name: 'Да, удалить' }).click()
+  await expect(page.getByRole('link', { name: 'Добавить: Обед' })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Удалить приём пищи: Полдник' }).click()
+  await page.getByRole('button', { name: 'Да, удалить' }).click()
+  await expect(page.getByRole('link', { name: 'Добавить: Полдник' })).toHaveCount(0)
+  await expect(page.getByRole('list', { name: 'Полдник' }).getByRole('listitem')).toHaveCount(1)
+  await expect(
+    page.getByText('Приём пищи убран из списка. Записи этого дня остались.'),
+  ).toBeVisible()
+  await page.getByRole('link', { name: 'Следующий день' }).click()
+  await expect(breakfast).toHaveCount(2)
+  await expect(page.getByText('Полдник')).toHaveCount(0)
+  await expect(page.getByText('Обед')).toHaveCount(0)
 
   expect(problems).toEqual([])
 })

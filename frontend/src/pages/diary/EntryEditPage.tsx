@@ -6,26 +6,28 @@ import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
 
-import { DIARY_KEY, type FoodEntry, MEALS, saveEntry, useDiaryDay } from '@/api/nutrition'
+import { type DayMeal, DIARY_KEY, type FoodEntry, saveEntry, useDiaryDay } from '@/api/nutrition'
 import { FormError, SelectField, TextField } from '@/components/form/fields'
 import { numberOf } from '@/components/form/validation'
 import { Button } from '@/components/ui/button'
 import type { ErrorKey } from '@/lib/errors'
 
+import { useMealName } from './mealName'
 import { amountSchema } from './values'
 
-const schema = amountSchema.extend({ meal: z.enum(MEALS) })
+const schema = amountSchema.extend({ meal: z.string() })
 
 type Values = z.infer<typeof schema>
 
-function EditForm({ entry }: { entry: FoodEntry }) {
+function EditForm({ entry, meals }: { entry: FoodEntry; meals: DayMeal[] }) {
   const { t } = useTranslation()
+  const mealName = useMealName()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [failure, setFailure] = useState<ErrorKey>()
   const form = useForm<Values>({
     resolver: zodResolver(schema),
-    defaultValues: { amount: String(entry.amount_g), meal: entry.meal },
+    defaultValues: { amount: String(entry.amount), meal: entry.meal_id },
   })
   const { errors, isSubmitting } = form.formState
 
@@ -33,10 +35,10 @@ function EditForm({ entry }: { entry: FoodEntry }) {
     setFailure(undefined)
     const result = await saveEntry(entry.id, {
       local_date: entry.local_date,
-      meal: values.meal,
+      meal_id: values.meal,
       // Продукт тот же — запись остаётся со своим снимком состава.
       product_id: entry.product_id,
-      amount_g: numberOf(values.amount, 1),
+      amount: numberOf(values.amount, 1),
     })
     if (result.failure) {
       setFailure(result.failure)
@@ -57,18 +59,21 @@ function EditForm({ entry }: { entry: FoodEntry }) {
       </h1>
       <FormError failure={failure} />
       <TextField
-        label={t('entry.amount')}
+        label={t('entry.amount', { unit: t(`productUnits.${entry.unit}`) })}
         inputMode="decimal"
         autoComplete="off"
         error={errors.amount?.message}
         {...form.register('amount')}
       />
       <SelectField label={t('entry.meal')} {...form.register('meal')}>
-        {MEALS.map((meal) => (
-          <option key={meal} value={meal}>
-            {t(`meals.${meal}`)}
-          </option>
-        ))}
+        {/* Приёмы из списка и тот, где запись лежит сейчас, даже если его из списка убрали. */}
+        {meals
+          .filter((meal) => !meal.archived || meal.id === entry.meal_id)
+          .map((meal) => (
+            <option key={meal.id} value={meal.id}>
+              {mealName(meal)}
+            </option>
+          ))}
       </SelectField>
       <div className="flex gap-3">
         <Button type="submit" className="h-11" disabled={isSubmitting}>
@@ -90,7 +95,8 @@ export function EntryEditPage() {
   const { t } = useTranslation()
   const { date, id } = route.useParams() as { date: string; id: string }
   const day = useDiaryDay(date)
-  const entry = day.data?.meals.flatMap((meal) => meal.entries).find((item) => item.id === id)
+  const meals = day.data?.meals ?? []
+  const entry = meals.flatMap((meal) => meal.entries).find((item) => item.id === id)
 
   if (day.isPending) {
     return <p className="text-muted-foreground">{t('common.loading')}</p>
@@ -107,5 +113,5 @@ export function EntryEditPage() {
       </div>
     )
   }
-  return <EditForm entry={entry} />
+  return <EditForm entry={entry} meals={meals} />
 }

@@ -1,8 +1,19 @@
 """Гейт миграций: схема в базе обязана совпадать с моделями, а миграции — откатываться."""
 
+import uuid
+from collections.abc import Iterator
+from datetime import date
+from typing import Any, LiteralString
+
+import psycopg
+import pytest
 from alembic import command
 
-from tests.conftest import alembic_config
+from tests.conftest import alembic_config, sync_url
+
+# Миграция, которая превратила приём пищи из кода в запись списка пользователя.
+BEFORE_MEALS = "fa29e6e94544"
+MEALS = "e8252b78ff95"
 
 
 def test_models_match_migrations() -> None:
@@ -16,3 +27,96 @@ def test_migrations_roll_back_and_forward() -> None:
     command.downgrade(config, "base")
     command.upgrade(config, "head")
     command.check(config)
+
+
+@pytest.fixture
+def at_head() -> Iterator[None]:
+    """Что бы ни случилось в тесте, база возвращается к последней миграции."""
+    yield
+    command.upgrade(alembic_config(), "head")
+
+
+def _rows(query: LiteralString) -> list[tuple[Any, ...]]:
+    with psycopg.connect(sync_url()) as connection:
+        return connection.execute(query).fetchall()
+
+
+def _execute(query: LiteralString, *params: Any) -> None:
+    with psycopg.connect(sync_url(), autocommit=True) as connection:
+        connection.execute(query, params)
+
+
+@pytest.mark.usefixtures("at_head")
+def test_meal_migration_carries_the_diary_over_and_back() -> None:
+    """Данные фазы 3 переживают переход к списку приёмов пищи и откат с него."""
+    config = alembic_config()
+    user, product = uuid.uuid7(), uuid.uuid7()
+    command.downgrade(config, BEFORE_MEALS)
+    _execute(
+        "INSERT INTO users (id, email, password_hash, display_name, role, language, timezone,"
+        " unit_system, disclaimer_accepted_at)"
+        " VALUES (%s, 'anna@example.com', 'x', 'Анна', 'user', 'ru', 'Europe/Moscow', 'metric',"
+        " now())",
+        user,
+    )
+    _execute(
+        "INSERT INTO products (id, name, kcal, protein_g, fat_g, carbs_g, created_by)"
+        " VALUES (%s, 'Творог 5 %%', 121, 17.2, 5, 1.8, %s)",
+        product,
+        user,
+    )
+    for meal, amount in (("breakfast", 150), ("snack", 60)):
+        _execute(
+            "INSERT INTO food_entries (id, user_id, local_date, meal, amount_g, product_id,"
+            " product_name, kcal, protein_g, fat_g, carbs_g)"
+            " VALUES (%s, %s, %s, %s, %s, %s, 'Творог 5 %%', 121, 17.2, 5, 1.8)",
+            uuid.uuid7(),
+            user,
+            date(2026, 10, 11),
+            meal,
+            amount,
+            product,
+        )
+    _execute(
+        "INSERT INTO nutrition_goals (user_id, effective_from, kcal, protein_g, fat_g, carbs_g)"
+        " VALUES (%s, %s, 2100, 130, 70, 230)",
+        user,
+        date(2026, 10, 1),
+    )
+
+    command.upgrade(config, MEALS)
+
+    meals = _rows("SELECT id, preset, position, name, archived_at FROM meals ORDER BY position")
+    assert [meal[1:] for meal in meals] == [
+        ("breakfast", 0, None, None),
+        ("lunch", 1, None, None),
+        ("dinner", 2, None, None),
+        ("snack", 3, None, None),
+    ]
+    # Ключи приёмов годятся для запросов клиента: это UUIDv7.
+    assert {meal[0].version for meal in meals} == {7}
+    assert _rows(
+        "SELECT meals.preset, amount::int, unit FROM food_entries"
+        " JOIN meals ON meals.id = meal_id ORDER BY amount"
+    ) == [("snack", 60, "g"), ("breakfast", 150, "g")]
+    assert _rows("SELECT unit FROM products") == [("g",)]
+
+    # Свой приём пищи и цель без калорий прежняя схема выразить не может.
+    own = uuid.uuid7()
+    _execute(
+        "INSERT INTO meals (id, user_id, name, position) VALUES (%s, %s, 'Полдник', 4)", own, user
+    )
+    _execute("UPDATE food_entries SET meal_id = %s WHERE amount = 150", own)
+    _execute(
+        "INSERT INTO nutrition_goals (user_id, effective_from, protein_g) VALUES (%s, %s, 150)",
+        user,
+        date(2026, 10, 11),
+    )
+
+    command.downgrade(config, BEFORE_MEALS)
+
+    assert _rows("SELECT meal, amount_g::int FROM food_entries ORDER BY amount_g") == [
+        ("snack", 60),
+        ("snack", 150),
+    ]
+    assert _rows("SELECT kcal FROM nutrition_goals") == [(2100,)]
