@@ -19,6 +19,7 @@ class ErrorCode(StrEnum):
     EMAIL_TAKEN = "email_taken"
     WRONG_PASSWORD = "wrong_password"  # noqa: S105
     PRODUCT_NOT_FOUND = "product_not_found"
+    MEAL_NOT_FOUND = "meal_not_found"
 
 
 class ErrorResponse(BaseModel):

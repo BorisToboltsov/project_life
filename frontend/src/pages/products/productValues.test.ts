@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { cottageCheese } from '@/test/fixtures'
+import { cottageCheese, kefir } from '@/test/fixtures'
 
 import { productDefaults, productSchema } from './productValues'
 
@@ -14,6 +14,7 @@ describe('productSchema', () => {
   it('принимает продукт из каталога как есть', () => {
     expect(valid).toEqual({
       name: 'Творог 5 %',
+      unit: 'g',
       kcal: '121',
       protein: '17.2',
       fat: '5',
@@ -41,9 +42,16 @@ describe('productSchema', () => {
     expect(issues(productSchema.safeParse({ ...valid, ...fields }))).toEqual([message])
   })
 
+  it('продукт измеряется в граммах или миллилитрах — новый по умолчанию в граммах', () => {
+    expect(productDefaults().unit).toBe('g')
+    expect(productDefaults(kefir).unit).toBe('ml')
+    expect(productSchema.safeParse(productDefaults(kefir)).success).toBe(true)
+    expect(productSchema.safeParse({ ...valid, unit: 'kg' }).success).toBe(false)
+  })
+
   it('чистый жир и вода — тоже продукты', () => {
-    const oil = { name: 'Масло', kcal: '899', protein: '0', fat: '99,9', carbs: '0' }
-    const water = { name: 'Вода', kcal: '0', protein: '0', fat: '0', carbs: '0' }
+    const oil = { ...valid, name: 'Масло', kcal: '899', protein: '0', fat: '99,9', carbs: '0' }
+    const water = { ...valid, name: 'Вода', kcal: '0', protein: '0', fat: '0', carbs: '0' }
 
     expect(productSchema.safeParse(oil).success).toBe(true)
     expect(productSchema.safeParse(water).success).toBe(true)

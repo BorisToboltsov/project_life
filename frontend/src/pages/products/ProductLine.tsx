@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import type { Product } from '@/api/nutrition'
 import { formatGrams, formatKcal } from '@/lib/nutrition'
 
-/** Название продукта и его состав на 100 г второй строкой. */
+/** Название продукта и его состав на 100 г или 100 мл второй строкой. */
 export function ProductLine({ product }: { product: Product }) {
   const { t, i18n } = useTranslation()
   return (
@@ -15,6 +15,7 @@ export function ProductLine({ product }: { product: Product }) {
           protein: formatGrams(product.protein_g, i18n.language),
           fat: formatGrams(product.fat_g, i18n.language),
           carbs: formatGrams(product.carbs_g, i18n.language),
+          unit: t(`productUnits.${product.unit}`),
         })}
       </span>
     </>

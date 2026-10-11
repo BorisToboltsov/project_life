@@ -5,7 +5,17 @@ import { describe, expect, it } from 'vitest'
 import { shiftDays, today } from '@/lib/dates'
 import { callsTo, json, mockApi, sequence } from '@/test/api'
 import { renderApp } from '@/test/app'
-import { anna, cottageCheese, dailyGoal, diaryDay, foodEntry, oatmeal } from '@/test/fixtures'
+import {
+  anna,
+  cottageCheese,
+  dailyGoal,
+  diaryDay,
+  foodEntry,
+  kefir,
+  meals,
+  oatmeal,
+  secondBreakfast,
+} from '@/test/fixtures'
 
 const DAY = 'GET /api/diary'
 const DATE = '2026-10-11'
@@ -17,7 +27,7 @@ function loggedDay(date = DATE, goal = dailyGoal) {
     [
       foodEntry(oatmeal, 60),
       foodEntry(cottageCheese, 150),
-      foodEntry(cottageCheese, 200, { meal: 'dinner' }),
+      foodEntry(cottageCheese, 200, { meal_id: meals.dinner.id }),
     ],
     goal,
   )
@@ -63,6 +73,32 @@ describe('день дневника', () => {
     expect(await screen.findByRole('link', { name: 'Задать цель' })).toBeInTheDocument()
     expect(screen.getByText('182 ккал', { selector: '.text-xl' })).toBeInTheDocument()
     expect(screen.queryByRole('progressbar')).not.toBeInTheDocument()
+  })
+
+  it('цель по части показателей сверяет только их', async () => {
+    const onlyKcalAndProtein = { ...dailyGoal, kcal: 2000, fat_g: null, carbs_g: null }
+    mockApi({
+      [DAY]: json(200, diaryDay(DATE, [foodEntry(cottageCheese, 150)], onlyKcalAndProtein)),
+    })
+    await renderApp(`/diary/${DATE}`, anna)
+
+    expect(await screen.findByText('182 из 2 000 ккал')).toBeInTheDocument()
+    expect(screen.getByText('25,8 из 130 г')).toBeInTheDocument()
+    // Жиры и углеводы без цели — только съеденное, без шкалы.
+    expect(screen.getByText('7,5 г')).toBeInTheDocument()
+    expect(screen.getByText('2,7 г')).toBeInTheDocument()
+    expect(screen.getAllByRole('progressbar').map((bar) => bar.getAttribute('aria-label'))).toEqual(
+      ['Калории', 'Белки'],
+    )
+    expect(screen.getByRole('link', { name: 'Изменить цель' })).toBeInTheDocument()
+  })
+
+  it('жидкость показывает в миллилитрах', async () => {
+    mockApi({ [DAY]: json(200, diaryDay(DATE, [foodEntry(kefir, 250)])) })
+    await renderApp(`/diary/${DATE}`, anna)
+
+    const breakfast = await screen.findByRole('list', { name: 'Завтрак' })
+    expect(within(breakfast).getByRole('listitem')).toHaveTextContent('Кефир 1 %250 мл · 100 ккал')
   })
 
   it('превышение цели отмечает шкалой', async () => {
@@ -113,7 +149,7 @@ describe('день дневника', () => {
 
     expect(await screen.findByRole('link', { name: 'Добавить: Обед' })).toHaveAttribute(
       'href',
-      `/diary/${DATE}/add/lunch`,
+      `/diary/${DATE}/add/${meals.lunch.id}`,
     )
     expect(screen.getByRole('link', { name: 'Изменить' })).toHaveAttribute(
       'href',
@@ -121,7 +157,11 @@ describe('день дневника', () => {
     )
     expect(screen.getAllByRole('link', { name: 'Скопировать из другого дня' })[2]).toHaveAttribute(
       'href',
-      `/diary/${DATE}/copy/dinner`,
+      `/diary/${DATE}/copy/${meals.dinner.id}`,
+    )
+    expect(screen.getByRole('link', { name: 'Добавить приём пищи' })).toHaveAttribute(
+      'href',
+      `/diary/${DATE}/meals/new`,
     )
     expect(screen.getByRole('link', { name: 'Скопировать день' })).toHaveAttribute(
       'href',
@@ -131,6 +171,137 @@ describe('день дневника', () => {
       'href',
       '/products',
     )
+  })
+})
+
+describe('приёмы пищи', () => {
+  const withOwn = [...Object.values(meals), secondBreakfast]
+
+  it('показывает свой приём пищи под его названием и вносит в него', async () => {
+    const entry = foodEntry(cottageCheese, 100, { meal_id: secondBreakfast.id })
+    mockApi({ [DAY]: json(200, diaryDay(DATE, [entry], null, withOwn)) })
+    await renderApp(`/diary/${DATE}`, anna)
+
+    const own = await screen.findByRole('list', { name: 'Второй завтрак' })
+    expect(within(own).getByRole('listitem')).toHaveTextContent('Творог 5 %100 г · 121 ккал')
+    expect(screen.getByRole('link', { name: 'Добавить: Второй завтрак' })).toHaveAttribute(
+      'href',
+      `/diary/${DATE}/add/${secondBreakfast.id}`,
+    )
+  })
+
+  it('убирает приём пищи из списка после подтверждения', async () => {
+    const calls = mockApi({
+      [DAY]: sequence(json(200, diaryDay(DATE, [], null, withOwn)), json(200, diaryDay(DATE))),
+      'DELETE /api/diary/meals/*': json(204),
+    })
+    await renderApp(`/diary/${DATE}`, anna)
+
+    const remove = await screen.findByRole('button', { name: 'Удалить приём пищи: Второй завтрак' })
+    await userEvent.click(remove)
+    expect(
+      screen.getByText('Убрать приём пищи из списка? Его записи останутся в своих днях.'),
+    ).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Отмена' }))
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Удалить приём пищи: Второй завтрак' }),
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Да, удалить' }))
+
+    await waitFor(() =>
+      expect(screen.queryByRole('link', { name: 'Добавить: Второй завтрак' })).toBeNull(),
+    )
+    expect(callsTo(calls, `DELETE /api/diary/meals/${secondBreakfast.id}`)).toHaveLength(1)
+    // Предустановленный приём убирается так же.
+    expect(screen.getByRole('button', { name: 'Удалить приём пищи: Завтрак' })).toBeInTheDocument()
+  })
+
+  it('показывает отказ сервера при удалении приёма пищи', async () => {
+    mockApi({
+      [DAY]: json(200, diaryDay(DATE)),
+      'DELETE /api/diary/meals/*': json(404, { detail: 'not_found' }),
+    })
+    await renderApp(`/diary/${DATE}`, anna)
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Удалить приём пищи: Обед' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Да, удалить' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Не найдено.')
+  })
+
+  it('убранный приём остаётся в дне со своими записями, но нового в него не внести', async () => {
+    const archived = { ...meals.snack, archived: true }
+    const entry = foodEntry(cottageCheese, 150, { meal_id: archived.id })
+    mockApi({
+      [DAY]: json(200, diaryDay(DATE, [entry], null, [meals.breakfast, archived])),
+    })
+    await renderApp(`/diary/${DATE}`, anna)
+
+    const snack = await screen.findByRole('list', { name: 'Перекус' })
+    expect(within(snack).getByRole('listitem')).toHaveTextContent('Творог 5 %')
+    expect(
+      screen.getByText('Приём пищи убран из списка. Записи этого дня остались.'),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Добавить: Перекус' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Удалить приём пищи: Перекус' })).toBeNull()
+    // Запись убранного приёма по-прежнему правится и удаляется.
+    expect(within(snack).getByRole('link', { name: 'Изменить' })).toBeInTheDocument()
+    expect(screen.getAllByRole('link', { name: 'Скопировать из другого дня' })).toHaveLength(1)
+  })
+
+  it('с пустым списком предлагает добавить приём пищи', async () => {
+    mockApi({ [DAY]: json(200, diaryDay(DATE, [], null, [])) })
+    await renderApp(`/diary/${DATE}`, anna)
+
+    expect(
+      await screen.findByText('В списке нет приёмов пищи. Добавьте хотя бы один.'),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Добавить приём пищи' })).toBeInTheDocument()
+  })
+
+  it('создаёт свой приём пищи и возвращает в день', async () => {
+    const calls = mockApi({
+      [DAY]: json(200, diaryDay(DATE)),
+      'PUT /api/diary/meals/*': sequence(
+        json(401, { detail: 'not_authenticated' }),
+        json(201, secondBreakfast),
+      ),
+    })
+    const { router } = await renderApp(`/diary/${DATE}`, anna)
+
+    await userEvent.click(await screen.findByRole('link', { name: 'Добавить приём пищи' }))
+    expect(await screen.findByRole('heading', { name: 'Новый приём пищи' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
+    expect(await screen.findByText('Заполните поле')).toBeInTheDocument()
+    await userEvent.type(screen.getByLabelText('Название'), 'я'.repeat(41))
+    await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
+    expect(await screen.findByText('Название — до 40 символов')).toBeInTheDocument()
+    expect(callsTo(calls, 'PUT /api/diary/meals/*')).toEqual([])
+
+    await userEvent.clear(screen.getByLabelText('Название'))
+    await userEvent.type(screen.getByLabelText('Название'), '  Второй завтрак ')
+    await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Сеанс истёк. Войдите снова.')
+    await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
+
+    await waitFor(() => expect(router.state.location.pathname).toBe(`/diary/${DATE}`))
+    const saves = callsTo(calls, 'PUT /api/diary/meals/*')
+    expect(saves.map((call) => call.body)).toEqual([
+      { name: 'Второй завтрак' },
+      { name: 'Второй завтрак' },
+    ])
+    // Повтор после сбоя идёт с тем же ключом: второго приёма не появится.
+    expect(saves[1].path).toBe(saves[0].path)
+    expect(saves[0].path).toMatch(/\/meals\/[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-/)
+  })
+
+  it('отмена на экране нового приёма пищи возвращает в день', async () => {
+    mockApi({ [DAY]: json(200, diaryDay(DATE)) })
+    const { router } = await renderApp(`/diary/${DATE}/meals/new`, anna)
+
+    await userEvent.click(await screen.findByRole('link', { name: 'Отмена' }))
+
+    await waitFor(() => expect(router.state.location.pathname).toBe(`/diary/${DATE}`))
   })
 })
 
@@ -175,7 +346,10 @@ describe('переход между днями', () => {
 
     await router.navigate({ to: '/diary/$date', params: { date: 'вчера' } })
     await waitFor(() => expect(router.state.location.pathname).toBe(`/diary/${today()}`))
+    // Приём пищи, которого в списке нет, не открывается — оттуда есть дорога в день.
     await router.navigate({ to: '/diary/$date/add/$meal', params: { date: DATE, meal: 'brunch' } })
+    expect(await screen.findByText('Такого приёма пищи нет.')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('link', { name: 'К дневнику' }))
     await waitFor(() => expect(router.state.location.pathname).toBe(`/diary/${DATE}`))
   })
 })

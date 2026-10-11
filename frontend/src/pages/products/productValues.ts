@@ -1,9 +1,9 @@
 import { z } from 'zod'
 
-import type { Product } from '@/api/nutrition'
+import { type Product, PRODUCT_UNITS } from '@/api/nutrition'
 import { message, numberIn, numberOf } from '@/components/form/validation'
 
-/** Продукт каталога: состав на 100 г. */
+/** Продукт каталога: в чём он измеряется и состав на 100 таких единиц. */
 export const productSchema = z
   .object({
     name: z
@@ -11,6 +11,7 @@ export const productSchema = z
       .trim()
       .min(1, message('validation.required'))
       .max(120, message('validation.productName')),
+    unit: z.enum(PRODUCT_UNITS),
     kcal: numberIn(0, 900, 'validation.kcalRange'),
     protein: numberIn(0, 100, 'validation.macroRange'),
     fat: numberIn(0, 100, 'validation.macroRange'),
@@ -30,6 +31,7 @@ export type ProductValues = z.infer<typeof productSchema>
 export function productDefaults(product?: Product): ProductValues {
   return {
     name: product?.name ?? '',
+    unit: product?.unit ?? 'g',
     kcal: product ? String(product.kcal) : '',
     protein: product ? String(product.protein_g) : '',
     fat: product ? String(product.fat_g) : '',

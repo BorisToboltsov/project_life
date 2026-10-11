@@ -4,7 +4,12 @@ import { attempt } from '@/lib/errors'
 
 import { api, type Schemas } from './client'
 
-export type Meal = Schemas['Meal']
+export type MealPreset = Schemas['MealPreset']
+/** Приём пищи из списка пользователя. */
+export type Meal = Schemas['MealOut']
+/** Приём пищи в дне: с записями и съеденным. */
+export type DayMeal = Schemas['DayMealOut']
+export type ProductUnit = Schemas['ProductUnit']
 export type Product = Schemas['ProductOut']
 export type Suggestion = Schemas['SuggestionOut']
 export type FoodEntry = Schemas['FoodEntryOut']
@@ -12,8 +17,8 @@ export type Nutrients = Schemas['NutrientsOut']
 export type DiaryDay = Schemas['DiaryDayOut']
 export type NutritionGoal = Schemas['NutritionGoalOut']
 
-/** Приёмы пищи в порядке дня. */
-export const MEALS: Meal[] = ['breakfast', 'lunch', 'dinner', 'snack']
+/** В чём измеряется продукт. */
+export const PRODUCT_UNITS: ProductUnit[] = ['g', 'ml']
 
 /** Все запросы дневника начинаются с этого ключа: любая запись сбрасывает их разом. */
 export const DIARY_KEY = ['diary'] as const
@@ -29,11 +34,16 @@ export function useDiaryDay(date: string) {
   })
 }
 
-/** Продукты, которые пользователь вносил недавно и вносит часто. */
-export function useSuggestions() {
+/**
+ * Продукты, которые пользователь вносит: чаще всего в приём пищи `mealId`, недавно и часто
+ * вообще.
+ */
+export function useSuggestions(mealId: string) {
   return useQuery({
-    queryKey: [...DIARY_KEY, 'suggestions'],
-    queryFn: async () => (await api.GET('/api/diary/suggestions')).data ?? null,
+    queryKey: [...DIARY_KEY, 'suggestions', mealId],
+    queryFn: async () =>
+      (await api.GET('/api/diary/suggestions', { params: { query: { meal_id: mealId } } })).data ??
+      null,
   })
 }
 
@@ -89,6 +99,18 @@ export function saveEntry(id: string, body: Schemas['FoodEntryIn']) {
 export function deleteEntry(id: string) {
   return attempt(() =>
     api.DELETE('/api/diary/entries/{entry_id}', { params: { path: { entry_id: id } } }),
+  )
+}
+
+export function saveMeal(id: string, body: Schemas['MealIn']) {
+  return attempt(() =>
+    api.PUT('/api/diary/meals/{meal_id}', { params: { path: { meal_id: id } }, body }),
+  )
+}
+
+export function deleteMeal(id: string) {
+  return attempt(() =>
+    api.DELETE('/api/diary/meals/{meal_id}', { params: { path: { meal_id: id } } }),
   )
 }
 

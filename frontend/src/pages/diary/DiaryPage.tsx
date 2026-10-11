@@ -1,10 +1,18 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { getRouteApi, Link, useNavigate } from '@tanstack/react-router'
-import { ChevronLeft, ChevronRight, Pencil, Trash2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { deleteEntry, DIARY_KEY, type DiaryDay, type FoodEntry, useDiaryDay } from '@/api/nutrition'
+import {
+  type DayMeal,
+  deleteEntry,
+  deleteMeal,
+  DIARY_KEY,
+  type DiaryDay,
+  type FoodEntry,
+  useDiaryDay,
+} from '@/api/nutrition'
 import { DateField } from '@/components/form/DateField'
 import { FormError } from '@/components/form/fields'
 import { Button } from '@/components/ui/button'
@@ -20,6 +28,7 @@ import { isRealDate, shiftDays, today } from '@/lib/dates'
 import type { ErrorKey } from '@/lib/errors'
 import { formatGrams, formatKcal } from '@/lib/nutrition'
 
+import { useMealName } from './mealName'
 import { Measure } from './Measure'
 import { DATE_MIN } from './values'
 
@@ -101,7 +110,7 @@ function Summary({ day }: { day: DiaryDay }) {
           label={t('nutrients.kcal')}
           unit="kcal"
           eaten={totals.kcal}
-          goal={goal?.kcal}
+          goal={goal?.kcal ?? undefined}
           prominent
         />
         <div className="grid grid-cols-3 gap-3">
@@ -109,19 +118,19 @@ function Summary({ day }: { day: DiaryDay }) {
             label={t('nutrients.protein')}
             unit="grams"
             eaten={totals.protein_g}
-            goal={goal?.protein_g}
+            goal={goal?.protein_g ?? undefined}
           />
           <Measure
             label={t('nutrients.fat')}
             unit="grams"
             eaten={totals.fat_g}
-            goal={goal?.fat_g}
+            goal={goal?.fat_g ?? undefined}
           />
           <Measure
             label={t('nutrients.carbs')}
             unit="grams"
             eaten={totals.carbs_g}
-            goal={goal?.carbs_g}
+            goal={goal?.carbs_g ?? undefined}
           />
         </div>
       </CardContent>
@@ -148,7 +157,8 @@ function EntryRow({ entry }: { entry: FoodEntry }) {
           <p className="font-medium break-words">{entry.product_name}</p>
           <p className="text-sm text-muted-foreground">
             {t('diary.entryLine', {
-              amount: formatGrams(entry.amount_g, i18n.language),
+              amount: formatGrams(entry.amount, i18n.language),
+              unit: t(`productUnits.${entry.unit}`),
               kcal: formatKcal(entry.kcal, i18n.language),
             })}
           </p>
@@ -186,9 +196,58 @@ function EntryRow({ entry }: { entry: FoodEntry }) {
   )
 }
 
-function MealCard({ date, meal }: { date: string; meal: DiaryDay['meals'][number] }) {
+/** Под записями приёма пищи: копирование из другого дня и удаление приёма из списка. */
+function MealActions({ date, meal, name }: { date: string; meal: DayMeal; name: string }) {
+  const { t } = useTranslation()
+  const queryClient = useQueryClient()
+  const [confirming, setConfirming] = useState(false)
+  const [failure, setFailure] = useState<ErrorKey>()
+
+  async function remove() {
+    const result = await deleteMeal(meal.id)
+    if (result.failure) setFailure(result.failure)
+    await queryClient.invalidateQueries({ queryKey: DIARY_KEY })
+  }
+
+  return (
+    <div className="grid gap-2">
+      {confirming ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm">{t('diary.mealDeleteConfirm')}</span>
+          <Button variant="destructive" size="sm" onClick={() => void remove()}>
+            {t('diary.deleteYes')}
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => setConfirming(false)}>
+            {t('diary.cancel')}
+          </Button>
+        </div>
+      ) : (
+        <div className="flex items-center justify-between gap-2">
+          <Link
+            to="/diary/$date/copy/$scope"
+            params={{ date, scope: meal.id }}
+            className="text-sm underline underline-offset-4"
+          >
+            {t('diary.copyMeal')}
+          </Link>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={t('diary.mealDelete', { meal: name })}
+            onClick={() => setConfirming(true)}
+          >
+            <Trash2 aria-hidden="true" />
+          </Button>
+        </div>
+      )}
+      <FormError failure={failure} />
+    </div>
+  )
+}
+
+function MealCard({ date, meal }: { date: string; meal: DayMeal }) {
   const { t, i18n } = useTranslation()
-  const name = t(`meals.${meal.meal}`)
+  const name = useMealName()(meal)
 
   return (
     <Card>
@@ -197,17 +256,19 @@ function MealCard({ date, meal }: { date: string; meal: DiaryDay['meals'][number
         <CardDescription>
           {t('diary.kcal', { value: formatKcal(meal.totals.kcal, i18n.language) })}
         </CardDescription>
-        <CardAction>
-          <Button asChild className="h-11">
-            <Link
-              to="/diary/$date/add/$meal"
-              params={{ date, meal: meal.meal }}
-              aria-label={t('diary.addTo', { meal: name })}
-            >
-              {t('diary.add')}
-            </Link>
-          </Button>
-        </CardAction>
+        {!meal.archived && (
+          <CardAction>
+            <Button asChild className="h-11">
+              <Link
+                to="/diary/$date/add/$meal"
+                params={{ date, meal: meal.id }}
+                aria-label={t('diary.addTo', { meal: name })}
+              >
+                {t('diary.add')}
+              </Link>
+            </Button>
+          </CardAction>
+        )}
       </CardHeader>
       <CardContent className="grid gap-3">
         {meal.entries.length === 0 ? (
@@ -219,13 +280,12 @@ function MealCard({ date, meal }: { date: string; meal: DiaryDay['meals'][number
             ))}
           </ul>
         )}
-        <Link
-          to="/diary/$date/copy/$scope"
-          params={{ date, scope: meal.meal }}
-          className="justify-self-start text-sm underline underline-offset-4"
-        >
-          {t('diary.copyMeal')}
-        </Link>
+        {/* Убранный из списка приём остаётся в дне ради своих записей: новое в него не вносят. */}
+        {meal.archived ? (
+          <p className="text-sm text-muted-foreground">{t('diary.mealArchived')}</p>
+        ) : (
+          <MealActions date={date} meal={meal} name={name} />
+        )}
       </CardContent>
     </Card>
   )
@@ -247,9 +307,18 @@ export function DiaryPage() {
         <>
           <Summary day={day.data} />
           {day.data.meals.map((meal) => (
-            <MealCard key={meal.meal} date={date} meal={meal} />
+            <MealCard key={meal.id} date={date} meal={meal} />
           ))}
+          {day.data.meals.length === 0 && (
+            <p className="text-sm text-muted-foreground">{t('diary.noMeals')}</p>
+          )}
           <div className="flex flex-wrap gap-3">
+            <Button asChild variant="outline" className="h-11">
+              <Link to="/diary/$date/meals/new" params={{ date }}>
+                <Plus aria-hidden="true" />
+                {t('diary.mealAdd')}
+              </Link>
+            </Button>
             <Button asChild variant="outline" className="h-11">
               <Link to="/diary/$date/copy/$scope" params={{ date, scope: 'day' }}>
                 {t('diary.copyDay')}

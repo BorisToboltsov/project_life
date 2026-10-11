@@ -18,8 +18,18 @@ from pydantic import (
 )
 
 from app.metrics import CATALOG, Metric, Quantity, Unit, quantity_of, to_canonical
-from app.models import ErrorSource, FoodEntry, Language, Product, Role, Sex, UnitSystem, User
-from app.nutrition import Meal, Nutrients
+from app.models import (
+    ErrorSource,
+    FoodEntry,
+    Language,
+    Meal,
+    Product,
+    Role,
+    Sex,
+    UnitSystem,
+    User,
+)
+from app.nutrition import MealPreset, Nutrients, ProductUnit, energy_kcal
 
 
 def _known_timezone(value: str) -> str:
@@ -303,16 +313,19 @@ def _diary_date(value: date) -> date:
 
 DiaryDate = Annotated[date, AfterValidator(_diary_date)]
 ProductName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)]
-# Состав на 100 г. Энергии больше, чем в чистом жире, не бывает.
+MealName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=40)]
+# Состав на 100 г или 100 мл. Энергии больше, чем в чистом жире, не бывает.
 Kcal = Annotated[Decimal, Field(ge=0, le=900, max_digits=4, decimal_places=1)]
 Macro = Annotated[Decimal, Field(ge=0, le=100, max_digits=5, decimal_places=2)]
-# Порция: от грамма специй до пяти килограммов — дальше опечатка.
-AmountG = Annotated[Decimal, Field(gt=0, le=5000, max_digits=5, decimal_places=1)]
+# Порция в единицах продукта: от грамма специй до пяти килограммов или литров — дальше
+# опечатка.
+Amount = Annotated[Decimal, Field(gt=0, le=5000, max_digits=5, decimal_places=1)]
 
 
 class ProductIn(Strict):
     name: ProductName
-    # Состав на 100 г продукта.
+    unit: ProductUnit
+    # Состав на 100 единиц продукта.
     kcal: Kcal
     protein_g: Macro
     fat_g: Macro
@@ -328,6 +341,7 @@ class ProductIn(Strict):
 class ProductOut(BaseModel):
     id: UUID
     name: str
+    unit: ProductUnit
     kcal: float
     protein_g: float
     fat_g: float
@@ -340,6 +354,7 @@ class ProductOut(BaseModel):
         return cls(
             id=product.id,
             name=product.name,
+            unit=product.unit,
             kcal=float(product.kcal),
             protein_g=float(product.protein_g),
             fat_g=float(product.fat_g),
@@ -349,11 +364,13 @@ class ProductOut(BaseModel):
 
 
 class SuggestionOut(ProductOut):
-    # Сколько граммов этого продукта пользователь внёс в прошлый раз.
-    amount_g: float
+    # Сколько этого продукта пользователь внёс в прошлый раз, в единицах продукта.
+    amount: float
 
 
 class SuggestionsOut(BaseModel):
+    # Что чаще всего вносят в запрошенный приём пищи; без приёма в запросе — пусто.
+    in_meal: list[SuggestionOut]
     recent: list[SuggestionOut]
     frequent: list[SuggestionOut]
 
@@ -376,11 +393,13 @@ class NutrientsOut(BaseModel):
 
 class FoodEntryIn(Strict):
     local_date: DiaryDate
-    meal: Meal
+    # Приём пищи из своего списка.
+    meal_id: UUID
     # Продукт каталога, с которого снимается состав. При правке записи тот же продукт
     # (или `null`) оставляет прежний снимок.
     product_id: UUID | None
-    amount_g: AmountG
+    # Сколько съедено, в единицах продукта.
+    amount: Amount
 
 
 class FoodEntryOut(NutrientsOut):
@@ -388,29 +407,37 @@ class FoodEntryOut(NutrientsOut):
 
     id: UUID
     local_date: date
-    meal: Meal
+    meal_id: UUID
     product_id: UUID | None
     product_name: str
-    amount_g: float
+    amount: float
+    unit: ProductUnit
 
     @classmethod
     def of_entry(cls, entry: FoodEntry) -> Self:
         return cls(
             id=entry.id,
             local_date=entry.local_date,
-            meal=entry.meal,
+            meal_id=entry.meal_id,
             product_id=entry.product_id,
             product_name=entry.product_name,
-            amount_g=float(entry.amount_g),
+            amount=float(entry.amount),
+            unit=entry.unit,
             **NutrientsOut.of(entry.eaten).model_dump(),
         )
 
 
+GoalKcal = Annotated[int, Field(ge=500, le=10000)]
+GoalMacro = Annotated[int, Field(ge=0, le=1000)]
+
+
 class NutritionGoalIn(Strict):
-    kcal: Annotated[int, Field(ge=500, le=10000)]
-    protein_g: Annotated[int, Field(ge=0, le=1000)]
-    fat_g: Annotated[int, Field(ge=0, le=1000)]
-    carbs_g: Annotated[int, Field(ge=0, le=1000)]
+    """Цель на день. `null` — цели по этому показателю нет; все четыре `null` снимают цель."""
+
+    kcal: GoalKcal | None
+    protein_g: GoalMacro | None
+    fat_g: GoalMacro | None
+    carbs_g: GoalMacro | None
     # Сегодняшний день пользователя: с него цель начинает действовать.
     local_date: date
 
@@ -421,29 +448,63 @@ class NutritionGoalIn(Strict):
             raise ValueError("goal must start today")
         return self
 
+    @model_validator(mode="after")
+    def _macros_fit_in_kcal(self) -> Self:
+        # Калории — бюджет: белки, жиры и углеводы не могут дать больше энергии.
+        macros = energy_kcal(self.protein_g or 0, self.fat_g or 0, self.carbs_g or 0)
+        if self.kcal is not None and macros > self.kcal:
+            raise ValueError("macronutrients exceed the calorie goal")
+        return self
+
 
 class NutritionGoalOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    kcal: int
-    protein_g: int
-    fat_g: int
-    carbs_g: int
+    kcal: int | None
+    protein_g: int | None
+    fat_g: int | None
+    carbs_g: int | None
     effective_from: date
+
+    def if_set(self) -> Self | None:
+        """Снятая цель (все показатели пусты) — то же, что её отсутствие."""
+        targets = (self.kcal, self.protein_g, self.fat_g, self.carbs_g)
+        return None if all(target is None for target in targets) else self
+
+
+class MealIn(Strict):
+    name: MealName
 
 
 class MealOut(BaseModel):
-    meal: Meal
+    """Приём пищи из списка пользователя."""
+
+    id: UUID
+    # Код предустановленного приёма: название подбирает интерфейс. У своего — `null`.
+    preset: MealPreset | None
+    # Название, которое дал пользователь; у предустановленного — `null`.
+    name: str | None
+    # Убран из списка: в дне остаётся, только пока в нём есть записи.
+    archived: bool
+
+    @classmethod
+    def of(cls, meal: Meal) -> Self:
+        return cls(
+            id=meal.id, preset=meal.preset, name=meal.name, archived=meal.archived_at is not None
+        )
+
+
+class DayMealOut(MealOut):
     entries: list[FoodEntryOut]
     totals: NutrientsOut
 
 
 class DiaryDayOut(BaseModel):
     local_date: date
-    # Все приёмы пищи по порядку, включая пустые.
-    meals: list[MealOut]
+    # Приёмы пищи из списка по порядку, включая пустые, и убранные — если в них есть записи.
+    meals: list[DayMealOut]
     totals: NutrientsOut
-    # Цель, действовавшая в этот день; `null` — цели тогда ещё не было.
+    # Цель, действовавшая в этот день; `null` — цели тогда не было.
     goal: NutritionGoalOut | None
 
 
@@ -456,5 +517,5 @@ class CopyItem(Strict):
 class DiaryCopyIn(Strict):
     to_date: DiaryDate
     # `null` — каждая запись остаётся в своём приёме пищи.
-    to_meal: Meal | None = None
+    to_meal_id: UUID | None = None
     items: Annotated[list[CopyItem], Field(min_length=1, max_length=200)]

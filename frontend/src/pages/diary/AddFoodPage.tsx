@@ -10,6 +10,8 @@ import {
   type Meal,
   type Product,
   saveEntry,
+  type Suggestion,
+  useDiaryDay,
   useProduct,
   useProductSearch,
   useSuggestions,
@@ -24,9 +26,11 @@ import { uuidv7 } from '@/lib/uuid'
 import { ProductForm } from '@/pages/products/ProductForm'
 import { ProductLine } from '@/pages/products/ProductLine'
 
+import { useMealName } from './mealName'
+import { MealNotFound } from './MealNotFound'
 import { amountSchema, type AmountValues } from './values'
 
-/** Граммовка по умолчанию для продукта, который пользователь ещё не вносил. */
+/** Количество по умолчанию для продукта, который пользователь ещё не вносил. */
 const DEFAULT_AMOUNT = 100
 
 function AmountForm({
@@ -55,19 +59,19 @@ function AmountForm({
 
   async function submit(values: AmountValues) {
     setFailure(undefined)
-    const amount_g = numberOf(values.amount, 1)
+    const entered = numberOf(values.amount, 1)
     const result = await saveEntry(id.current, {
       local_date: date,
-      meal,
+      meal_id: meal.id,
       product_id: product.id,
-      amount_g,
+      amount: entered,
     })
     if (result.failure) {
       setFailure(result.failure)
       return
     }
     await queryClient.invalidateQueries({ queryKey: DIARY_KEY })
-    onAdded(amount_g)
+    onAdded(entered)
   }
 
   return (
@@ -78,7 +82,7 @@ function AmountForm({
     >
       <FormError failure={failure} />
       <TextField
-        label={t('addFood.amount')}
+        label={t('addFood.amount', { unit: t(`productUnits.${product.unit}`) })}
         inputMode="decimal"
         autoComplete="off"
         error={errors.amount?.message}
@@ -93,7 +97,7 @@ function AmountForm({
 
 interface Choice {
   product: Product
-  /** Сколько граммов подставить в поле. */
+  /** Сколько подставить в поле, в единицах продукта. */
   amount: number
 }
 
@@ -150,18 +154,16 @@ function ProductList({
   )
 }
 
-const route = getRouteApi('/app/diary/$date/add/$meal')
-
-export function AddFoodPage() {
+function AddFood({ date, meal }: { date: string; meal: Meal }) {
   const { t, i18n } = useTranslation()
-  const { date, meal } = route.useParams() as { date: string; meal: Meal }
   const { product: createdId } = route.useSearch() as { product?: string }
+  const mealName = useMealName()
   const [query, setQuery] = useState('')
   const [opened, setOpened] = useState<string>()
-  const [added, setAdded] = useState<{ name: string; amount: number }>()
+  const [added, setAdded] = useState<{ product: Product; amount: number }>()
   const q = query.trim()
   const found = useProductSearch(q, q !== '')
-  const suggestions = useSuggestions()
+  const suggestions = useSuggestions(meal.id)
   const created = useProduct(createdId)
   // Созданный продукт показывается отдельно, пока его не внесли: дальше он в «недавних».
   const justCreated =
@@ -171,34 +173,39 @@ export function AddFoodPage() {
 
   const titles = {
     created: t('addFood.created'),
+    inMeal: t('addFood.inMeal'),
     frequent: t('addFood.frequent'),
     recent: t('addFood.recent'),
     results: t('addFood.results'),
   }
-  // Только что созданный продукт раскрыт сразу: осталось ввести граммы.
+  // Только что созданный продукт раскрыт сразу: осталось ввести количество.
   const openedKey = opened ?? (justCreated ? `${titles.created}:${justCreated.id}` : undefined)
   const lists = { opened: openedKey, onOpen: setOpened, date, meal, onAdded }
 
   function onAdded(product: Product, amount: number) {
-    setAdded({ name: product.name, amount })
+    setAdded({ product, amount })
     setOpened('')
     setQuery('')
   }
 
   const fresh = (products: Product[]): Choice[] =>
     products.map((product) => ({ product, amount: DEFAULT_AMOUNT }))
+  const remembered = (items: Suggestion[] = []): Choice[] =>
+    items.map((item) => ({ product: item, amount: item.amount }))
+  const inMeal = remembered(suggestions.data?.in_meal)
   const nothingToSuggest = suggestions.data?.recent.length === 0 && !justCreated
 
   return (
     <div className="grid gap-4">
       <h1 className="text-2xl font-semibold">
-        {t('addFood.title', { meal: t(`meals.${meal}`), date: isoToDisplay(date) })}
+        {t('addFood.title', { meal: mealName(meal), date: isoToDisplay(date) })}
       </h1>
       {added && (
         <p role="status" className="text-sm text-muted-foreground">
           {t('addFood.added', {
-            name: added.name,
+            name: added.product.name,
             amount: formatGrams(added.amount, i18n.language),
+            unit: t(`productUnits.${added.product.unit}`),
           })}
         </p>
       )}
@@ -223,20 +230,19 @@ export function AddFoodPage() {
             choices={fresh(justCreated ? [justCreated] : [])}
             {...lists}
           />
-          <ProductList
-            title={titles.frequent}
-            choices={(suggestions.data?.frequent ?? []).map((item) => ({
-              product: item,
-              amount: item.amount_g,
-            }))}
-            {...lists}
-          />
+          {/* То, что обычно едят в этот приём пищи; пока такого нет — частое вообще. */}
+          {inMeal.length > 0 ? (
+            <ProductList title={titles.inMeal} choices={inMeal} {...lists} />
+          ) : (
+            <ProductList
+              title={titles.frequent}
+              choices={remembered(suggestions.data?.frequent)}
+              {...lists}
+            />
+          )}
           <ProductList
             title={titles.recent}
-            choices={(suggestions.data?.recent ?? []).map((item) => ({
-              product: item,
-              amount: item.amount_g,
-            }))}
+            choices={remembered(suggestions.data?.recent)}
             {...lists}
           />
           {nothingToSuggest && <p className="text-sm text-muted-foreground">{t('addFood.hint')}</p>}
@@ -249,7 +255,7 @@ export function AddFoodPage() {
           </Link>
         </Button>
         <Button asChild variant="outline" className="h-11">
-          <Link to="/diary/$date/add/$meal/new" params={{ date, meal }}>
+          <Link to="/diary/$date/add/$meal/new" params={{ date, meal: meal.id }}>
             {t('addFood.createProduct')}
           </Link>
         </Button>
@@ -258,12 +264,29 @@ export function AddFoodPage() {
   )
 }
 
+const route = getRouteApi('/app/diary/$date/add/$meal')
+
+export function AddFoodPage() {
+  const { t } = useTranslation()
+  const { date, meal: mealId } = route.useParams() as { date: string; meal: string }
+  const day = useDiaryDay(date)
+  const meal = day.data?.meals.find((item) => item.id === mealId)
+
+  if (day.isPending) {
+    return <p className="text-muted-foreground">{t('common.loading')}</p>
+  }
+  if (!meal) {
+    return <MealNotFound date={date} />
+  }
+  return <AddFood date={date} meal={meal} />
+}
+
 const newRoute = getRouteApi('/app/diary/$date/add/$meal/new')
 
 /** Создание продукта по пути в приём пищи: после сохранения возвращает к вводу граммов. */
 export function AddFoodNewProductPage() {
   const { t } = useTranslation()
-  const { date, meal } = newRoute.useParams() as { date: string; meal: Meal }
+  const { date, meal } = newRoute.useParams() as { date: string; meal: string }
   const navigate = useNavigate()
 
   return (

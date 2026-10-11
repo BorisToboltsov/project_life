@@ -32,7 +32,7 @@ export function DiaryCard() {
             label={t('nutrients.kcal')}
             unit="kcal"
             eaten={day.data.totals.kcal}
-            goal={day.data.goal?.kcal}
+            goal={day.data.goal?.kcal ?? undefined}
             prominent
           />
         </CardContent>

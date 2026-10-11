@@ -3,7 +3,7 @@
 from app.models.auth import Invite, LoginFailure, PasswordReset, RefreshToken
 from app.models.error_report import ErrorReport, ErrorSource
 from app.models.measurement import Measurement
-from app.models.nutrition import FoodEntry, NutritionGoal, Product
+from app.models.nutrition import FoodEntry, Meal, NutritionGoal, Product, preset_meals
 from app.models.user import Language, Role, Sex, UnitSystem, User
 
 __all__ = [
@@ -13,6 +13,7 @@ __all__ = [
     "Invite",
     "Language",
     "LoginFailure",
+    "Meal",
     "Measurement",
     "NutritionGoal",
     "PasswordReset",
@@ -22,4 +23,5 @@ __all__ = [
     "Sex",
     "UnitSystem",
     "User",
+    "preset_meals",
 ]

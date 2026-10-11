@@ -1,12 +1,35 @@
 import { describe, expect, it } from 'vitest'
 
-import { numberIn, numberOf } from './validation'
+import { numberIn, numberOf, optionalNumberIn, optionalNumberOf } from './validation'
 
 describe('numberOf', () => {
   it('понимает запятую и округляет до точности сервера', () => {
     expect(numberOf('12,345', 2)).toBe(12.35)
     expect(numberOf('149.96', 1)).toBe(150)
     expect(numberOf('2100', 0)).toBe(2100)
+  })
+})
+
+describe('optionalNumberOf', () => {
+  it('пустое поле — нет значения, заполненное — число', () => {
+    expect(optionalNumberOf('', 0)).toBeNull()
+    expect(optionalNumberOf('   ', 0)).toBeNull()
+    expect(optionalNumberOf('0', 0)).toBe(0)
+    expect(optionalNumberOf('130,4', 0)).toBe(130)
+  })
+})
+
+describe('optionalNumberIn', () => {
+  const schema = optionalNumberIn(500, 10000, 'validation.goalKcalRange')
+
+  it.each(['', '  ', '500', '10000', '2100,5'])('принимает «%s»', (text) => {
+    expect(schema.safeParse(text).success).toBe(true)
+  })
+
+  it.each(['499', '10001', 'много', '-'])('отклоняет «%s» ключом словаря', (text) => {
+    const result = schema.safeParse(text)
+
+    expect(result.error?.issues.map((issue) => issue.message)).toEqual(['validation.goalKcalRange'])
   })
 })
 

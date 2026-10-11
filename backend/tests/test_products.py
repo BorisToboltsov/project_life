@@ -123,6 +123,8 @@ async def test_product_is_deleted_by_its_author(client: AsyncClient, make_user: 
         {"protein_g": -0.1},
         {"fat_g": 100.01},
         {"carbs_g": 1.234},
+        {"unit": "kg"},
+        {"unit": ...},
         # Белки, жиры и углеводы вместе не помещаются в 100 г.
         {"protein_g": 40, "fat_g": 40, "carbs_g": 20.01},
         {"barcode": "4600000000000"},
@@ -133,7 +135,11 @@ async def test_implausible_product_is_rejected(
 ) -> None:
     author = await make_user()
 
-    response = await put_product(client, author, {**COTTAGE_CHEESE, **fields})
+    body = {**COTTAGE_CHEESE, **fields}
+
+    response = await put_product(
+        client, author, {name: value for name, value in body.items() if value is not ...}
+    )
 
     assert response.status_code == 422
     assert await search(client, author.headers) == []
@@ -143,11 +149,25 @@ async def test_pure_fat_and_empty_water_are_products_too(
     client: AsyncClient, make_user: MakeUser
 ) -> None:
     author = await make_user()
-    oil = {"name": "Масло оливковое", "kcal": 899, "protein_g": 0, "fat_g": 99.9, "carbs_g": 0}
-    water = {"name": "Вода", "kcal": 0, "protein_g": 0, "fat_g": 0, "carbs_g": 0}
+    oil = {**COTTAGE_CHEESE, "name": "Масло оливковое", "kcal": 899, "protein_g": 0}
+    oil = {**oil, "fat_g": 99.9, "carbs_g": 0}
+    water = {"name": "Вода", "unit": "ml", "kcal": 0, "protein_g": 0, "fat_g": 0, "carbs_g": 0}
 
     assert (await put_product(client, author, oil)).status_code == 201
     assert (await put_product(client, author, water)).status_code == 201
+
+
+async def test_product_is_measured_in_grams_or_millilitres(
+    client: AsyncClient, make_user: MakeUser
+) -> None:
+    author = await make_user()
+    kefir = {**COTTAGE_CHEESE, "name": "Кефир 1 %", "unit": "ml"}
+
+    created = await put_product(client, author, kefir)
+    corrected = await put_product(client, author, {**kefir, "unit": "g"}, created.json()["id"])
+
+    assert (created.status_code, created.json()["unit"]) == (201, "ml")
+    assert corrected.json()["unit"] == "g"
 
 
 # --- Поиск -------------------------------------------------------------------------------

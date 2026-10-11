@@ -4,27 +4,34 @@ import { describe, expect, it } from 'vitest'
 
 import { callsTo, json, mockApi } from '@/test/api'
 import { renderApp } from '@/test/app'
-import { anna, cottageCheese, oatmeal } from '@/test/fixtures'
+import { anna, cottageCheese, diaryDay, kefir, meals, oatmeal } from '@/test/fixtures'
 
 const DATE = '2026-10-11'
-const PAGE = `/diary/${DATE}/add/breakfast`
+const PAGE = `/diary/${DATE}/add/${meals.breakfast.id}`
+// Экран узнаёт приём пищи по дню: без него название взять неоткуда.
+const DAY = { 'GET /api/diary': json(200, diaryDay(DATE)) }
 const SUGGESTIONS = 'GET /api/diary/suggestions'
 const SEARCH = 'GET /api/products'
 const SAVE = 'PUT /api/diary/entries/*'
 const UUID7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 
 const suggestions = {
-  frequent: [{ ...cottageCheese, amount_g: 180 }],
+  in_meal: [],
+  frequent: [{ ...cottageCheese, amount: 180 }],
   recent: [
-    { ...oatmeal, amount_g: 60 },
-    { ...cottageCheese, amount_g: 180 },
+    { ...oatmeal, amount: 60 },
+    { ...cottageCheese, amount: 180 },
   ],
 }
-const nothing = { frequent: [], recent: [] }
+const nothing = { in_meal: [], frequent: [], recent: [] }
 
 describe('добавление в приём пищи', () => {
   it('предлагает частые и недавние продукты с прошлой граммовкой', async () => {
-    const calls = mockApi({ [SUGGESTIONS]: json(200, suggestions), [SAVE]: json(201, {}) })
+    const calls = mockApi({
+      ...DAY,
+      [SUGGESTIONS]: json(200, suggestions),
+      [SAVE]: json(201, {}),
+    })
     await renderApp(PAGE, anna)
 
     expect(await screen.findByRole('heading', { name: 'Завтрак, 11/10/2026' })).toBeInTheDocument()
@@ -47,16 +54,47 @@ describe('добавление в приём пищи', () => {
     expect(saved.path.split('/').at(-1)).toMatch(UUID7)
     expect(saved.body).toEqual({
       local_date: DATE,
-      meal: 'breakfast',
+      meal_id: meals.breakfast.id,
       product_id: cottageCheese.id,
-      amount_g: 180,
+      amount: 180,
     })
     // Форма закрылась: можно выбирать следующий продукт.
     expect(screen.queryByLabelText('Сколько, г')).not.toBeInTheDocument()
+    // Подсказки спрошены для этого приёма пищи.
+    expect(callsTo(calls, SUGGESTIONS)[0].query).toEqual({ meal_id: meals.breakfast.id })
+  })
+
+  it('первым показывает то, что обычно едят в этот приём пищи', async () => {
+    const usual = {
+      in_meal: [
+        { ...oatmeal, amount: 60 },
+        { ...kefir, amount: 250 },
+      ],
+      frequent: [{ ...cottageCheese, amount: 180 }],
+      recent: [{ ...cottageCheese, amount: 180 }],
+    }
+    const calls = mockApi({ ...DAY, [SUGGESTIONS]: json(200, usual), [SAVE]: json(201, {}) })
+    await renderApp(PAGE, anna)
+
+    const inMeal = await screen.findByRole('list', { name: 'Часто в этом приёме пищи' })
+    expect(within(inMeal).getAllByRole('listitem')).toHaveLength(2)
+    // Общие «частые» уступают место, «недавние» остаются.
+    expect(screen.queryByRole('list', { name: 'Частые' })).not.toBeInTheDocument()
+    expect(screen.getByRole('list', { name: 'Недавние' })).toBeInTheDocument()
+
+    // Жидкость вносится в миллилитрах, с прошлым количеством из этого приёма.
+    expect(within(inMeal).getByText('40 ккал · Б 3 · Ж 1 · У 4 на 100 мл')).toBeInTheDocument()
+    await userEvent.click(within(inMeal).getByRole('button', { name: /Кефир/ }))
+    expect(screen.getByLabelText('Сколько, мл')).toHaveValue('250')
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить' }))
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Добавлено: Кефир 1 %, 250 мл')
+    expect(callsTo(calls, SAVE)[0].body).toMatchObject({ product_id: kefir.id, amount: 250 })
   })
 
   it('ищет по каталогу и вносит найденное с введённой граммовкой', async () => {
     const calls = mockApi({
+      ...DAY,
       [SUGGESTIONS]: json(200, nothing),
       [SEARCH]: (call) => json(200, call.query.q === 'овс' ? [oatmeal] : [])(call),
       [SAVE]: json(201, {}),
@@ -75,13 +113,13 @@ describe('добавление в приём пищи', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Добавить' }))
 
     expect(await screen.findByRole('status')).toHaveTextContent('Добавлено: Овсяные хлопья, 62,5 г')
-    expect(callsTo(calls, SAVE)[0].body).toMatchObject({ product_id: oatmeal.id, amount_g: 62.5 })
+    expect(callsTo(calls, SAVE)[0].body).toMatchObject({ product_id: oatmeal.id, amount: 62.5 })
     // Поиск очищен — снова видны подсказки.
     expect(screen.getByLabelText('Поиск продукта')).toHaveValue('')
   })
 
   it('говорит, когда ничего не найдено', async () => {
-    mockApi({ [SUGGESTIONS]: json(200, suggestions), [SEARCH]: json(200, []) })
+    mockApi({ ...DAY, [SUGGESTIONS]: json(200, suggestions), [SEARCH]: json(200, []) })
     await renderApp(PAGE, anna)
 
     await userEvent.type(await screen.findByLabelText('Поиск продукта'), 'кефир')
@@ -91,7 +129,7 @@ describe('добавление в приём пищи', () => {
   })
 
   it('не принимает граммовку вне диапазона', async () => {
-    const calls = mockApi({ [SUGGESTIONS]: json(200, suggestions) })
+    const calls = mockApi({ ...DAY, [SUGGESTIONS]: json(200, suggestions) })
     await renderApp(PAGE, anna)
 
     await userEvent.click(await screen.findByRole('button', { name: /Овсяные хлопья/ }))
@@ -99,12 +137,13 @@ describe('добавление в приём пищи', () => {
     await userEvent.type(screen.getByLabelText('Сколько, г'), '0')
     await userEvent.click(screen.getByRole('button', { name: 'Добавить' }))
 
-    expect(await screen.findByText('От 0,1 до 5000 г')).toBeInTheDocument()
+    expect(await screen.findByText('От 0,1 до 5000')).toBeInTheDocument()
     expect(callsTo(calls, SAVE)).toEqual([])
   })
 
   it('после отказа повторная отправка идёт с тем же ключом записи', async () => {
     const calls = mockApi({
+      ...DAY,
       [SUGGESTIONS]: json(200, suggestions),
       [SAVE]: json(404, { detail: 'product_not_found' }),
     })
@@ -123,13 +162,25 @@ describe('добавление в приём пищи', () => {
   })
 
   it('кнопка «Готово» возвращает в день', async () => {
-    mockApi({ [SUGGESTIONS]: json(200, nothing) })
+    mockApi({ ...DAY, [SUGGESTIONS]: json(200, nothing) })
     await renderApp(PAGE, anna)
 
     expect(await screen.findByRole('link', { name: 'Готово' })).toHaveAttribute(
       'href',
       `/diary/${DATE}`,
     )
+  })
+
+  it('в приём пищи, которого нет в дне, не вносит', async () => {
+    const calls = mockApi({ ...DAY, [SUGGESTIONS]: json(200, suggestions) })
+    await renderApp(`/diary/${DATE}/add/0199b7a0-0000-7000-8000-0000000000ff`, anna)
+
+    expect(await screen.findByText('Такого приёма пищи нет.')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'К дневнику' })).toHaveAttribute(
+      'href',
+      `/diary/${DATE}`,
+    )
+    expect(callsTo(calls, SUGGESTIONS)).toEqual([])
   })
 })
 
@@ -139,11 +190,9 @@ describe('новый продукт по пути в приём пищи', () =>
     // Продукт попадает в «недавние», когда запись с ним сохранена.
     let logged = false
     const calls = mockApi({
+      ...DAY,
       [SUGGESTIONS]: (call) =>
-        json(
-          200,
-          logged ? { frequent: [], recent: [{ ...created, amount_g: 100 }] } : nothing,
-        )(call),
+        json(200, logged ? { ...nothing, recent: [{ ...created, amount: 100 }] } : nothing)(call),
       'PUT /api/products/*': json(201, created),
       'GET /api/products/*': json(200, created),
       [SAVE]: (call) => {
@@ -167,6 +216,7 @@ describe('новый продукт по пути в приём пищи', () =>
     expect(id).toMatch(UUID7)
     expect(saved.body).toEqual({
       name: 'Овсяные хлопья',
+      unit: 'g',
       kcal: 352,
       protein_g: 12.3,
       fat_g: 6.2,
@@ -186,7 +236,7 @@ describe('новый продукт по пути в приём пищи', () =>
   })
 
   it('«Отмена» возвращает к выбору продукта', async () => {
-    mockApi({ [SUGGESTIONS]: json(200, nothing) })
+    mockApi({ ...DAY, [SUGGESTIONS]: json(200, nothing) })
     await renderApp(`${PAGE}/new`, anna)
 
     await userEvent.click(await screen.findByRole('link', { name: 'Отмена' }))

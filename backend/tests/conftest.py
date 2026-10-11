@@ -28,7 +28,7 @@ def alembic_config() -> Config:
     return Config(Path(__file__).parent.parent / "alembic.ini")
 
 
-def _sync_url(database: str | None = None) -> str:
+def sync_url(database: str | None = None) -> str:
     url = make_url(TEST_DATABASE_URL).set(drivername="postgresql")
     return (url.set(database=database) if database else url).render_as_string(hide_password=False)
 
@@ -39,7 +39,7 @@ def database() -> None:
     name = make_url(TEST_DATABASE_URL).database
     if name is None or not name.endswith("_test"):
         raise RuntimeError(f"Тестовая база должна называться *_test, получено: {name!r}")
-    with psycopg.connect(_sync_url("postgres"), autocommit=True) as conn:
+    with psycopg.connect(sync_url("postgres"), autocommit=True) as conn:
         conn.execute(
             sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(name))
         )
@@ -54,7 +54,7 @@ def clean_tables() -> Iterator[None]:
     from app.db import Base
 
     tables = sql.SQL(", ").join(sql.Identifier(table.name) for table in Base.metadata.sorted_tables)
-    with psycopg.connect(_sync_url(), autocommit=True) as conn:
+    with psycopg.connect(sync_url(), autocommit=True) as conn:
         conn.execute(sql.SQL("TRUNCATE {} RESTART IDENTITY CASCADE").format(tables))
 
 
@@ -109,7 +109,7 @@ _numbers = count(1)
 def make_user() -> MakeUser:
     async def make(*, admin: bool = False, email: str | None = None) -> Account:
         from app.db import session_factory
-        from app.models import Language, Role, User
+        from app.models import Language, Role, User, preset_meals
         from app.security.passwords import hash_password
         from app.security.tokens import create_access_token
 
@@ -124,6 +124,9 @@ def make_user() -> MakeUser:
         )
         async with session_factory() as session:
             session.add(user)
+            await session.flush()
+            # Как при регистрации: пользователь начинает с предустановленных приёмов пищи.
+            session.add_all(preset_meals(user.id))
             await session.commit()
         token, _ = create_access_token(user.id)
         return Account(str(user.id), user.email, PASSWORD, {"Authorization": f"Bearer {token}"})
