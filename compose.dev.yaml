@@ -14,7 +14,10 @@ services:
     volumes:
       - db:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U life -d life"]
+      # По TCP, а не через сокет: на пустом томе образ создаёт базу на временном сервере,
+      # который слушает только сокет и тут же останавливается. Сокету он ответил бы
+      # «готов», и make db вернулся бы раньше настоящего сервера.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U life -d life"]
       interval: 2s
       timeout: 2s
       retries: 30
