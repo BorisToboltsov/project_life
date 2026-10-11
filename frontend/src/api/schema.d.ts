@@ -266,6 +266,116 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/diary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Day
+         * @description День дневника: записи по приёмам пищи, съеденное за приём и за день, цель дня.
+         */
+        get: operations["read_day_api_diary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/diary/copy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Copy Entries
+         * @description Копирует свои записи на другой день вместе со снимками.
+         *
+         *     Ключи копий выбирает клиент, так что повтор запроса ничего не дублирует.
+         */
+        post: operations["copy_entries_api_diary_copy_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/diary/entries/{entry_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Save Entry
+         * @description Создаёт запись или заменяет свою же: повтор запроса не плодит дубли (ADR 0002).
+         *
+         *     Состав продукта снимается в запись при создании и при смене продукта. Пока продукт
+         *     тот же, снимок прежний — даже если продукт в каталоге с тех пор исправили.
+         */
+        put: operations["save_entry_api_diary_entries__entry_id__put"];
+        post?: never;
+        /** Delete Entry */
+        delete: operations["delete_entry_api_diary_entries__entry_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/diary/goal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Goal
+         * @description Действующая цель на день; `null`, пока она не задана.
+         */
+        get: operations["read_goal_api_diary_goal_get"];
+        /**
+         * Save Goal
+         * @description Задаёт цель с сегодняшнего дня. Прошлые дни остаются со своей прежней целью.
+         */
+        put: operations["save_goal_api_diary_goal_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/diary/suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Suggest Products
+         * @description Продукты, которые пользователь вносил недавно и вносит часто, с прошлой граммовкой.
+         */
+        get: operations["suggest_products_api_diary_suggestions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/errors": {
         parameters: {
             query?: never;
@@ -396,6 +506,53 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/products": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search Products
+         * @description Продукты каталога по алфавиту; `q` — слова, которые есть в названии, в любом порядке.
+         */
+        get: operations["search_products_api_products_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/products/{product_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Product */
+        get: operations["read_product_api_products__product_id__get"];
+        /**
+         * Save Product
+         * @description Создаёт продукт или заменяет свой: повтор запроса не плодит дубли (ADR 0002).
+         *
+         *     Записи дневника хранят снимок состава — правка продукта их не меняет (инвариант I10).
+         */
+        put: operations["save_product_api_products__product_id__put"];
+        post?: never;
+        /**
+         * Delete Product
+         * @description Убирает продукт из каталога. Записи дневника с ним остаются — со своим снимком.
+         */
+        delete: operations["delete_product_api_products__product_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -418,12 +575,48 @@ export interface components {
             id: string;
             role: components["schemas"]["Role"];
         };
+        /** CopyItem */
+        CopyItem: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Source Id
+             * Format: uuid
+             */
+            source_id: string;
+        };
+        /** DiaryCopyIn */
+        DiaryCopyIn: {
+            /** Items */
+            items: components["schemas"]["CopyItem"][];
+            /**
+             * To Date
+             * Format: date
+             */
+            to_date: string;
+            to_meal?: components["schemas"]["Meal"] | null;
+        };
+        /** DiaryDayOut */
+        DiaryDayOut: {
+            goal: components["schemas"]["NutritionGoalOut"] | null;
+            /**
+             * Local Date
+             * Format: date
+             */
+            local_date: string;
+            /** Meals */
+            meals: components["schemas"]["MealOut"][];
+            totals: components["schemas"]["NutrientsOut"];
+        };
         /**
          * ErrorCode
          * @description Коды ошибок API. Текст для пользователя подбирает фронтенд по коду.
          * @enum {string}
          */
-        ErrorCode: "not_authenticated" | "forbidden" | "not_found" | "invalid_credentials" | "too_many_attempts" | "invite_invalid" | "reset_invalid" | "email_taken" | "wrong_password";
+        ErrorCode: "not_authenticated" | "forbidden" | "not_found" | "invalid_credentials" | "too_many_attempts" | "invite_invalid" | "reset_invalid" | "email_taken" | "wrong_password" | "product_not_found";
         /** ErrorFrameIn */
         ErrorFrameIn: {
             /** Column */
@@ -487,6 +680,50 @@ export interface components {
          * @enum {string}
          */
         ErrorSource: "backend" | "frontend";
+        /** FoodEntryIn */
+        FoodEntryIn: {
+            /** Amount G */
+            amount_g: number | string;
+            /**
+             * Local Date
+             * Format: date
+             */
+            local_date: string;
+            meal: components["schemas"]["Meal"];
+            /** Product Id */
+            product_id: string | null;
+        };
+        /**
+         * FoodEntryOut
+         * @description Запись дневника; нутриенты — съеденной порции, по снимку продукта.
+         */
+        FoodEntryOut: {
+            /** Amount G */
+            amount_g: number;
+            /** Carbs G */
+            carbs_g: number;
+            /** Fat G */
+            fat_g: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Kcal */
+            kcal: number;
+            /**
+             * Local Date
+             * Format: date
+             */
+            local_date: string;
+            meal: components["schemas"]["Meal"];
+            /** Product Id */
+            product_id: string | null;
+            /** Product Name */
+            product_name: string;
+            /** Protein G */
+            protein_g: number;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -577,6 +814,18 @@ export interface components {
             /** Password */
             password: string;
         };
+        /**
+         * Meal
+         * @enum {string}
+         */
+        Meal: "breakfast" | "lunch" | "dinner" | "snack";
+        /** MealOut */
+        MealOut: {
+            /** Entries */
+            entries: components["schemas"]["FoodEntryOut"][];
+            meal: components["schemas"]["Meal"];
+            totals: components["schemas"]["NutrientsOut"];
+        };
         /** MeasurementIn */
         MeasurementIn: {
             /**
@@ -643,6 +892,49 @@ export interface components {
             quantity: components["schemas"]["Quantity"];
             unit: components["schemas"]["Unit"];
         };
+        /** NutrientsOut */
+        NutrientsOut: {
+            /** Carbs G */
+            carbs_g: number;
+            /** Fat G */
+            fat_g: number;
+            /** Kcal */
+            kcal: number;
+            /** Protein G */
+            protein_g: number;
+        };
+        /** NutritionGoalIn */
+        NutritionGoalIn: {
+            /** Carbs G */
+            carbs_g: number;
+            /** Fat G */
+            fat_g: number;
+            /** Kcal */
+            kcal: number;
+            /**
+             * Local Date
+             * Format: date
+             */
+            local_date: string;
+            /** Protein G */
+            protein_g: number;
+        };
+        /** NutritionGoalOut */
+        NutritionGoalOut: {
+            /** Carbs G */
+            carbs_g: number;
+            /**
+             * Effective From
+             * Format: date
+             */
+            effective_from: string;
+            /** Fat G */
+            fat_g: number;
+            /** Kcal */
+            kcal: number;
+            /** Protein G */
+            protein_g: number;
+        };
         /** PasswordChangeIn */
         PasswordChangeIn: {
             /** Current Password */
@@ -676,6 +968,39 @@ export interface components {
              * Format: date-time
              */
             expires_at: string;
+        };
+        /** ProductIn */
+        ProductIn: {
+            /** Carbs G */
+            carbs_g: number | string;
+            /** Fat G */
+            fat_g: number | string;
+            /** Kcal */
+            kcal: number | string;
+            /** Name */
+            name: string;
+            /** Protein G */
+            protein_g: number | string;
+        };
+        /** ProductOut */
+        ProductOut: {
+            /** Carbs G */
+            carbs_g: number;
+            /** Editable */
+            editable: boolean;
+            /** Fat G */
+            fat_g: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Kcal */
+            kcal: number;
+            /** Name */
+            name: string;
+            /** Protein G */
+            protein_g: number;
         };
         /**
          * ProfilePatch
@@ -739,6 +1064,35 @@ export interface components {
          * @enum {string}
          */
         Sex: "male" | "female";
+        /** SuggestionOut */
+        SuggestionOut: {
+            /** Amount G */
+            amount_g: number;
+            /** Carbs G */
+            carbs_g: number;
+            /** Editable */
+            editable: boolean;
+            /** Fat G */
+            fat_g: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Kcal */
+            kcal: number;
+            /** Name */
+            name: string;
+            /** Protein G */
+            protein_g: number;
+        };
+        /** SuggestionsOut */
+        SuggestionsOut: {
+            /** Frequent */
+            frequent: components["schemas"]["SuggestionOut"][];
+            /** Recent */
+            recent: components["schemas"]["SuggestionOut"][];
+        };
         /** TokenIn */
         TokenIn: {
             /** Token */
@@ -1506,6 +1860,304 @@ export interface operations {
             };
         };
     };
+    read_day_api_diary_get: {
+        parameters: {
+            query: {
+                date: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiaryDayOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    copy_entries_api_diary_copy_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiaryCopyIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_entry_api_diary_entries__entry_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entry_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FoodEntryIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FoodEntryOut"];
+                };
+            };
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FoodEntryOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_entry_api_diary_entries__entry_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entry_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_goal_api_diary_goal_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NutritionGoalOut"] | null;
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    save_goal_api_diary_goal_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NutritionGoalIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NutritionGoalOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    suggest_products_api_diary_suggestions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuggestionsOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     report_error_api_errors_post: {
         parameters: {
             query?: never;
@@ -1849,6 +2501,213 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    search_products_api_products_get: {
+        parameters: {
+            query?: {
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductOut"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_product_api_products__product_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_product_api_products__product_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProductIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductOut"];
+                };
+            };
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_product_api_products__product_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

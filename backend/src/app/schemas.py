@@ -18,7 +18,8 @@ from pydantic import (
 )
 
 from app.metrics import CATALOG, Metric, Quantity, Unit, quantity_of, to_canonical
-from app.models import ErrorSource, Language, Role, Sex, UnitSystem
+from app.models import ErrorSource, FoodEntry, Language, Product, Role, Sex, UnitSystem, User
+from app.nutrition import Meal, Nutrients
 
 
 def _known_timezone(value: str) -> str:
@@ -289,3 +290,171 @@ class ErrorReportOut(BaseModel):
     count: int
     first_seen: datetime
     last_seen: datetime
+
+
+# Дневник начинается не раньше этой даты и не заглядывает дальше чем на год вперёд:
+# границы отсекают опечатки в годе.
+def _diary_date(value: date) -> date:
+    latest = datetime.now(UTC).date() + timedelta(days=366)
+    if not date(1900, 1, 1) <= value <= latest:
+        raise ValueError("date out of range")
+    return value
+
+
+DiaryDate = Annotated[date, AfterValidator(_diary_date)]
+ProductName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)]
+# Состав на 100 г. Энергии больше, чем в чистом жире, не бывает.
+Kcal = Annotated[Decimal, Field(ge=0, le=900, max_digits=4, decimal_places=1)]
+Macro = Annotated[Decimal, Field(ge=0, le=100, max_digits=5, decimal_places=2)]
+# Порция: от грамма специй до пяти килограммов — дальше опечатка.
+AmountG = Annotated[Decimal, Field(gt=0, le=5000, max_digits=5, decimal_places=1)]
+
+
+class ProductIn(Strict):
+    name: ProductName
+    # Состав на 100 г продукта.
+    kcal: Kcal
+    protein_g: Macro
+    fat_g: Macro
+    carbs_g: Macro
+
+    @model_validator(mode="after")
+    def _fits_in_100_grams(self) -> Self:
+        if self.protein_g + self.fat_g + self.carbs_g > 100:
+            raise ValueError("macronutrients exceed 100 g per 100 g")
+        return self
+
+
+class ProductOut(BaseModel):
+    id: UUID
+    name: str
+    kcal: float
+    protein_g: float
+    fat_g: float
+    carbs_g: float
+    # Может ли продукт менять тот, кто спрашивает: автор или администратор.
+    editable: bool
+
+    @classmethod
+    def of(cls, product: Product, viewer: User) -> Self:
+        return cls(
+            id=product.id,
+            name=product.name,
+            kcal=float(product.kcal),
+            protein_g=float(product.protein_g),
+            fat_g=float(product.fat_g),
+            carbs_g=float(product.carbs_g),
+            editable=viewer.role == Role.ADMIN or product.created_by == viewer.id,
+        )
+
+
+class SuggestionOut(ProductOut):
+    # Сколько граммов этого продукта пользователь внёс в прошлый раз.
+    amount_g: float
+
+
+class SuggestionsOut(BaseModel):
+    recent: list[SuggestionOut]
+    frequent: list[SuggestionOut]
+
+
+class NutrientsOut(BaseModel):
+    kcal: float
+    protein_g: float
+    fat_g: float
+    carbs_g: float
+
+    @classmethod
+    def of(cls, nutrients: Nutrients) -> Self:
+        return cls(
+            kcal=float(nutrients.kcal),
+            protein_g=float(nutrients.protein_g),
+            fat_g=float(nutrients.fat_g),
+            carbs_g=float(nutrients.carbs_g),
+        )
+
+
+class FoodEntryIn(Strict):
+    local_date: DiaryDate
+    meal: Meal
+    # Продукт каталога, с которого снимается состав. При правке записи тот же продукт
+    # (или `null`) оставляет прежний снимок.
+    product_id: UUID | None
+    amount_g: AmountG
+
+
+class FoodEntryOut(NutrientsOut):
+    """Запись дневника; нутриенты — съеденной порции, по снимку продукта."""
+
+    id: UUID
+    local_date: date
+    meal: Meal
+    product_id: UUID | None
+    product_name: str
+    amount_g: float
+
+    @classmethod
+    def of_entry(cls, entry: FoodEntry) -> Self:
+        return cls(
+            id=entry.id,
+            local_date=entry.local_date,
+            meal=entry.meal,
+            product_id=entry.product_id,
+            product_name=entry.product_name,
+            amount_g=float(entry.amount_g),
+            **NutrientsOut.of(entry.eaten).model_dump(),
+        )
+
+
+class NutritionGoalIn(Strict):
+    kcal: Annotated[int, Field(ge=500, le=10000)]
+    protein_g: Annotated[int, Field(ge=0, le=1000)]
+    fat_g: Annotated[int, Field(ge=0, le=1000)]
+    carbs_g: Annotated[int, Field(ge=0, le=1000)]
+    # Сегодняшний день пользователя: с него цель начинает действовать.
+    local_date: date
+
+    @model_validator(mode="after")
+    def _starts_today(self) -> Self:
+        # Местная дата расходится с датой по UTC не больше чем на сутки — в любом поясе.
+        if abs((self.local_date - datetime.now(UTC).date()).days) > 1:
+            raise ValueError("goal must start today")
+        return self
+
+
+class NutritionGoalOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    kcal: int
+    protein_g: int
+    fat_g: int
+    carbs_g: int
+    effective_from: date
+
+
+class MealOut(BaseModel):
+    meal: Meal
+    entries: list[FoodEntryOut]
+    totals: NutrientsOut
+
+
+class DiaryDayOut(BaseModel):
+    local_date: date
+    # Все приёмы пищи по порядку, включая пустые.
+    meals: list[MealOut]
+    totals: NutrientsOut
+    # Цель, действовавшая в этот день; `null` — цели тогда ещё не было.
+    goal: NutritionGoalOut | None
+
+
+class CopyItem(Strict):
+    source_id: UUID
+    # Ключ копии выбирает клиент: повтор запроса не создаёт вторую копию (ADR 0002).
+    id: RecordId
+
+
+class DiaryCopyIn(Strict):
+    to_date: DiaryDate
+    # `null` — каждая запись остаётся в своём приёме пищи.
+    to_meal: Meal | None = None
+    items: Annotated[list[CopyItem], Field(min_length=1, max_length=200)]

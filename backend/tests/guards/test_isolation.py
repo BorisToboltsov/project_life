@@ -4,7 +4,9 @@
 - открытый — перечислен в PUBLIC поимённо;
 - административный — под /api/admin, обычному пользователю отвечает 403;
 - пользовательский — без входа отвечает 401, а если принимает идентификатор записи,
-  то обязан иметь сценарий в OWNERSHIP: чужая запись неотличима от несуществующей.
+  то обязан иметь сценарий в OWNERSHIP: чужая запись неотличима от несуществующей;
+- общий — запись каталога из SHARED: её видят все вошедшие, а меняет автор или
+  администратор, остальным — 403.
 """
 
 import re
@@ -76,9 +78,61 @@ async def _delete_measurement(client: AsyncClient, owner: Account) -> Probe:
     return Probe(await _own_measurement(client, owner))
 
 
+def _product_body() -> dict[str, Any]:
+    return {"name": "Творог 5 %", "kcal": 121, "protein_g": 17.2, "fat_g": 5, "carbs_g": 1.8}
+
+
+async def _own_product(client: AsyncClient, owner: Account) -> str:
+    path = f"/api/products/{uuid.uuid7()}"
+    created = await client.put(path, headers=owner.headers, json=_product_body())
+    assert created.status_code == 201
+    return path
+
+
+async def _read_product(client: AsyncClient, owner: Account) -> Probe:
+    return Probe(await _own_product(client, owner))
+
+
+async def _replace_product(client: AsyncClient, owner: Account) -> Probe:
+    return Probe(await _own_product(client, owner), {**_product_body(), "name": "Подменено"})
+
+
+async def _food_entry_body(client: AsyncClient, owner: Account) -> dict[str, Any]:
+    product = await _own_product(client, owner)
+    return {
+        "local_date": datetime.now(UTC).date().isoformat(),
+        "meal": "breakfast",
+        "product_id": product.rsplit("/", 1)[1],
+        "amount_g": 150,
+    }
+
+
+async def _own_food_entry(client: AsyncClient, owner: Account) -> Probe:
+    body = await _food_entry_body(client, owner)
+    path = f"/api/diary/entries/{uuid.uuid7()}"
+    created = await client.put(path, headers=owner.headers, json=body)
+    assert created.status_code == 201
+    return Probe(path, body)
+
+
+async def _delete_food_entry(client: AsyncClient, owner: Account) -> Probe:
+    return Probe((await _own_food_entry(client, owner)).path)
+
+
 OWNERSHIP: dict[Route, OwnershipCase] = {
     ("PUT", "/api/measurements/{measurement_id}"): _replace_measurement,
     ("DELETE", "/api/measurements/{measurement_id}"): _delete_measurement,
+    ("PUT", "/api/diary/entries/{entry_id}"): _own_food_entry,
+    ("DELETE", "/api/diary/entries/{entry_id}"): _delete_food_entry,
+}
+
+# Общий каталог: запись видят все вошедшие, меняет её автор или администратор. Сценарий
+# создаёт запись от имени автора; гейт повторяет запрос от имени другого пользователя и
+# ждёт 200 на чтение и 403 на изменение.
+SHARED: dict[Route, OwnershipCase] = {
+    ("GET", "/api/products/{product_id}"): _read_product,
+    ("PUT", "/api/products/{product_id}"): _replace_product,
+    ("DELETE", "/api/products/{product_id}"): _read_product,
 }
 
 
@@ -93,7 +147,8 @@ def all_routes() -> list[Route]:
 
 CLOSED = [route for route in all_routes() if route not in PUBLIC]
 ADMIN = [route for route in CLOSED if route[1].startswith("/api/admin/")]
-OWNED = [route for route in CLOSED if route not in ADMIN and "{" in route[1]]
+WITH_RECORD_ID = [route for route in CLOSED if route not in ADMIN and "{" in route[1]]
+OWNED = [route for route in WITH_RECORD_ID if route not in SHARED]
 
 
 def concrete(path: str) -> str:
@@ -146,6 +201,7 @@ def test_every_route_with_a_record_id_has_an_ownership_case() -> None:
 
     assert not missing, f"нет сценария владения для: {missing}"
     assert set(OWNERSHIP) <= set(OWNED), "в OWNERSHIP остались несуществующие маршруты"
+    assert set(SHARED) <= set(WITH_RECORD_ID), "в SHARED остались несуществующие маршруты"
 
 
 @pytest.mark.parametrize(("method", "path"), OWNED)
@@ -161,13 +217,32 @@ async def test_foreign_record_looks_missing(
     assert response.json() == {"detail": "not_found"}
 
 
-@pytest.mark.parametrize(("method", "path"), OWNED)
+@pytest.mark.parametrize(("method", "path"), sorted(SHARED))
+async def test_shared_record_is_changed_only_by_its_author(
+    client: AsyncClient, make_user: MakeUser, method: str, path: str
+) -> None:
+    author, stranger = await make_user(), await make_user()
+    probe = await SHARED[method, path](client, author)
+    before = (await client.get(probe.path, headers=author.headers)).json()
+
+    response = await client.request(method, probe.path, headers=stranger.headers, json=probe.json)
+
+    if method == "GET":
+        assert response.status_code == 200, f"{method} {path} не отдаёт общую запись"
+        assert response.json() == {**before, "editable": False}
+    else:
+        assert response.status_code == 403, f"{method} {path} даёт менять чужую запись"
+        assert response.json() == {"detail": "forbidden"}
+    assert (await client.get(probe.path, headers=author.headers)).json() == before
+
+
+@pytest.mark.parametrize(("method", "path"), OWNED + sorted(SHARED))
 async def test_record_id_must_be_a_client_uuid7(
     client: AsyncClient, make_user: MakeUser, method: str, path: str
 ) -> None:
     """Инвариант I8: ключ пользовательской записи — UUIDv7 от клиента, другой не принимается."""
     owner = await make_user()
-    probe = await OWNERSHIP[method, path](client, owner)
+    probe = await {**OWNERSHIP, **SHARED}[method, path](client, owner)
     with_other_version = re.sub(r"[^/]+$", str(uuid.uuid4()), probe.path)
 
     response = await client.request(
