@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next'
 
 import { useUser } from '@/auth/useSession'
 
+import { DiaryCard } from './diary/DiaryCard'
 import { SummaryCard } from './measurements/SummaryCard'
 
 export function HomePage() {
@@ -11,8 +12,8 @@ export function HomePage() {
   return (
     <div className="grid gap-4">
       <h1 className="text-2xl font-semibold">{t('home.greeting', { name: user.display_name })}</h1>
+      <DiaryCard />
       <SummaryCard />
-      <p className="text-sm text-muted-foreground">{t('home.empty')}</p>
     </div>
   )
 }

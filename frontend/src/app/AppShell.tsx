@@ -1,5 +1,5 @@
 import { Link, type LinkProps, Outlet } from '@tanstack/react-router'
-import { House, type LucideIcon, Ruler, ShieldCheck, UserRound } from 'lucide-react'
+import { House, type LucideIcon, Ruler, ShieldCheck, UserRound, Utensils } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { useUser } from '@/auth/useSession'
@@ -23,6 +23,7 @@ export function AppShell() {
 
   const items: NavItem[] = [
     { to: '/', icon: House, label: 'nav.home' },
+    { to: '/diary', icon: Utensils, label: 'nav.diary' },
     { to: '/measurements', icon: Ruler, label: 'nav.measurements' },
     { to: '/profile', icon: UserRound, label: 'nav.profile' },
     ...(user.role === 'admin'

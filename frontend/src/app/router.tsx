@@ -9,15 +9,24 @@ import {
 } from '@tanstack/react-router'
 
 import { type Metric, METRICS } from '@/api/measurements'
+import { type Meal, MEALS } from '@/api/nutrition'
 import { session, type SessionState } from '@/auth/session'
+import { isRealDate, today } from '@/lib/dates'
 import { AdminPage } from '@/pages/admin/AdminPage'
 import { InvitePage } from '@/pages/auth/InvitePage'
 import { LoginPage } from '@/pages/auth/LoginPage'
 import { ResetPage } from '@/pages/auth/ResetPage'
+import { AddFoodNewProductPage, AddFoodPage } from '@/pages/diary/AddFoodPage'
+import { CopyPage } from '@/pages/diary/CopyPage'
+import { DiaryPage } from '@/pages/diary/DiaryPage'
+import { EntryEditPage } from '@/pages/diary/EntryEditPage'
+import { GoalPage } from '@/pages/diary/GoalPage'
 import { HomePage } from '@/pages/HomePage'
 import { MeasurementEditPage } from '@/pages/measurements/MeasurementEditPage'
 import { MeasurementEntryPage } from '@/pages/measurements/MeasurementEntryPage'
 import { MeasurementsPage } from '@/pages/measurements/MeasurementsPage'
+import { ProductEditPage, ProductNewPage } from '@/pages/products/ProductPages'
+import { ProductsPage } from '@/pages/products/ProductsPage'
 import { ProfilePage } from '@/pages/profile/ProfilePage'
 
 import { AppShell } from './AppShell'
@@ -70,6 +79,66 @@ const measurementEditRoute = createRoute({
   component: MeasurementEditPage,
 })
 
+/** День дневника из адреса; не дата — уводит на сегодня. */
+function dateParam(value: string): string {
+  if (isRealDate(value)) return value
+  throw redirect({ to: '/diary/$date', params: { date: today() } })
+}
+
+/** Приём пищи из адреса; незнакомое значение уводит на день дневника. */
+function mealParam(value: string, date: string): Meal {
+  if (MEALS.includes(value as Meal)) return value as Meal
+  throw redirect({ to: '/diary/$date', params: { date } })
+}
+
+const diaryDayRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/diary/$date',
+  params: { parse: ({ date }) => ({ date: dateParam(date) }) },
+  component: DiaryPage,
+})
+
+const addFoodRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/diary/$date/add/$meal',
+  params: {
+    parse: ({ date, meal }) => ({ date: dateParam(date), meal: mealParam(meal, date) }),
+  },
+  // Ключ продукта, созданного по пути сюда: он показывается первым.
+  validateSearch: (search: Record<string, unknown>): { product?: string } =>
+    typeof search.product === 'string' ? { product: search.product } : {},
+  component: AddFoodPage,
+})
+
+const addFoodNewProductRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/diary/$date/add/$meal/new',
+  params: {
+    parse: ({ date, meal }) => ({ date: dateParam(date), meal: mealParam(meal, date) }),
+  },
+  component: AddFoodNewProductPage,
+})
+
+const copyRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/diary/$date/copy/$scope',
+  params: {
+    // Что копируется: приём пищи или весь день.
+    parse: ({ date, scope }): { date: string; scope: Meal | 'day' } => ({
+      date: dateParam(date),
+      scope: scope === 'day' ? 'day' : mealParam(scope, date),
+    }),
+  },
+  component: CopyPage,
+})
+
+const entryEditRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/diary/$date/entries/$id',
+  params: { parse: ({ date, id }) => ({ date: dateParam(date), id }) },
+  component: EntryEditPage,
+})
+
 const routeTree = rootRoute.addChildren([
   guestRoute.addChildren([
     createRoute({ getParentRoute: () => guestRoute, path: '/login', component: LoginPage }),
@@ -92,6 +161,30 @@ const routeTree = rootRoute.addChildren([
     }),
     measurementsRoute,
     measurementEditRoute,
+    createRoute({
+      getParentRoute: () => appRoute,
+      path: '/diary',
+      beforeLoad: () => {
+        throw redirect({ to: '/diary/$date', params: { date: today() } })
+      },
+    }),
+    createRoute({ getParentRoute: () => appRoute, path: '/diary/goal', component: GoalPage }),
+    diaryDayRoute,
+    addFoodRoute,
+    addFoodNewProductRoute,
+    copyRoute,
+    entryEditRoute,
+    createRoute({ getParentRoute: () => appRoute, path: '/products', component: ProductsPage }),
+    createRoute({
+      getParentRoute: () => appRoute,
+      path: '/products/new',
+      component: ProductNewPage,
+    }),
+    createRoute({
+      getParentRoute: () => appRoute,
+      path: '/products/$id',
+      component: ProductEditPage,
+    }),
     createRoute({ getParentRoute: () => appRoute, path: '/profile', component: ProfilePage }),
     createRoute({
       getParentRoute: () => appRoute,

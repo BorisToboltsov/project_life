@@ -18,6 +18,7 @@ class ErrorCode(StrEnum):
     RESET_INVALID = "reset_invalid"
     EMAIL_TAKEN = "email_taken"
     WRONG_PASSWORD = "wrong_password"  # noqa: S105
+    PRODUCT_NOT_FOUND = "product_not_found"
 
 
 class ErrorResponse(BaseModel):
