@@ -22,6 +22,7 @@ import { ProfilePage } from '@/pages/profile/ProfilePage'
 
 import { AppShell } from './AppShell'
 import { AuthLayout } from './AuthLayout'
+import { CrashScreen } from './CrashScreen'
 
 interface RouterContext {
   session: SessionState
@@ -110,6 +111,9 @@ export function createAppRouter(history?: RouterHistory) {
     history,
     context: { session: { status: 'loading', user: null } },
     defaultNotFoundComponent: () => <Navigate to="/" />,
+    // Без него сбой отрисовки показывает встроенный экран роутера — непереведённый и с
+    // текстом исключения.
+    defaultErrorComponent: CrashScreen,
   })
 }
 

@@ -31,6 +31,11 @@ export const en: Dictionary = {
     title: 'Cannot reach the server',
     hint: 'Check your connection and try again.',
   },
+  crash: {
+    title: 'This screen could not be shown',
+    hint: 'Reload the page. If it happens again, tell the administrator.',
+    reload: 'Reload',
+  },
   disclaimer: {
     text: 'This app is not a medical device and does not replace a doctor’s advice.',
     accept:
