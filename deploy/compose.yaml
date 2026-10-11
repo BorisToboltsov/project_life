@@ -33,7 +33,10 @@ services:
     volumes:
       - db:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U life -d life"]
+      # По TCP, а не через сокет: при первом запуске образ создаёт базу на временном
+      # сервере, который слушает только сокет и тут же останавливается. Сокету он ответил
+      # бы «готов», и migrate стартовал бы раньше настоящего сервера.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U life -d life"]
       interval: 5s
       timeout: 3s
       retries: 20

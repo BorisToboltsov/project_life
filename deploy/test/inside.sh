@@ -110,4 +110,28 @@ age --decrypt --identity /root/backup.key "$latest" | gunzip \
 restored_email="$(docker exec life-deploy-restore psql --username life --dbname life --tuples-only --no-align --command 'SELECT email FROM users')"
 [ "$restored_email" = "deploy@example.com" ] || fail "восстановлены не те данные"
 
+step "проверка готовности базы не принимает временный сервер за настоящий"
+# На пустом томе образ postgres создаёт базу на временном сервере: он слушает только сокет
+# и тут же останавливается. Проба из compose обязана такому серверу отказать — иначе
+# migrate стартует раньше настоящего. Временный сервер здесь изображает восстановленная
+# база, перезапущенная без TCP.
+probes="$(sed -n 's/.*"CMD-SHELL", "\(pg_isready[^"]*\)".*/\1/p' /opt/life/compose.yaml /src/compose.dev.yaml)"
+[ "$(wc -l <<<"$probes")" = 2 ] || fail "проба готовности базы не найдена в compose.yaml или compose.dev.yaml"
+probe_passes() { docker exec life-deploy-restore sh -c "$1" >/dev/null 2>&1; }
+while read -r probe; do
+  probe_passes "$probe" || fail "проба «$probe» не проходит на работающей базе"
+done <<<"$probes"
+docker exec life-deploy-restore psql --username life --dbname life --quiet \
+  --command "ALTER SYSTEM SET listen_addresses = ''"
+docker restart life-deploy-restore >/dev/null
+for _ in $(seq 30); do
+  docker exec life-deploy-restore pg_isready --username life --dbname life >/dev/null 2>&1 && break
+  sleep 1
+done
+docker exec life-deploy-restore pg_isready --username life --dbname life >/dev/null \
+  || fail "база без TCP не поднялась"
+while read -r probe; do
+  probe_passes "$probe" && fail "проба «$probe» принимает сервер, который слушает только сокет"
+done <<<"$probes"
+
 echo "== выкладка проверена"
