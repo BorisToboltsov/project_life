@@ -8,7 +8,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import User
 from tests.conftest import MakeUser
-from tests.nutrition import COTTAGE_CHEESE, OATMEAL, add_product, put_product
+from tests.nutrition import (
+    BY_HAND,
+    COTTAGE_CHEESE,
+    EAN_8,
+    EAN_13,
+    OATMEAL,
+    UPC_A,
+    UPC_A_AS_EAN_13,
+    add_product,
+    put_product,
+)
 
 pytestmark = pytest.mark.anyio
 
@@ -32,7 +42,12 @@ async def test_product_is_created_with_the_client_id(
     again = await put_product(client, author, COTTAGE_CHEESE, product_id)
 
     assert response.status_code == 201
-    assert response.json() == {**COTTAGE_CHEESE, "id": response.json()["id"], "editable": True}
+    assert response.json() == {
+        **COTTAGE_CHEESE,
+        **BY_HAND,
+        "id": response.json()["id"],
+        "editable": True,
+    }
     assert again.json()["id"] == product_id
 
 
@@ -79,6 +94,7 @@ async def test_catalog_is_shared_but_only_the_author_and_admin_edit(
     # Правка администратора не делает его автором.
     assert (await client.get(path, headers=author.headers)).json() == {
         **COTTAGE_CHEESE,
+        **BY_HAND,
         "name": "Творог 5%",
         "id": product_id,
         "editable": True,
@@ -127,7 +143,14 @@ async def test_product_is_deleted_by_its_author(client: AsyncClient, make_user: 
         {"unit": ...},
         # Белки, жиры и углеводы вместе не помещаются в 100 г.
         {"protein_g": 40, "fat_g": 40, "carbs_g": 20.01},
+        # Штрихкод: неверная контрольная цифра, не та длина, не цифры.
         {"barcode": "4600000000000"},
+        {"barcode": "460000000"},
+        {"barcode": "46000000000080"},
+        {"barcode": "46000000ABCD8"},
+        {"barcode": ""},
+        # Источник продукта клиент не выбирает.
+        {"source": "open_food_facts"},
     ],
 )
 async def test_implausible_product_is_rejected(
@@ -168,6 +191,72 @@ async def test_product_is_measured_in_grams_or_millilitres(
 
     assert (created.status_code, created.json()["unit"]) == (201, "ml")
     assert corrected.json()["unit"] == "g"
+
+
+# --- Штрихкод ----------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("typed", "stored"),
+    [
+        (EAN_13, EAN_13),
+        (EAN_8, EAN_8),
+        # UPC-A — тот же EAN-13 без ведущего нуля: в каталоге он один.
+        (UPC_A, UPC_A_AS_EAN_13),
+        # Как на упаковке: с пробелами и дефисами.
+        ("4 600000 000008", EAN_13),
+        ("4600-0000-00008", EAN_13),
+    ],
+)
+async def test_barcode_is_stored_in_one_form(
+    client: AsyncClient, make_user: MakeUser, typed: str, stored: str
+) -> None:
+    author = await make_user()
+
+    response = await put_product(client, author, {**COTTAGE_CHEESE, "barcode": typed})
+
+    assert response.status_code == 201
+    assert response.json()["barcode"] == stored
+
+
+async def test_one_barcode_belongs_to_one_product(client: AsyncClient, make_user: MakeUser) -> None:
+    author, other = await make_user(), await make_user()
+    first = await add_product(client, author, barcode=EAN_13)
+    second = await add_product(client, other, name="Кефир")
+
+    created = await put_product(client, other, {**OATMEAL, "barcode": EAN_13})
+    changed = await put_product(client, other, {**OATMEAL, "barcode": EAN_13}, second)
+    # Свой штрихкод продукту оставить можно: это не конфликт с самим собой.
+    kept = await put_product(client, author, {**COTTAGE_CHEESE, "barcode": EAN_13}, first)
+
+    assert (created.status_code, changed.status_code, kept.status_code) == (409, 409, 200)
+    assert created.json() == {"detail": "barcode_taken"}
+    assert await search(client, author.headers) == ["Кефир", "Творог 5 %"]
+    assert (await client.get(f"/api/products/{second}", headers=other.headers)).json()[
+        "name"
+    ] == "Кефир"
+
+
+async def test_barcode_is_removed_and_freed(client: AsyncClient, make_user: MakeUser) -> None:
+    author = await make_user()
+    first = await add_product(client, author, barcode=EAN_13)
+
+    cleared = await put_product(client, author, COTTAGE_CHEESE, first)
+    reused = await put_product(client, author, {**OATMEAL, "barcode": EAN_13})
+
+    assert cleared.json()["barcode"] is None
+    assert reused.status_code == 201
+
+
+async def test_products_without_a_barcode_do_not_collide(
+    client: AsyncClient, make_user: MakeUser
+) -> None:
+    author = await make_user()
+
+    await add_product(client, author)
+    await add_product(client, author, name="Кефир")
+
+    assert await search(client, author.headers) == ["Кефир", "Творог 5 %"]
 
 
 # --- Поиск -------------------------------------------------------------------------------

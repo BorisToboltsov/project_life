@@ -7,13 +7,21 @@ import { createRoot } from 'react-dom/client'
 import { registerSW } from 'virtual:pwa-register'
 
 import { App } from '@/app/App'
+import { appUpdate, watchForUpdates } from '@/app/appUpdate'
 import { caughtErrorHandler, installErrorReporting } from '@/app/errorReporting'
 import { bindSession, createAppRouter } from '@/app/router'
 import { session } from '@/auth/session'
 import '@/i18n'
 import './index.css'
 
-registerSW({ immediate: true })
+// Новая версия не включается сама: приложение предлагает обновиться (ADR 0009).
+const applyUpdate = registerSW({
+  immediate: true,
+  onNeedRefresh: () => appUpdate.offer(() => void applyUpdate(true)),
+  onRegisteredSW: (_url, registration) => {
+    if (registration) watchForUpdates(registration)
+  },
+})
 
 const queryClient = new QueryClient()
 const router = createAppRouter()

@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     login_max_failures_per_email: int = 10
     login_max_failures_per_ip: int = 30
 
+    # Адрес Open Food Facts, где сервер ищет продукт по штрихкоду (ADR 0009). Пусто — наружу
+    # не ходим: штрихкод ищется только в своём каталоге.
+    off_url: str = "https://world.openfoodfacts.org"
+
     @model_validator(mode="after")
     def _require_real_secret_in_prod(self) -> Self:
         secret = self.jwt_secret.get_secret_value()

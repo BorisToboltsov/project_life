@@ -3,6 +3,7 @@ import {
   createRootRouteWithContext,
   createRoute,
   createRouter,
+  lazyRouteComponent,
   Navigate,
   redirect,
   type RouterHistory,
@@ -11,27 +12,48 @@ import {
 import { type Metric, METRICS } from '@/api/measurements'
 import { session, type SessionState } from '@/auth/session'
 import { isRealDate, today } from '@/lib/dates'
-import { AdminPage } from '@/pages/admin/AdminPage'
-import { InvitePage } from '@/pages/auth/InvitePage'
-import { LoginPage } from '@/pages/auth/LoginPage'
-import { ResetPage } from '@/pages/auth/ResetPage'
-import { AddFoodNewProductPage, AddFoodPage } from '@/pages/diary/AddFoodPage'
-import { CopyPage } from '@/pages/diary/CopyPage'
-import { DiaryPage } from '@/pages/diary/DiaryPage'
-import { EntryEditPage } from '@/pages/diary/EntryEditPage'
-import { GoalPage } from '@/pages/diary/GoalPage'
-import { MealNewPage } from '@/pages/diary/MealNewPage'
-import { HomePage } from '@/pages/HomePage'
-import { MeasurementEditPage } from '@/pages/measurements/MeasurementEditPage'
-import { MeasurementEntryPage } from '@/pages/measurements/MeasurementEntryPage'
-import { MeasurementsPage } from '@/pages/measurements/MeasurementsPage'
-import { ProductEditPage, ProductNewPage } from '@/pages/products/ProductPages'
-import { ProductsPage } from '@/pages/products/ProductsPage'
-import { ProfilePage } from '@/pages/profile/ProfilePage'
 
 import { AppShell } from './AppShell'
 import { AuthLayout } from './AuthLayout'
 import { CrashScreen } from './CrashScreen'
+import { ScreenLoading } from './ScreenLoading'
+
+// Экраны подгружаются при переходе, а не вместе с рамкой приложения (инвариант I12):
+// статический импорт из `@/pages` вернул бы экран в первую загрузку.
+const screens = {
+  login: lazyRouteComponent(() => import('@/pages/auth/LoginPage'), 'LoginPage'),
+  invite: lazyRouteComponent(() => import('@/pages/auth/InvitePage'), 'InvitePage'),
+  reset: lazyRouteComponent(() => import('@/pages/auth/ResetPage'), 'ResetPage'),
+  home: lazyRouteComponent(() => import('@/pages/HomePage'), 'HomePage'),
+  measurementEntry: lazyRouteComponent(
+    () => import('@/pages/measurements/MeasurementEntryPage'),
+    'MeasurementEntryPage',
+  ),
+  measurements: lazyRouteComponent(
+    () => import('@/pages/measurements/MeasurementsPage'),
+    'MeasurementsPage',
+  ),
+  measurementEdit: lazyRouteComponent(
+    () => import('@/pages/measurements/MeasurementEditPage'),
+    'MeasurementEditPage',
+  ),
+  diary: lazyRouteComponent(() => import('@/pages/diary/DiaryPage'), 'DiaryPage'),
+  goal: lazyRouteComponent(() => import('@/pages/diary/GoalPage'), 'GoalPage'),
+  addFood: lazyRouteComponent(() => import('@/pages/diary/AddFoodPage'), 'AddFoodPage'),
+  addFoodNewProduct: lazyRouteComponent(
+    () => import('@/pages/diary/AddFoodPage'),
+    'AddFoodNewProductPage',
+  ),
+  scan: lazyRouteComponent(() => import('@/pages/diary/ScanPage'), 'ScanPage'),
+  mealNew: lazyRouteComponent(() => import('@/pages/diary/MealNewPage'), 'MealNewPage'),
+  copy: lazyRouteComponent(() => import('@/pages/diary/CopyPage'), 'CopyPage'),
+  entryEdit: lazyRouteComponent(() => import('@/pages/diary/EntryEditPage'), 'EntryEditPage'),
+  products: lazyRouteComponent(() => import('@/pages/products/ProductsPage'), 'ProductsPage'),
+  productNew: lazyRouteComponent(() => import('@/pages/products/ProductPages'), 'ProductNewPage'),
+  productEdit: lazyRouteComponent(() => import('@/pages/products/ProductPages'), 'ProductEditPage'),
+  profile: lazyRouteComponent(() => import('@/pages/profile/ProfilePage'), 'ProfilePage'),
+  admin: lazyRouteComponent(() => import('@/pages/admin/AdminPage'), 'AdminPage'),
+}
 
 interface RouterContext {
   session: SessionState
@@ -69,14 +91,14 @@ const measurementsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/measurements/$metric',
   params: { parse: ({ metric }) => ({ metric: metricParam(metric) }) },
-  component: MeasurementsPage,
+  component: screens.measurements,
 })
 
 const measurementEditRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/measurements/$metric/$id',
   params: { parse: ({ metric, id }) => ({ metric: metricParam(metric), id }) },
-  component: MeasurementEditPage,
+  component: screens.measurementEdit,
 })
 
 /** День дневника из адреса; не дата — уводит на сегодня. */
@@ -89,7 +111,7 @@ const diaryDayRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/diary/$date',
   params: { parse: ({ date }) => ({ date: dateParam(date) }) },
-  component: DiaryPage,
+  component: screens.diary,
 })
 
 const addFoodRoute = createRoute({
@@ -97,24 +119,34 @@ const addFoodRoute = createRoute({
   path: '/diary/$date/add/$meal',
   // `$meal` — ключ приёма пищи из списка пользователя; есть ли такой, решает экран.
   params: { parse: ({ date, meal }) => ({ date: dateParam(date), meal }) },
-  // Ключ продукта, созданного по пути сюда: он показывается первым.
-  validateSearch: (search: Record<string, unknown>): { product?: string } =>
-    typeof search.product === 'string' ? { product: search.product } : {},
-  component: AddFoodPage,
+  // Ключ продукта, с которым сюда пришли, — он показывается первым: `product` — созданный
+  // по пути, `scanned` — найденный по штрихкоду.
+  validateSearch: (search: Record<string, unknown>): { product?: string; scanned?: string } => ({
+    ...(typeof search.product === 'string' && { product: search.product }),
+    ...(typeof search.scanned === 'string' && { scanned: search.scanned }),
+  }),
+  component: screens.addFood,
 })
 
 const addFoodNewProductRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/diary/$date/add/$meal/new',
   params: { parse: ({ date, meal }) => ({ date: dateParam(date), meal }) },
-  component: AddFoodNewProductPage,
+  component: screens.addFoodNewProduct,
+})
+
+const scanRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/diary/$date/add/$meal/scan',
+  params: { parse: ({ date, meal }) => ({ date: dateParam(date), meal }) },
+  component: screens.scan,
 })
 
 const mealNewRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/diary/$date/meals/new',
   params: { parse: ({ date }) => ({ date: dateParam(date) }) },
-  component: MealNewPage,
+  component: screens.mealNew,
 })
 
 const copyRoute = createRoute({
@@ -122,24 +154,24 @@ const copyRoute = createRoute({
   path: '/diary/$date/copy/$scope',
   // Что копируется: `day` — весь день, иначе ключ приёма пищи.
   params: { parse: ({ date, scope }) => ({ date: dateParam(date), scope }) },
-  component: CopyPage,
+  component: screens.copy,
 })
 
 const entryEditRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/diary/$date/entries/$id',
   params: { parse: ({ date, id }) => ({ date: dateParam(date), id }) },
-  component: EntryEditPage,
+  component: screens.entryEdit,
 })
 
 const routeTree = rootRoute.addChildren([
   guestRoute.addChildren([
-    createRoute({ getParentRoute: () => guestRoute, path: '/login', component: LoginPage }),
-    createRoute({ getParentRoute: () => guestRoute, path: '/invite', component: InvitePage }),
-    createRoute({ getParentRoute: () => guestRoute, path: '/reset', component: ResetPage }),
+    createRoute({ getParentRoute: () => guestRoute, path: '/login', component: screens.login }),
+    createRoute({ getParentRoute: () => guestRoute, path: '/invite', component: screens.invite }),
+    createRoute({ getParentRoute: () => guestRoute, path: '/reset', component: screens.reset }),
   ]),
   appRoute.addChildren([
-    createRoute({ getParentRoute: () => appRoute, path: '/', component: HomePage }),
+    createRoute({ getParentRoute: () => appRoute, path: '/', component: screens.home }),
     createRoute({
       getParentRoute: () => appRoute,
       path: '/measurements',
@@ -150,7 +182,7 @@ const routeTree = rootRoute.addChildren([
     createRoute({
       getParentRoute: () => appRoute,
       path: '/measurements/new',
-      component: MeasurementEntryPage,
+      component: screens.measurementEntry,
     }),
     measurementsRoute,
     measurementEditRoute,
@@ -161,29 +193,30 @@ const routeTree = rootRoute.addChildren([
         throw redirect({ to: '/diary/$date', params: { date: today() } })
       },
     }),
-    createRoute({ getParentRoute: () => appRoute, path: '/diary/goal', component: GoalPage }),
+    createRoute({ getParentRoute: () => appRoute, path: '/diary/goal', component: screens.goal }),
     diaryDayRoute,
     addFoodRoute,
     addFoodNewProductRoute,
+    scanRoute,
     mealNewRoute,
     copyRoute,
     entryEditRoute,
-    createRoute({ getParentRoute: () => appRoute, path: '/products', component: ProductsPage }),
+    createRoute({ getParentRoute: () => appRoute, path: '/products', component: screens.products }),
     createRoute({
       getParentRoute: () => appRoute,
       path: '/products/new',
-      component: ProductNewPage,
+      component: screens.productNew,
     }),
     createRoute({
       getParentRoute: () => appRoute,
       path: '/products/$id',
-      component: ProductEditPage,
+      component: screens.productEdit,
     }),
-    createRoute({ getParentRoute: () => appRoute, path: '/profile', component: ProfilePage }),
+    createRoute({ getParentRoute: () => appRoute, path: '/profile', component: screens.profile }),
     createRoute({
       getParentRoute: () => appRoute,
       path: '/admin',
-      component: AdminPage,
+      component: screens.admin,
       // Сервер всё равно ответит 403; это лишь чтобы не показывать пустой экран.
       beforeLoad: ({ context }) => {
         if (context.session.user?.role !== 'admin') throw redirect({ to: '/' })
@@ -198,6 +231,7 @@ export function createAppRouter(history?: RouterHistory) {
     history,
     context: { session: { status: 'loading', user: null } },
     defaultNotFoundComponent: () => <Navigate to="/" />,
+    defaultPendingComponent: ScreenLoading,
     // Без него сбой отрисовки показывает встроенный экран роутера — непереведённый и с
     // текстом исключения.
     defaultErrorComponent: CrashScreen,

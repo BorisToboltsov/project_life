@@ -37,6 +37,10 @@ export const en: Dictionary = {
     hint: 'Reload the page. If it happens again, tell the administrator.',
     reload: 'Reload',
   },
+  update: {
+    ready: 'A new version of the app is available.',
+    apply: 'Update',
+  },
   disclaimer: {
     text: 'This app is not a medical device and does not replace a doctor’s advice.',
     accept:
@@ -150,6 +154,32 @@ export const en: Dictionary = {
     submit: 'Add',
     added: 'Added: {{name}}, {{amount}} {{unit}}',
     done: 'Done',
+    scan: 'Scan a barcode',
+    scanned: 'By barcode',
+  },
+  scan: {
+    title: 'Barcode',
+    camera: 'Camera view',
+    manual: 'Barcode digits',
+    manualHint: 'The digits under the bars: 8, 12 or 13.',
+    find: 'Find',
+    looking: 'Looking for {{barcode}}…',
+    again: 'Scan again',
+    back: 'Back',
+  },
+  scannerStates: {
+    starting: 'Starting the camera…',
+    scanning: 'Point the camera at the barcode on the package.',
+    denied: 'No access to the camera. Allow it in the browser settings or type the barcode digits.',
+    unavailable: 'The scanner is unavailable. Type the barcode digits.',
+  },
+  lookupNotices: {
+    not_found:
+      'Barcode {{barcode}} was not found. Fill in the values from the label — next time the food will be found at once.',
+    draft:
+      'Open Food Facts knows {{barcode}}, but its values are incomplete. Fill in the rest from the label.',
+    unavailable:
+      'Barcode {{barcode}} is not in the catalogue, and Open Food Facts is not responding. Fill in the values from the label or try again later.',
   },
   entry: {
     editTitle: 'Edit entry',
@@ -183,6 +213,10 @@ export const en: Dictionary = {
     protein: 'Protein, g',
     fat: 'Fat, g',
     carbs: 'Carbs, g',
+    barcode: 'Barcode',
+    barcodeHint: 'Optional. The scanner finds the food by it.',
+    fromOpenFoodFacts: 'Values come from Open Food Facts. Check them against the label.',
+    openFoodFactsLink: 'Open in Open Food Facts',
     pastDays:
       'Editing will not change days already logged: they keep the values from when they were entered.',
     readOnly: 'Someone else created this food. Only its author or an administrator can change it.',
@@ -351,6 +385,7 @@ export const en: Dictionary = {
     wrong_password: 'The current password is wrong.',
     product_not_found: 'This food is no longer in the catalogue.',
     meal_not_found: 'This meal is no longer in your list.',
+    barcode_taken: 'A food with this barcode is already in the catalogue.',
     unknown: 'Something went wrong. Try again.',
     network: 'Cannot reach the server.',
   },
@@ -378,5 +413,6 @@ export const en: Dictionary = {
     goalMacroRange: 'Must be 0 to 1000 g',
     goalOverKcal: 'Protein, fat and carbs do not fit into these calories',
     mealName: 'Name must be up to 40 characters',
+    barcode: 'Check the barcode: 8, 12 or 13 digits',
   },
 }

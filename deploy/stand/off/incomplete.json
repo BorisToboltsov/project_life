@@ -1,0 +1,11 @@
+{
+  "code": "4602000000000",
+  "status": 1,
+  "status_verbose": "product found",
+  "product": {
+    "product_name": "Морс клюквенный",
+    "brands": "Стенд",
+    "quantity": "1 л",
+    "nutriments": {}
+  }
+}

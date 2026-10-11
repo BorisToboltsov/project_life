@@ -19,8 +19,36 @@ describe('productSchema', () => {
       protein: '17.2',
       fat: '5',
       carbs: '1.8',
+      barcode: '',
     })
     expect(productSchema.safeParse(valid).success).toBe(true)
+  })
+
+  it('заготовка по штрихкоду заполняет то, что известно, и оставляет пустым остальное', () => {
+    const draft = { name: 'Чай', unit: 'ml' as const, kcal: 1, protein_g: null, fat_g: null }
+
+    expect(productDefaults({ ...draft, barcode: '4600000000008' })).toEqual({
+      name: 'Чай',
+      unit: 'ml',
+      kcal: '1',
+      protein: '',
+      fat: '',
+      carbs: '',
+      barcode: '4600000000008',
+    })
+    // Источник знает только штрихкод: названия нет.
+    expect(productDefaults({ name: null, barcode: '46012340' }).name).toBe('')
+  })
+
+  it('штрихкод необязателен, но введённый проверяется по контрольной цифре', () => {
+    const withBarcode = (barcode: string) => productSchema.safeParse({ ...valid, barcode })
+
+    expect(withBarcode('').success).toBe(true)
+    expect(withBarcode('  ').success).toBe(true)
+    expect(withBarcode('4600000000008').success).toBe(true)
+    expect(withBarcode('4 600000 000008').success).toBe(true)
+    expect(issues(withBarcode('4600000000000'))).toEqual(['validation.barcode'])
+    expect(issues(withBarcode('46000'))).toEqual(['validation.barcode'])
   })
 
   it('пустая форма для нового продукта не проходит', () => {

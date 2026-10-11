@@ -18,6 +18,8 @@ x-backend: &backend
     LIFE_DATABASE_URL: postgresql+psycopg://life:${POSTGRES_PASSWORD:?}@db:5432/life
     LIFE_JWT_SECRET: ${JWT_SECRET:?}
     LIFE_PUBLIC_URL: ${PUBLIC_URL:?}
+    # Где искать продукт по штрихкоду; пустое значение в .env оставляет только свой каталог.
+    LIFE_OFF_URL: ${OFF_URL-https://world.openfoodfacts.org}
 
 services:
   db:

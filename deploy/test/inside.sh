@@ -97,8 +97,11 @@ step "восстановление из бэкапа в чистую базу"
 latest="$(find "$BACKUPS" -name 'life-*.sql.gz.age' | sort | tail -n 1)"
 docker run --detach --name life-deploy-restore \
   --env POSTGRES_USER=life --env POSTGRES_PASSWORD=restore --env POSTGRES_DB=life postgres:18 >/dev/null
+# Готовность спрашиваем по TCP: пока образ создаёт базу, в контейнере работает временный
+# сервер — он слушает только сокет и вот-вот остановится. Сокету он ответил бы «готов».
 for _ in $(seq 30); do
-  docker exec life-deploy-restore pg_isready --username life --dbname life >/dev/null 2>&1 && break
+  docker exec life-deploy-restore pg_isready --host 127.0.0.1 --username life --dbname life \
+    >/dev/null 2>&1 && break
   sleep 1
 done
 age --decrypt --identity /root/backup.key "$latest" | gunzip \

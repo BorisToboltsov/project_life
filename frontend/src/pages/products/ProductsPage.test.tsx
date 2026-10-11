@@ -68,6 +68,7 @@ describe('каталог продуктов', () => {
       protein_g: 17.2,
       fat_g: 5,
       carbs_g: 1.8,
+      barcode: null,
     })
   })
 
@@ -131,6 +132,7 @@ describe('каталог продуктов', () => {
       protein_g: 3,
       fat_g: 1,
       carbs_g: 4,
+      barcode: null,
     })
   })
 
@@ -184,6 +186,7 @@ describe('продукт', () => {
       protein_g: 17.2,
       fat_g: 5,
       carbs_g: 1.8,
+      barcode: null,
     })
   })
 
@@ -252,6 +255,56 @@ describe('продукт', () => {
     expect(screen.getByText(/Изменить его может автор или администратор/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Сохранить' })).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'К каталогу' })).toHaveAttribute('href', '/products')
+  })
+
+  it('у продукта из Open Food Facts назван источник и есть ссылка на него', async () => {
+    const imported = {
+      ...cottageCheese,
+      barcode: '4600000000008',
+      source: 'open_food_facts' as const,
+    }
+    mockApi({ [ONE]: json(200, imported) })
+    await renderApp(`/products/${cottageCheese.id}`, anna)
+
+    expect(
+      await screen.findByText(/Состав взят из Open Food Facts\. Сверьте его с упаковкой\./),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Открыть в Open Food Facts' })).toHaveAttribute(
+      'href',
+      'https://world.openfoodfacts.org/product/4600000000008',
+    )
+    expect(screen.getByLabelText('Штрихкод')).toHaveValue('4600000000008')
+  })
+
+  it('у продукта, внесённого человеком, источник не упоминается', async () => {
+    mockApi({ [ONE]: json(200, cottageCheese) })
+    await renderApp(`/products/${cottageCheese.id}`, anna)
+
+    expect(await screen.findByLabelText('Штрихкод')).toHaveValue('')
+    expect(screen.queryByText(/Open Food Facts/)).not.toBeInTheDocument()
+  })
+
+  it('штрихкод вписывается в карточку продукта; занятый — отказ', async () => {
+    const calls = mockApi({
+      [ONE]: json(200, cottageCheese),
+      [SAVE]: json(409, { detail: 'barcode_taken' }),
+    })
+    await renderApp(`/products/${cottageCheese.id}`, anna)
+
+    await userEvent.type(await screen.findByLabelText('Штрихкод'), '4600000000000')
+    await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
+    expect(await screen.findByText('Проверьте штрихкод: 8, 12 или 13 цифр')).toBeInTheDocument()
+    expect(callsTo(calls, SAVE)).toEqual([])
+
+    // UPC-A уходит на сервер уже как EAN-13.
+    await userEvent.clear(screen.getByLabelText('Штрихкод'))
+    await userEvent.type(screen.getByLabelText('Штрихкод'), '036000291452')
+    await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Продукт с таким штрихкодом уже есть в каталоге.',
+    )
+    expect(callsTo(calls, SAVE)[0].body).toMatchObject({ barcode: '0036000291452' })
   })
 
   it('говорит, что продукта нет', async () => {

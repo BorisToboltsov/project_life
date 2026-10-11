@@ -11,6 +11,10 @@ export type Meal = Schemas['MealOut']
 export type DayMeal = Schemas['DayMealOut']
 export type ProductUnit = Schemas['ProductUnit']
 export type Product = Schemas['ProductOut']
+/** Чем кончился поиск продукта по штрихкоду. */
+export type BarcodeLookup = Schemas['BarcodeLookupOut']
+/** Что источник знает о продукте, которого нет в каталоге. */
+export type ProductDraft = Schemas['ProductDraftOut']
 export type Suggestion = Schemas['SuggestionOut']
 export type FoodEntry = Schemas['FoodEntryOut']
 export type Nutrients = Schemas['NutrientsOut']
@@ -68,9 +72,12 @@ export function useProductSearch(q: string, enabled = true) {
   })
 }
 
+/** Ключ запроса одного продукта: найденный по штрихкоду кладётся в кэш под ним же. */
+export const productKey = (id: string | undefined) => [...PRODUCTS_KEY, 'one', id] as const
+
 export function useProduct(id: string | undefined) {
   return useQuery({
-    queryKey: [...PRODUCTS_KEY, 'one', id],
+    queryKey: productKey(id),
     enabled: id !== undefined,
     queryFn: async () =>
       (await api.GET('/api/products/{product_id}', { params: { path: { product_id: id! } } }))
@@ -82,6 +89,14 @@ export function saveProduct(id: string, body: Schemas['ProductIn']) {
   return attempt(() =>
     api.PUT('/api/products/{product_id}', { params: { path: { product_id: id } }, body }),
   )
+}
+
+/**
+ * Продукт по штрихкоду: свой каталог, затем Open Food Facts. Найденный там полный продукт
+ * сервер сам кладёт в каталог.
+ */
+export function lookupBarcode(barcode: string) {
+  return attempt(() => api.POST('/api/products/lookup', { body: { barcode } }))
 }
 
 export function deleteProduct(id: string) {

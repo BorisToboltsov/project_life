@@ -27,7 +27,9 @@
 	handle {
 		root * /srv
 
-		header Content-Security-Policy "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+		# `wasm-unsafe-eval` — только компиляция WebAssembly: на нём работает распознавание
+		# штрихкодов там, где его нет в браузере. Скрипты по-прежнему только свои.
+		header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 
 		# Файлы с хэшем в имени не меняются никогда; оболочка и service worker — проверяются каждый раз,
 		# иначе телефон не увидит новую версию.

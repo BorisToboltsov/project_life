@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 import { message, numberIn, optionalNumberIn } from '@/components/form/validation'
+import { normalizeBarcode } from '@/lib/barcode'
 import { parseDecimal } from '@/lib/numbers'
 import { macrosEnergy } from '@/lib/nutrition'
 
@@ -11,6 +12,15 @@ export const DATE_MIN = '1900-01-01'
 export const amountSchema = z.object({ amount: numberIn(0.1, 5000, 'validation.amountRange') })
 
 export type AmountValues = z.infer<typeof amountSchema>
+
+/** Штрихкод, введённый цифрами: опечатку выдаёт контрольная цифра. */
+export const barcodeSchema = z.object({
+  barcode: z
+    .string()
+    .refine((text) => normalizeBarcode(text) !== null, message('validation.barcode')),
+})
+
+export type BarcodeValues = z.infer<typeof barcodeSchema>
 
 const goalKcal = optionalNumberIn(500, 10000, 'validation.goalKcalRange')
 const goalMacro = optionalNumberIn(0, 1000, 'validation.goalMacroRange')

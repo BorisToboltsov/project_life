@@ -7,13 +7,15 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
 from app.models.columns import choice, one_of
-from app.nutrition import MealPreset, Nutrients, ProductUnit
+from app.nutrition import MealPreset, Nutrients, ProductSource, ProductUnit
 
 # Состав на 100 г или 100 мл: энергия до 900,0 ккал, макронутриент до 100,00 г.
 KCAL = Numeric(6, 1)
 MACRO = Numeric(5, 2)
 PRODUCT_NAME = String(120)
 MEAL_NAME = String(40)
+# EAN-8 или EAN-13 — в том виде, к которому штрихкод приводит `app.barcodes`.
+BARCODE = String(13)
 
 
 class Product(Base):
@@ -21,7 +23,18 @@ class Product(Base):
     администратор."""
 
     __tablename__ = "products"
-    __table_args__ = (one_of("unit", ProductUnit),)
+    __table_args__ = (
+        one_of("unit", ProductUnit),
+        one_of("source", ProductSource),
+        CheckConstraint("barcode ~ '^([0-9]{8}|[0-9]{13})$'", name="barcode"),
+        # Один штрихкод — один продукт: сканирование отвечает однозначно (ADR 0009).
+        Index(
+            "uq_products_barcode",
+            "barcode",
+            unique=True,
+            postgresql_where=text("barcode IS NOT NULL"),
+        ),
+    )
 
     # Ключ приходит от клиента (UUIDv7): повтор запроса не создаёт второй продукт (ADR 0002).
     id: Mapped[UUID] = mapped_column(primary_key=True)
@@ -32,10 +45,24 @@ class Product(Base):
     protein_g: Mapped[Decimal] = mapped_column(MACRO)
     fat_g: Mapped[Decimal] = mapped_column(MACRO)
     carbs_g: Mapped[Decimal] = mapped_column(MACRO)
+    # Штрихкод с упаковки; пусто — продукт находится только по названию.
+    barcode: Mapped[str | None] = mapped_column(BARCODE)
+    # Откуда продукт: от этого зависит, что приложение показывает о его происхождении.
+    source: Mapped[ProductSource] = mapped_column(choice(ProductSource), default=ProductSource.USER)
     # Автор; пусто, если его учётной записи больше нет, — тогда продукт правит администратор.
     created_by: Mapped[UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
+
+
+class BarcodeMiss(Base):
+    """Штрихкод, которого не оказалось в Open Food Facts: пока запись свежа, повторное
+    сканирование наружу не идёт (ADR 0009). Кто спрашивал, не записывается."""
+
+    __tablename__ = "barcode_misses"
+
+    barcode: Mapped[str] = mapped_column(BARCODE, primary_key=True)
+    checked_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 
 class Meal(Base):

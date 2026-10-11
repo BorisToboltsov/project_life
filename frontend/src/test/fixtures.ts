@@ -69,6 +69,8 @@ export const cottageCheese: Schemas['ProductOut'] = {
   protein_g: 17.2,
   fat_g: 5,
   carbs_g: 1.8,
+  barcode: null,
+  source: 'user',
   editable: true,
 }
 
@@ -80,6 +82,8 @@ export const oatmeal: Schemas['ProductOut'] = {
   protein_g: 12.3,
   fat_g: 6.2,
   carbs_g: 61.8,
+  barcode: null,
+  source: 'user',
   editable: false,
 }
 
@@ -91,6 +95,8 @@ export const kefir: Schemas['ProductOut'] = {
   protein_g: 3,
   fat_g: 1,
   carbs_g: 4,
+  barcode: null,
+  source: 'user',
   editable: true,
 }
 

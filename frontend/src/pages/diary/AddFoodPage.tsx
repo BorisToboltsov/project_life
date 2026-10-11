@@ -1,6 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQueryClient } from '@tanstack/react-query'
 import { getRouteApi, Link, useNavigate } from '@tanstack/react-router'
+import { ScanBarcode } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -156,7 +157,11 @@ function ProductList({
 
 function AddFood({ date, meal }: { date: string; meal: Meal }) {
   const { t, i18n } = useTranslation()
-  const { product: createdId } = route.useSearch() as { product?: string }
+  const { product: createdId, scanned: scannedId } = route.useSearch() as {
+    product?: string
+    scanned?: string
+  }
+  const navigate = useNavigate()
   const mealName = useMealName()
   const [query, setQuery] = useState('')
   const [opened, setOpened] = useState<string>()
@@ -165,6 +170,9 @@ function AddFood({ date, meal }: { date: string; meal: Meal }) {
   const found = useProductSearch(q, q !== '')
   const suggestions = useSuggestions(meal.id)
   const created = useProduct(createdId)
+  const byBarcode = useProduct(scannedId)
+  // Количество подставляется из подсказок, поэтому найденный сканером продукт ждёт их.
+  const scanned = suggestions.isPending ? undefined : (byBarcode.data ?? undefined)
   // Созданный продукт показывается отдельно, пока его не внесли: дальше он в «недавних».
   const justCreated =
     created.data && !suggestions.data?.recent.some((item) => item.id === created.data?.id)
@@ -172,20 +180,33 @@ function AddFood({ date, meal }: { date: string; meal: Meal }) {
       : undefined
 
   const titles = {
+    scanned: t('addFood.scanned'),
     created: t('addFood.created'),
     inMeal: t('addFood.inMeal'),
     frequent: t('addFood.frequent'),
     recent: t('addFood.recent'),
     results: t('addFood.results'),
   }
-  // Только что созданный продукт раскрыт сразу: осталось ввести количество.
-  const openedKey = opened ?? (justCreated ? `${titles.created}:${justCreated.id}` : undefined)
-  const lists = { opened: openedKey, onOpen: setOpened, date, meal, onAdded }
+  // Найденный сканером и только что созданный продукт раскрыт сразу: осталось ввести
+  // количество.
+  const chosen = scanned
+    ? `${titles.scanned}:${scanned.id}`
+    : justCreated && `${titles.created}:${justCreated.id}`
+  const lists = { opened: opened ?? (chosen || undefined), onOpen: setOpened, date, meal, onAdded }
 
   function onAdded(product: Product, amount: number) {
     setAdded({ product, amount })
     setOpened('')
     setQuery('')
+    // Отсканированный продукт внесён: при возврате на экран он снова не всплывёт.
+    if (scannedId) {
+      void navigate({
+        to: '/diary/$date/add/$meal',
+        params: { date, meal: meal.id },
+        search: {},
+        replace: true,
+      })
+    }
   }
 
   const fresh = (products: Product[]): Choice[] =>
@@ -193,7 +214,12 @@ function AddFood({ date, meal }: { date: string; meal: Meal }) {
   const remembered = (items: Suggestion[] = []): Choice[] =>
     items.map((item) => ({ product: item, amount: item.amount }))
   const inMeal = remembered(suggestions.data?.in_meal)
-  const nothingToSuggest = suggestions.data?.recent.length === 0 && !justCreated
+  // Знакомому продукту — количество из прошлого раза, лучше всего из этого же приёма пищи.
+  const lastAmount = (product: Product) =>
+    [...(suggestions.data?.in_meal ?? []), ...(suggestions.data?.recent ?? [])].find(
+      (item) => item.id === product.id,
+    )?.amount ?? DEFAULT_AMOUNT
+  const nothingToSuggest = suggestions.data?.recent.length === 0 && !justCreated && !scanned
 
   return (
     <div className="grid gap-4">
@@ -209,6 +235,12 @@ function AddFood({ date, meal }: { date: string; meal: Meal }) {
           })}
         </p>
       )}
+      <Button asChild variant="outline" className="h-11 justify-self-start">
+        <Link to="/diary/$date/add/$meal/scan" params={{ date, meal: meal.id }}>
+          <ScanBarcode aria-hidden="true" />
+          {t('addFood.scan')}
+        </Link>
+      </Button>
       <TextField
         label={t('addFood.search')}
         type="search"
@@ -225,6 +257,14 @@ function AddFood({ date, meal }: { date: string; meal: Meal }) {
         </>
       ) : (
         <>
+          <ProductList
+            title={titles.scanned}
+            choices={scanned ? [{ product: scanned, amount: lastAmount(scanned) }] : []}
+            {...lists}
+          />
+          {scanned?.source === 'open_food_facts' && (
+            <p className="text-sm text-muted-foreground">{t('products.fromOpenFoodFacts')}</p>
+          )}
           <ProductList
             title={titles.created}
             choices={fresh(justCreated ? [justCreated] : [])}

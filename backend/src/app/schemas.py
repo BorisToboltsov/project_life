@@ -2,6 +2,7 @@
 
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
+from enum import StrEnum
 from typing import Annotated, Literal, Self
 from uuid import UUID
 from zoneinfo import available_timezones
@@ -17,6 +18,7 @@ from pydantic import (
     model_validator,
 )
 
+from app import barcodes
 from app.metrics import CATALOG, Metric, Quantity, Unit, quantity_of, to_canonical
 from app.models import (
     ErrorSource,
@@ -29,7 +31,8 @@ from app.models import (
     UnitSystem,
     User,
 )
-from app.nutrition import MealPreset, Nutrients, ProductUnit, energy_kcal
+from app.nutrition import MealPreset, Nutrients, ProductSource, ProductUnit, energy_kcal
+from app.services.open_food_facts import OffProduct
 
 
 def _known_timezone(value: str) -> str:
@@ -322,6 +325,18 @@ Macro = Annotated[Decimal, Field(ge=0, le=100, max_digits=5, decimal_places=2)]
 Amount = Annotated[Decimal, Field(gt=0, le=5000, max_digits=5, decimal_places=1)]
 
 
+def _barcode(value: str) -> str:
+    code = barcodes.normalize(value)
+    if code is None:
+        raise ValueError("not a product barcode")
+    return code
+
+
+# Штрихкод с упаковки: EAN-8, EAN-13 или UPC-A с верной контрольной цифрой. Дальше схемы он
+# идёт в одном виде — см. `app.barcodes`.
+Barcode = Annotated[str, StringConstraints(max_length=32), AfterValidator(_barcode)]
+
+
 class ProductIn(Strict):
     name: ProductName
     unit: ProductUnit
@@ -330,6 +345,8 @@ class ProductIn(Strict):
     protein_g: Macro
     fat_g: Macro
     carbs_g: Macro
+    # `null` — у продукта нет штрихкода.
+    barcode: Barcode | None = None
 
     @model_validator(mode="after")
     def _fits_in_100_grams(self) -> Self:
@@ -346,6 +363,8 @@ class ProductOut(BaseModel):
     protein_g: float
     fat_g: float
     carbs_g: float
+    barcode: str | None
+    source: ProductSource
     # Может ли продукт менять тот, кто спрашивает: автор или администратор.
     editable: bool
 
@@ -359,8 +378,62 @@ class ProductOut(BaseModel):
             protein_g=float(product.protein_g),
             fat_g=float(product.fat_g),
             carbs_g=float(product.carbs_g),
+            barcode=product.barcode,
+            source=product.source,
             editable=viewer.role == Role.ADMIN or product.created_by == viewer.id,
         )
+
+
+class BarcodeLookupIn(Strict):
+    barcode: Barcode
+
+
+class LookupStatus(StrEnum):
+    """Чем кончился поиск по штрихкоду (ADR 0009)."""
+
+    # Продукт есть в каталоге — был там или только что взят из Open Food Facts.
+    FOUND = "found"
+    # В Open Food Facts продукт есть, но состав неполный: его дополняет пользователь.
+    DRAFT = "draft"
+    NOT_FOUND = "not_found"
+    # Open Food Facts не ответил; в своём каталоге продукта нет.
+    UNAVAILABLE = "unavailable"
+
+
+class ProductDraftOut(BaseModel):
+    """Что известно о продукте, которого нет в каталоге: значения для формы создания.
+    `null` — источник этого не знает."""
+
+    name: str | None
+    unit: ProductUnit
+    kcal: float | None
+    protein_g: float | None
+    fat_g: float | None
+    carbs_g: float | None
+
+    @classmethod
+    def of(cls, found: OffProduct) -> Self:
+        def known(value: Decimal | None) -> float | None:
+            return None if value is None else float(value)
+
+        return cls(
+            name=found.name,
+            unit=found.unit,
+            kcal=known(found.kcal),
+            protein_g=known(found.protein_g),
+            fat_g=known(found.fat_g),
+            carbs_g=known(found.carbs_g),
+        )
+
+
+class BarcodeLookupOut(BaseModel):
+    status: LookupStatus
+    # Штрихкод в том виде, в каком он хранится в каталоге.
+    barcode: str
+    # Найденный продукт — при `found`.
+    product: ProductOut | None = None
+    # Заготовка продукта — при `draft`.
+    draft: ProductDraftOut | None = None
 
 
 class SuggestionOut(ProductOut):

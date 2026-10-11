@@ -26,6 +26,13 @@ class ProductUnit(StrEnum):
     ML = "ml"
 
 
+class ProductSource(StrEnum):
+    """Откуда продукт в каталоге: внесён человеком или взят из Open Food Facts (ADR 0009)."""
+
+    USER = "user"
+    OPEN_FOOD_FACTS = "open_food_facts"
+
+
 # Килокалорий в грамме белков, жиров и углеводов.
 KCAL_PER_PROTEIN_G = 4
 KCAL_PER_FAT_G = 9

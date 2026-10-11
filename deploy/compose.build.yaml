@@ -1,6 +1,13 @@
-# Дополнение к compose.yaml: собирать образы из исходников, а не брать из реестра.
-# Используется стендом для e2e (make stand); на сервере этого файла нет.
+# Дополнение к compose.yaml: собирать образы из исходников, а не брать из реестра, и
+# отвечать за Open Food Facts самим. Используется стендом для e2e (make stand); на сервере
+# этого файла нет.
 services:
+  # Подменный Open Food Facts: бэкенд стенда ходит сюда (OFF_URL в e2e.env), а не наружу.
+  off:
+    image: caddy:2-alpine
+    volumes:
+      - ./stand/off/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./stand/off:/srv:ro
   migrate:
     build: ../backend
   backend:

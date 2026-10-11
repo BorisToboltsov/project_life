@@ -34,6 +34,30 @@ export function ProductNewPage() {
   )
 }
 
+/**
+ * Откуда состав продукта, взятого из Open Food Facts: его вносят добровольцы, а лицензия
+ * базы просит называть источник (ADR 0009).
+ */
+function ProductSource({ product }: { product: Product }) {
+  const { t } = useTranslation()
+  if (product.source !== 'open_food_facts') return null
+  return (
+    <p className="text-sm text-muted-foreground">
+      {t('products.fromOpenFoodFacts')}{' '}
+      {product.barcode && (
+        <a
+          className="underline underline-offset-4"
+          href={`https://world.openfoodfacts.org/product/${product.barcode}`}
+          target="_blank"
+          rel="noreferrer"
+        >
+          {t('products.openFoodFactsLink')}
+        </a>
+      )}
+    </p>
+  )
+}
+
 function DeleteProduct({ product }: { product: Product }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -105,6 +129,7 @@ export function ProductEditPage() {
         <div className="rounded-lg border p-3">
           <ProductLine product={product.data} />
         </div>
+        <ProductSource product={product.data} />
         <p className="text-sm text-muted-foreground">{t('products.readOnly')}</p>
         <Button asChild variant="outline" className="h-11 justify-self-start">
           <Link to="/products">{t('products.back')}</Link>
@@ -116,6 +141,7 @@ export function ProductEditPage() {
     <div className="grid gap-4">
       <h1 className="text-2xl font-semibold">{t('products.editTitle')}</h1>
       <p className="text-sm text-muted-foreground">{t('products.pastDays')}</p>
+      <ProductSource product={product.data} />
       <ProductForm
         product={product.data}
         onSaved={() => navigate({ to: '/products' })}
