@@ -63,16 +63,24 @@ def anyio_backend() -> str:
     return "asyncio"
 
 
-def new_client() -> AsyncClient:
+def new_client(*, raise_app_exceptions: bool = True) -> AsyncClient:
     from app.main import app
 
     # https: иначе httpx не вернёт серверу cookie с флагом Secure.
-    return AsyncClient(transport=ASGITransport(app=app), base_url="https://test")
+    transport = ASGITransport(app=app, raise_app_exceptions=raise_app_exceptions)
+    return AsyncClient(transport=transport, base_url="https://test")
 
 
 @pytest.fixture
 async def client() -> AsyncIterator[AsyncClient]:
     async with new_client() as client:
+        yield client
+
+
+@pytest.fixture
+async def crash_client() -> AsyncIterator[AsyncClient]:
+    """Клиент для сбоев: необработанное исключение приходит ответом 500, как у настоящего."""
+    async with new_client(raise_app_exceptions=False) as client:
         yield client
 
 

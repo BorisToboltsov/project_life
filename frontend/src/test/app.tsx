@@ -3,6 +3,7 @@ import { createMemoryHistory } from '@tanstack/react-router'
 import { render } from '@testing-library/react'
 
 import { App } from '@/app/App'
+import { caughtErrorHandler, installErrorReporting } from '@/app/errorReporting'
 import { bindSession, createAppRouter } from '@/app/router'
 import { session, type User } from '@/auth/session'
 
@@ -27,11 +28,12 @@ export async function renderApp(path: string, user?: User) {
 
   const router = createAppRouter(createMemoryHistory({ initialEntries: [path] }))
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  cleanups.push(bindSession(router, queryClient))
+  cleanups.push(bindSession(router, queryClient), installErrorReporting(router))
   const view = render(
     <QueryClientProvider client={queryClient}>
       <App router={router} />
     </QueryClientProvider>,
+    { onCaughtError: caughtErrorHandler(router) },
   )
   return { router, queryClient, ...view }
 }

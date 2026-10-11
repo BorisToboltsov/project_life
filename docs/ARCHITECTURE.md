@@ -70,7 +70,7 @@
   единица, допустимый диапазон; здесь же пересчёт единиц.
 - `app.security` — хэши паролей (argon2id), JWT, случайные токены и их хэши.
 - `app.services` — логика без HTTP: сессии с ротацией refresh-токена, ограничение частоты
-  входа, одноразовые ссылки.
+  входа, одноразовые ссылки, состав и сохранение отчётов об ошибках.
 - `app.api` — роутеры и зависимости `current_user` / `require_admin`.
 - `app.cli` — команды администратора сервера (`python -m app.cli invite --admin`).
 
@@ -79,8 +79,8 @@
 | Группа | Маршруты |
 |--------|----------|
 | Открытые | `GET /api/health`; `POST /api/auth/…`: `login`, `register`, `refresh`, `logout`, `invite/check`, `password-reset`, `password-reset/check` |
-| Для вошедших | `GET` и `PATCH /api/me`; `POST /api/auth/password`, `POST /api/auth/logout-all`; `GET /api/metric-types`; `GET /api/measurements`, `GET /api/measurements/summary`, `PUT` и `DELETE /api/measurements/{id}` |
-| Для администратора | `/api/admin/users`, `/api/admin/users/{id}/password-reset`, `/api/admin/invites`, `/api/admin/invites/{id}` |
+| Для вошедших | `GET` и `PATCH /api/me`; `POST /api/auth/password`, `POST /api/auth/logout-all`; `GET /api/metric-types`; `GET /api/measurements`, `GET /api/measurements/summary`, `PUT` и `DELETE /api/measurements/{id}`; `POST /api/errors` |
+| Для администратора | `/api/admin/users`, `/api/admin/users/{id}/password-reset`, `/api/admin/invites`, `/api/admin/invites/{id}`, `/api/admin/errors`, `/api/admin/errors/{id}` |
 
 ### Таблицы
 
@@ -92,6 +92,7 @@
 | `password_resets` | хэши ссылок для сброса пароля |
 | `login_failures` | неудачные попытки входа для ограничения частоты |
 | `measurements` | измерения показателей: значение в канонической единице, исходное значение и единица, момент и местная дата, источник |
+| `error_reports` | сбои приложения: одна строка на место в коде — тип исключения, шаблон маршрута, стек, версия, счётчик повторов |
 
 ### Показатели
 
@@ -101,6 +102,18 @@
 ([ADR 0004](adr/0004-units.md)). Ключ записи выбирает клиент
 ([ADR 0002](adr/0002-record-ids.md)), местную дату — тоже ([ADR 0003](adr/0003-time.md)).
 
+### Сбор ошибок
+
+Решение и его причины — в [ADR 0006](adr/0006-error-collection.md). Отчёт попадает в
+`error_reports` двумя путями, оба — в `app.api.error_reports`:
+
+- обёртка `CaptureErrors` вокруг приложения записывает необработанное исключение запроса
+  и пропускает его дальше — в логи и в ответ 500;
+- `POST /api/errors` принимает отчёт от приложения в браузере.
+
+Повтор той же ошибки увеличивает счётчик в существующей строке. Отчёты видны
+администратору в разделе «Управление».
+
 ### Вход
 
 Схема описана в [ADR 0001](adr/0001-auth-jwt.md). Access-JWT клиент шлёт в заголовке
@@ -109,16 +122,18 @@
 
 ## Фронтенд
 
-- `src/main.tsx` — точка входа: провайдеры, регистрация service worker, старт сессии.
+- `src/main.tsx` — точка входа: провайдеры, регистрация service worker, старт сессии,
+  подключение сбора ошибок.
 - `src/app/` — `App` (экраны загрузки и «нет связи»), дерево маршрутов с защитой
-  (`router.tsx`), рамки `AuthLayout` и `AppShell`.
+  (`router.tsx`), рамки `AuthLayout` и `AppShell`, отправка отчётов об ошибках
+  (`errorReporting.ts`).
 - `src/auth/` — сессия: access-токен в памяти, обновление одним общим запросом, выход.
 - `src/api/` — сгенерированные типы и клиент; клиент сам подставляет токен и повторяет
   запрос после его обновления.
 - `src/i18n/` — словари и выбор языка: до входа — язык браузера или сохранённый выбор,
   после входа — язык из профиля.
 - `src/lib/` — пересчёт единиц, разбор и формат чисел и дат, линия тренда, генерация
-  UUIDv7, сопоставление ошибок API ключам словаря.
+  UUIDv7, сопоставление ошибок API ключам словаря, разбор стека исключения.
 - `src/components/ui/` — компоненты shadcn/ui, добавляются из реестра как есть.
 - `src/components/form/` — поля форм с подписью, подсказкой и ошибкой, поле даты.
 - `src/components/illustrations/` — анимированные SVG-подсказки «как измерять».

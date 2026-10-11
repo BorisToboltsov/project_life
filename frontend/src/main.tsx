@@ -7,6 +7,7 @@ import { createRoot } from 'react-dom/client'
 import { registerSW } from 'virtual:pwa-register'
 
 import { App } from '@/app/App'
+import { caughtErrorHandler, installErrorReporting } from '@/app/errorReporting'
 import { bindSession, createAppRouter } from '@/app/router'
 import { session } from '@/auth/session'
 import '@/i18n'
@@ -18,9 +19,10 @@ const queryClient = new QueryClient()
 const router = createAppRouter()
 
 bindSession(router, queryClient)
+installErrorReporting(router)
 void session.bootstrap()
 
-createRoot(document.getElementById('root')!).render(
+createRoot(document.getElementById('root')!, { onCaughtError: caughtErrorHandler(router) }).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <App router={router} />

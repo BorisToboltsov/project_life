@@ -169,6 +169,17 @@ export const ru = {
     resetLink: 'Ссылка для сброса пароля: {{name}}',
     resetLinkHint:
       'Скопируйте и отправьте её сейчас: ссылка показывается один раз и действует сутки.',
+    errorsTitle: 'Ошибки',
+    errorsHint:
+      'Сбои приложения и сервера. В отчёте только место в коде: текста ошибки и данных пользователей в нём нет.',
+    errorsEmpty: 'Ошибок нет.',
+    errorSeen: 'Последний раз {{date}} · всего {{times}} · версия {{version}}',
+    errorStack: 'Стек вызовов',
+    errorDelete: 'Удалить',
+  },
+  errorSources: {
+    backend: 'Сервер',
+    frontend: 'Приложение',
   },
   errors: {
     not_authenticated: 'Сеанс истёк. Войдите снова.',

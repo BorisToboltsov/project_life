@@ -122,3 +122,60 @@ describe('пользователи', () => {
     expect(calls.at(-1)?.authorization).toBe('Bearer access-1')
   })
 })
+
+describe('ошибки', () => {
+  const ERRORS = 'GET /api/admin/errors'
+  const crash = {
+    id: '0199b7a0-0000-7000-8000-0000000000e1',
+    source: 'frontend',
+    kind: 'TypeError',
+    place: '/measurements/$metric',
+    stack: 'assets/index-B3x9.js:45:12345 Zr\nassets/index-B3x9.js:45:999',
+    version: '0.2.4',
+    count: 3,
+    first_seen: '2026-10-10T08:00:00Z',
+    last_seen: '2026-10-11T10:00:00Z',
+  }
+  const failure = {
+    ...crash,
+    id: '0199b7a0-0000-7000-8000-0000000000e2',
+    source: 'backend',
+    kind: 'sqlalchemy.exc.IntegrityError',
+    place: null,
+    stack: '',
+    count: 1,
+  }
+
+  it('показывает сбои приложения и сервера', async () => {
+    mockApi({ [ERRORS]: json(200, [crash, failure]) })
+    await renderApp('/admin', boris)
+
+    const row = (await screen.findByText('TypeError')).closest('li')!
+    expect(within(row).getByText('Приложение · /measurements/$metric')).toBeInTheDocument()
+    // Время — в часовом поясе администратора.
+    expect(
+      within(row).getByText('Последний раз 11 окт. 2026 г., 13:00 · всего 3 · версия 0.2.4'),
+    ).toBeInTheDocument()
+    expect(within(row).getByText('Стек вызовов')).toBeInTheDocument()
+    expect(within(row).getByText(/assets\/index-B3x9\.js:45:12345 Zr/)).toBeInTheDocument()
+
+    // Сбой вне маршрута и без стека: ни места, ни раскрывающегося блока.
+    const bare = screen.getByText('sqlalchemy.exc.IntegrityError').closest('li')!
+    expect(within(bare).getByText('Сервер')).toBeInTheDocument()
+    expect(within(bare).queryByText('Стек вызовов')).not.toBeInTheDocument()
+  })
+
+  it('удаляет разобранную ошибку', async () => {
+    const calls = mockApi({
+      [ERRORS]: sequence(json(200, [crash]), json(200, [])),
+      [`DELETE /api/admin/errors/${crash.id}`]: json(204),
+    })
+    await renderApp('/admin', boris)
+
+    const row = (await screen.findByText('TypeError')).closest('li')!
+    await userEvent.click(within(row).getByRole('button', { name: 'Удалить' }))
+
+    expect(await screen.findByText('Ошибок нет.')).toBeInTheDocument()
+    expect(callsTo(calls, `DELETE /api/admin/errors/${crash.id}`)).toHaveLength(1)
+  })
+})

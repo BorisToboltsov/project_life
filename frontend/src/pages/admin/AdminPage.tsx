@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
 
+import { ErrorsCard } from './ErrorsCard'
 import { InvitesCard } from './InvitesCard'
 import { UsersCard } from './UsersCard'
 
@@ -11,6 +12,7 @@ export function AdminPage() {
       <h1 className="text-2xl font-semibold">{t('admin.title')}</h1>
       <InvitesCard />
       <UsersCard />
+      <ErrorsCard />
     </div>
   )
 }

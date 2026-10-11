@@ -1,10 +1,20 @@
+import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import { defineConfig } from 'vitest/config'
 
+const { version } = JSON.parse(
+  readFileSync(path.resolve(import.meta.dirname, 'package.json'), 'utf8'),
+) as { version: string }
+
 export default defineConfig({
+  // Версия сборки — для отчётов об ошибках: открытое приложение бывает старее сервера.
+  define: { 'import.meta.env.APP_VERSION': JSON.stringify(version) },
+  // Карты исходников лежат рядом со сборкой: по ним кадр стека из отчёта об ошибке
+  // переводится в строку исходного кода. Репозиторий открыт, скрывать в них нечего.
+  build: { sourcemap: true },
   plugins: [
     react(),
     tailwindcss(),
