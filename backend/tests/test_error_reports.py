@@ -24,7 +24,7 @@ pytestmark = pytest.mark.anyio
 def measurement_body() -> dict[str, Any]:
     now = datetime.now(UTC)
     return {
-        "metric": "weight",
+        "metric_id": str(uuid.uuid7()),
         "value": 72.4,
         "unit": "kg",
         "measured_at": now.isoformat(),

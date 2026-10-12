@@ -2,10 +2,11 @@ import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
 import {
+  listed,
   type Measurement,
-  type MetricType,
+  type Metric,
   useMeasurementSummary,
-  useMetricTypes,
+  useMetrics,
 } from '@/api/measurements'
 import { useUser } from '@/auth/useSession'
 import { Button } from '@/components/ui/button'
@@ -14,31 +15,34 @@ import { isoToDisplay } from '@/lib/dates'
 import { formatDelta, formatNumber } from '@/lib/numbers'
 import { measuredIn, type UnitSystem } from '@/lib/units'
 
+import { AddMetricLink } from './AddMetricLink'
 import { inputUnit } from './entryValues'
+import { useMetricName } from './metricName'
 
 function Tile({
-  type,
+  metric,
   system,
   latest,
   previous,
 }: {
-  type: MetricType
+  metric: Metric
   system: UnitSystem
   latest: Measurement | null
   previous: Measurement | null
 }) {
   const { t, i18n } = useTranslation()
-  const unit = inputUnit(type, system)
+  const name = useMetricName()
+  const unit = inputUnit(metric, system)
   const unitName = t(`unitNames.${unit}`)
   const delta = latest && previous ? measuredIn(latest, unit) - measuredIn(previous, unit) : null
 
   return (
     <Link
       to="/measurements/$metric"
-      params={{ metric: type.code }}
+      params={{ metric: metric.id }}
       className="grid gap-0.5 rounded-lg border p-3 transition-colors hover:bg-muted/50"
     >
-      <span className="text-sm text-muted-foreground">{t(`metrics.${type.code}`)}</span>
+      <span className="text-sm text-muted-foreground">{name(metric)}</span>
       {latest ? (
         <>
           <span className="text-xl font-semibold">
@@ -57,11 +61,14 @@ function Tile({
   )
 }
 
-/** Последние замеры на главной и самый короткий путь к новому. */
+/**
+ * Последние замеры на главной и самый короткий путь к новому. Последняя плитка — «+»:
+ * добавить в список свой вид замера.
+ */
 export function SummaryCard() {
   const { t } = useTranslation()
   const user = useUser()
-  const types = useMetricTypes()
+  const metrics = useMetrics()
   const summary = useMeasurementSummary()
 
   return (
@@ -75,18 +82,19 @@ export function SummaryCard() {
         </CardAction>
       </CardHeader>
       <CardContent className="grid grid-cols-2 gap-3">
-        {types.data?.map((type) => {
-          const item = summary.data?.find((entry) => entry.metric === type.code)
+        {listed(metrics.data?.metrics).map((metric) => {
+          const item = summary.data?.find((entry) => entry.metric_id === metric.id)
           return (
             <Tile
-              key={type.code}
-              type={type}
+              key={metric.id}
+              metric={metric}
               system={user.unit_system}
               latest={item?.latest ?? null}
               previous={item?.previous ?? null}
             />
           )
         })}
+        {metrics.data && <AddMetricLink label={t('metric.add')} />}
       </CardContent>
     </Card>
   )

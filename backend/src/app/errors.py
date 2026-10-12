@@ -20,6 +20,7 @@ class ErrorCode(StrEnum):
     WRONG_PASSWORD = "wrong_password"  # noqa: S105
     PRODUCT_NOT_FOUND = "product_not_found"
     MEAL_NOT_FOUND = "meal_not_found"
+    METRIC_NOT_FOUND = "metric_not_found"
     BARCODE_TAKEN = "barcode_taken"
 
 

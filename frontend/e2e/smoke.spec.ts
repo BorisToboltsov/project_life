@@ -83,7 +83,7 @@ test('первая загрузка не тянет экраны, которые
   expect(scripts.some((name) => name.includes('LoginPage'))).toBe(true)
   expect(
     scripts.filter((name) =>
-      /Diary|AddFood|Scan|Product|Measurement|Profile|Admin|Chart/.test(name),
+      /Diary|AddFood|Scan|Product|Measurement|Metric|Profile|Admin|Chart/.test(name),
     ),
   ).toEqual([])
 })

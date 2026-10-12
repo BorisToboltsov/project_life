@@ -78,7 +78,7 @@ async def test_server_error_takes_nothing_from_the_request(
         params={"note": MARKER},
         headers={**user.headers, "X-Note": MARKER, "User-Agent": f"browser/{MARKER}"},
         json={
-            "metric": "weight",
+            "metric_id": str(uuid.uuid7()),
             "value": VALUE,
             "unit": "kg",
             "measured_at": now.isoformat(),

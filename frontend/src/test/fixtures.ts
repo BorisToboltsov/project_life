@@ -20,12 +20,75 @@ export function sessionOf(user: User, token = 'access-1'): Schemas['SessionOut']
   return { access_token: token, expires_in: 900, user }
 }
 
-export const metricTypes: Schemas['MetricTypeOut'][] = [
-  { code: 'weight', quantity: 'mass', unit: 'kg', min_value: 2, max_value: 500 },
-  { code: 'neck', quantity: 'length', unit: 'cm', min_value: 15, max_value: 80 },
-  { code: 'waist', quantity: 'length', unit: 'cm', min_value: 30, max_value: 250 },
-  { code: 'hips', quantity: 'length', unit: 'cm', min_value: 30, max_value: 250 },
+function presetMetric(
+  preset: Schemas['MetricPreset'],
+  number: number,
+  limits: Pick<Schemas['MetricOut'], 'quantity' | 'unit' | 'min_value' | 'max_value'>,
+): Schemas['MetricOut'] {
+  return {
+    id: `0199b7a0-0000-7000-8000-0000000000b${number}`,
+    preset,
+    name: null,
+    ...limits,
+    archived: false,
+  }
+}
+
+const girth = (min_value: number, max_value: number) =>
+  ({ quantity: 'length', unit: 'cm', min_value, max_value }) as const
+
+/** Виды замеров, с которыми начинает каждый пользователь. */
+export const metrics = {
+  weight: presetMetric('weight', 1, { quantity: 'mass', unit: 'kg', min_value: 2, max_value: 500 }),
+  neck: presetMetric('neck', 2, girth(15, 80)),
+  waist: presetMetric('waist', 3, girth(30, 250)),
+  hips: presetMetric('hips', 4, girth(30, 250)),
+}
+
+/** Рекомендуемый вид: штатный, но в список его добавляет сам пользователь. */
+export const biceps = presetMetric('biceps', 5, girth(10, 100))
+
+/** Процент жира: рекомендуемый вид, который измеряют не лентой. */
+export const bodyFat = presetMetric('body_fat', 6, {
+  quantity: 'percent',
+  unit: 'percent',
+  min_value: 1,
+  max_value: 75,
+})
+
+/** Свой вид замера: его назвал пользователь. */
+export const wrist: Schemas['MetricOut'] = {
+  id: '0199b7a0-0000-7000-8000-0000000000b7',
+  preset: null,
+  name: 'Запястье',
+  ...girth(0.1, 300),
+  archived: false,
+}
+
+const PRESETS: Schemas['MetricPreset'][] = [
+  'weight',
+  'neck',
+  'waist',
+  'hips',
+  'chest',
+  'shoulders',
+  'biceps',
+  'forearm',
+  'thigh',
+  'calf',
+  'body_fat',
 ]
+
+/**
+ * Ответ со списком видов замеров: без `list` — четыре начальных. Штатные виды, которых
+ * в списке нет (или которые убраны), предлагаются к добавлению.
+ */
+export function metricList(
+  list: Schemas['MetricOut'][] = Object.values(metrics),
+): Schemas['MetricListOut'] {
+  const inList = new Set(list.filter((metric) => !metric.archived).map((metric) => metric.preset))
+  return { metrics: list, available: PRESETS.filter((preset) => !inList.has(preset)) }
+}
 
 let sequence = 0
 
@@ -38,7 +101,7 @@ export function measurement(
   sequence += 1
   return {
     id: `0199b7a0-0000-7000-8000-${String(sequence).padStart(12, '0')}`,
-    metric: 'weight',
+    metric_id: metrics.weight.id,
     value,
     unit: 'kg',
     original_value: value,
@@ -49,15 +112,24 @@ export function measurement(
   }
 }
 
+/** Замер обхвата в сантиметрах по виду `metric`. */
+export function girthOf(
+  metric: Schemas['MetricOut'],
+  local_date: string,
+  value: number,
+): Schemas['MeasurementOut'] {
+  return measurement(local_date, value, { metric_id: metric.id, unit: 'cm', original_unit: 'cm' })
+}
+
+/** Сводка по видам из `list`: последний и предыдущий замер — по ключу вида. */
 export function summaryOf(
-  entries: Partial<
-    Record<Schemas['Metric'], [Schemas['MeasurementOut'], Schemas['MeasurementOut']?]>
-  >,
+  entries: Record<string, [Schemas['MeasurementOut'], Schemas['MeasurementOut']?]>,
+  list: Schemas['MetricOut'][] = Object.values(metrics),
 ): Schemas['MetricSummary'][] {
-  return metricTypes.map(({ code }) => ({
-    metric: code,
-    latest: entries[code]?.[0] ?? null,
-    previous: entries[code]?.[1] ?? null,
+  return list.map(({ id }) => ({
+    metric_id: id,
+    latest: entries[id]?.[0] ?? null,
+    previous: entries[id]?.[1] ?? null,
   }))
 }
 

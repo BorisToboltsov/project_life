@@ -19,12 +19,13 @@ from pydantic import (
 )
 
 from app import barcodes
-from app.metrics import CATALOG, Metric, Quantity, Unit, quantity_of, to_canonical
+from app.metrics import MetricPreset, Quantity, Unit, to_canonical
 from app.models import (
     ErrorSource,
     FoodEntry,
     Language,
     Meal,
+    Metric,
     Product,
     Role,
     Sex,
@@ -192,19 +193,61 @@ def _version_7(value: UUID) -> UUID:
 RecordId = Annotated[UUID, AfterValidator(_version_7)]
 
 
-class MetricTypeOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+MetricName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=40)]
 
-    code: Metric
+
+class MetricIn(Strict):
+    """Свой вид замера. Величину задают один раз, при создании."""
+
+    name: MetricName
+    quantity: Quantity
+
+
+class MetricPresetIn(Strict):
+    preset: MetricPreset
+
+
+class MetricOut(BaseModel):
+    """Вид замера из списка пользователя."""
+
+    id: UUID
+    # Код штатного вида: название подбирает интерфейс. У своего — `null`.
+    preset: MetricPreset | None
+    # Название, которое дал пользователь; у штатного — `null`.
+    name: str | None
     quantity: Quantity
     # Каноническая единица и допустимый диапазон в ней.
     unit: Unit
     min_value: float
     max_value: float
+    # Убран из списка: замеры по нему остаются, но новых не вносят.
+    archived: bool
+
+    @classmethod
+    def of(cls, metric: Metric) -> Self:
+        low, high = metric.limits
+        return cls(
+            id=metric.id,
+            preset=metric.preset,
+            name=metric.name,
+            quantity=metric.quantity,
+            unit=metric.unit,
+            min_value=float(low),
+            max_value=float(high),
+            archived=metric.archived_at is not None,
+        )
+
+
+class MetricListOut(BaseModel):
+    # Весь список пользователя по порядку, вместе с убранными видами.
+    metrics: list[MetricOut]
+    # Штатные виды, которых в списке сейчас нет: их предлагает экран добавления.
+    available: list[MetricPreset]
 
 
 class MeasurementIn(Strict):
-    metric: Metric
+    # Вид замера из своего списка: подходит ли ему значение, проверяет эндпоинт.
+    metric_id: UUID
     # Значение и единица — как ввёл пользователь; в каноническую пересчитывает сервер.
     value: Annotated[Decimal, Field(gt=0, max_digits=9, decimal_places=3)]
     unit: Unit
@@ -214,15 +257,6 @@ class MeasurementIn(Strict):
     @property
     def canonical_value(self) -> Decimal:
         return to_canonical(self.value, self.unit)
-
-    @model_validator(mode="after")
-    def _fits_the_metric(self) -> Self:
-        metric_type = CATALOG[self.metric]
-        if quantity_of(self.unit) != metric_type.quantity:
-            raise ValueError("unit does not measure this metric")
-        if not metric_type.min_value <= self.canonical_value <= metric_type.max_value:
-            raise ValueError("value out of range for this metric")
-        return self
 
     @model_validator(mode="after")
     def _plausible_time(self) -> Self:
@@ -241,7 +275,7 @@ class MeasurementOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    metric: Metric
+    metric_id: UUID
     # В канонической единице показателя.
     value: float
     unit: Unit
@@ -254,7 +288,7 @@ class MeasurementOut(BaseModel):
 class MetricSummary(BaseModel):
     """Последнее измерение показателя и предыдущее — для сравнения."""
 
-    metric: Metric
+    metric_id: UUID
     latest: MeasurementOut | None
     previous: MeasurementOut | None
 

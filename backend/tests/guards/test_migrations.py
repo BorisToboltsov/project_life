@@ -14,6 +14,9 @@ from tests.conftest import alembic_config, sync_url
 # Миграция, которая превратила приём пищи из кода в запись списка пользователя.
 BEFORE_MEALS = "fa29e6e94544"
 MEALS = "e8252b78ff95"
+# Миграция, которая превратила показатель замера из кода в вид из списка пользователя.
+BEFORE_METRICS = "87f039dcbe74"
+METRICS = "606fb64c3ae3"
 
 
 def test_models_match_migrations() -> None:
@@ -36,9 +39,9 @@ def at_head() -> Iterator[None]:
     command.upgrade(alembic_config(), "head")
 
 
-def _rows(query: LiteralString) -> list[tuple[Any, ...]]:
+def _rows(query: LiteralString, *params: Any) -> list[tuple[Any, ...]]:
     with psycopg.connect(sync_url()) as connection:
-        return connection.execute(query).fetchall()
+        return connection.execute(query, params).fetchall()
 
 
 def _execute(query: LiteralString, *params: Any) -> None:
@@ -120,3 +123,99 @@ def test_meal_migration_carries_the_diary_over_and_back() -> None:
         ("snack", 150),
     ]
     assert _rows("SELECT kcal FROM nutrition_goals") == [(2100,)]
+
+
+@pytest.mark.usefixtures("at_head")
+def test_metric_migration_carries_the_measurements_over_and_back() -> None:
+    """Замеры фазы 2 переживают переход к списку видов замеров и откат с него."""
+    config = alembic_config()
+    user, other = uuid.uuid7(), uuid.uuid7()
+    command.downgrade(config, BEFORE_METRICS)
+    for user_id, email in ((user, "anna@example.com"), (other, "boris@example.com")):
+        _execute(
+            "INSERT INTO users (id, email, password_hash, display_name, role, language, timezone,"
+            " unit_system, disclaimer_accepted_at)"
+            " VALUES (%s, %s, 'x', 'Анна', 'user', 'ru', 'Europe/Moscow', 'metric', now())",
+            user_id,
+            email,
+        )
+
+    for owner, metric, value, unit in (
+        (user, "weight", 72.4, "kg"),
+        (user, "waist", 86, "cm"),
+        (other, "weight", 90, "kg"),
+    ):
+        _execute(
+            "INSERT INTO measurements (id, user_id, metric, value, original_value,"
+            " original_unit, measured_at, local_date, source)"
+            " VALUES (%s, %s, %s, %s, %s, %s, now(), %s, 'manual')",
+            uuid.uuid7(),
+            owner,
+            metric,
+            value,
+            value,
+            unit,
+            date(2026, 10, 11),
+        )
+
+    command.upgrade(config, METRICS)
+
+    metrics = _rows(
+        "SELECT id, preset, quantity, position, name, archived_at FROM metrics"
+        " WHERE user_id = %s ORDER BY position",
+        user,
+    )
+    assert [metric[1:] for metric in metrics] == [
+        ("weight", "mass", 0, None, None),
+        ("neck", "length", 1, None, None),
+        ("waist", "length", 2, None, None),
+        ("hips", "length", 3, None, None),
+    ]
+    # Ключи видов годятся для запросов клиента: это UUIDv7.
+    assert {metric[0].version for metric in metrics} == {7}
+    # Каждый замер привязан к виду своего владельца.
+    assert _rows(
+        "SELECT users.email, metrics.preset, measurements.value::float FROM measurements"
+        " JOIN metrics ON metrics.id = metric_id AND metrics.user_id = measurements.user_id"
+        " JOIN users ON users.id = measurements.user_id ORDER BY value"
+    ) == [
+        ("anna@example.com", "weight", 72.4),
+        ("anna@example.com", "waist", 86.0),
+        ("boris@example.com", "weight", 90.0),
+    ]
+
+    # Свой вид, рекомендуемый вид и проценты прежняя схема выразить не может.
+    own, body_fat = uuid.uuid7(), uuid.uuid7()
+    _execute(
+        "INSERT INTO metrics (id, user_id, name, quantity, position)"
+        " VALUES (%s, %s, 'Запястье', 'length', 4)",
+        own,
+        user,
+    )
+    _execute(
+        "INSERT INTO metrics (id, user_id, preset, quantity, position)"
+        " VALUES (%s, %s, 'body_fat', 'percent', 5)",
+        body_fat,
+        user,
+    )
+    for metric_id, value, unit in ((own, 16.5, "cm"), (body_fat, 18.5, "percent")):
+        _execute(
+            "INSERT INTO measurements (id, user_id, metric_id, value, original_value,"
+            " original_unit, measured_at, local_date, source)"
+            " VALUES (%s, %s, %s, %s, %s, %s, now(), %s, 'manual')",
+            uuid.uuid7(),
+            user,
+            metric_id,
+            value,
+            value,
+            unit,
+            date(2026, 10, 11),
+        )
+
+    command.downgrade(config, BEFORE_METRICS)
+
+    assert _rows("SELECT metric, value::float, original_unit FROM measurements ORDER BY value") == [
+        ("weight", 72.4, "kg"),
+        ("waist", 86.0, "cm"),
+        ("weight", 90.0, "kg"),
+    ]

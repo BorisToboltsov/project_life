@@ -4,7 +4,7 @@ import type { ComponentProps, ReactNode } from 'react'
 
 import type { Schemas } from '@/api/client'
 
-type Metric = Schemas['Metric']
+type MetricPreset = Schemas['MetricPreset']
 
 export function Frame({ children, ...props }: ComponentProps<'svg'>) {
   // Рисунок поясняет соседний текст и сам по себе ничего не сообщает скринридеру.
@@ -92,15 +92,30 @@ function Hips() {
   )
 }
 
-const ILLUSTRATIONS: Record<Metric, () => ReactNode> = {
+/** Рулетка: лента разматывается. Рисунок вида замера, у которого нет своего. */
+function TapeRoll() {
+  return (
+    <Frame>
+      <circle className="illus-body" cx={50} cy={58} r={34} />
+      <circle className="illus-line" cx={50} cy={58} r={22} />
+      <circle className="illus-body" cx={50} cy={58} r={9} />
+      <Tape d="M50 92H104" tab={{ x: 100, y: 85.5 }} />
+    </Frame>
+  )
+}
+
+const ILLUSTRATIONS: Partial<Record<MetricPreset, () => ReactNode>> = {
   weight: Weight,
   neck: Neck,
   waist: Waist,
   hips: Hips,
 }
 
-/** Анимированная подсказка, как измерять показатель. */
-export function MeasureIllustration({ metric }: { metric: Metric }) {
-  const Illustration = ILLUSTRATIONS[metric]
+/**
+ * Анимированная подсказка, как измерять показатель. У своего вида замера (`preset` пуст)
+ * и у штатного без собственного рисунка — рулетка.
+ */
+export function MeasureIllustration({ preset }: { preset: MetricPreset | null }) {
+  const Illustration = (preset && ILLUSTRATIONS[preset]) ?? TapeRoll
   return <Illustration />
 }
