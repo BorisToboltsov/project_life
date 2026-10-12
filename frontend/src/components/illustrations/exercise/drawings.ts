@@ -445,6 +445,8 @@ export const DRAWINGS: Record<ExercisePreset, Figure> = {
       { s: -18, t: -22, g: -15 },
     ],
     world: TREADMILL,
+    // Человек стоит выше пола — на полотне или педалях: кадр сдвинут вверх.
+    viewBox: '0 -4 120 120',
   }),
   exercise_bike: sideFigure({
     root: 'hip',
@@ -475,6 +477,8 @@ export const DRAWINGS: Record<ExercisePreset, Figure> = {
     grip: true,
     onFoot: PEDAL,
     world: ELLIPTICAL,
+    // Человек стоит выше пола — на полотне или педалях: кадр сдвинут вверх.
+    viewBox: '0 -4 120 120',
   }),
   rowing_machine: sideFigure({
     root: 'hip',

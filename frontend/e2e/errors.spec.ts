@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-import { adminInviteLink, register } from './steps.ts'
+import { adminInviteLink, openUnderMore, register } from './steps.ts'
 
 test('сбой в приложении виден администратору и удаляется', async ({ page }, testInfo) => {
   const suffix = `${testInfo.project.name}${Date.now()}`
@@ -22,7 +22,7 @@ test('сбой в приложении виден администратору �
   }, kind)
   expect((await reported).status()).toBe(204)
 
-  await page.getByRole('link', { name: 'Управление' }).click()
+  await openUnderMore(page, 'Управление')
   const row = page.getByRole('listitem').filter({ hasText: kind })
   // Сбой случился на главной; в отчёте её шаблон маршрута, а текста ошибки нет.
   await expect(row).toContainText('Приложение · /')

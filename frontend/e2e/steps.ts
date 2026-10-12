@@ -28,8 +28,18 @@ export async function login(page: Page, email: string, password = PASSWORD) {
   await page.getByRole('button', { name: 'Войти' }).click()
 }
 
+/**
+ * Профиль и управление: на компьютере они стоят в колонке разделов, на телефоне — под
+ * «Ещё» в нижней панели.
+ */
+export async function openUnderMore(page: Page, name: 'Профиль' | 'Управление') {
+  const more = page.getByRole('link', { name: 'Ещё' })
+  if (await more.isVisible()) await more.click()
+  await page.getByRole('link', { name }).click()
+}
+
 export async function logout(page: Page) {
-  await page.getByRole('link', { name: 'Профиль' }).click()
+  await openUnderMore(page, 'Профиль')
   await page.getByRole('button', { name: 'Выйти', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Вход' })).toBeVisible()
 }
