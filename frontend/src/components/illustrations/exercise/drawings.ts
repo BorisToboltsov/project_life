@@ -302,8 +302,8 @@ export const DRAWINGS: Record<ExercisePreset, Figure> = {
     root: 'hip',
     at: [58, 79.5],
     poses: [
-      { s: 90, t: 90, u: 90, h: -20, a: 110, f: 80, g: 160 },
-      { s: 150, t: 90, u: 90, h: -20, a: 110, f: 80, g: 220 },
+      { s: 90, t: 90, u: 90, h: -20, a: 140, f: 60, g: 160 },
+      { s: 150, t: 90, u: 90, h: -20, a: 140, f: 60, g: 220 },
     ],
     grip: true,
     onShin: roller(-5.5),
