@@ -9,9 +9,9 @@ def _values(enum: type[StrEnum]) -> list[str]:
     return [member.value for member in enum]
 
 
-def choice(enum: type[StrEnum]) -> Enum:
+def choice(enum: type[StrEnum], length: int = 16) -> Enum:
     """Перечисление как varchar: добавить значение — миграция без ALTER TYPE."""
-    return Enum(enum, native_enum=False, length=16, values_callable=_values)
+    return Enum(enum, native_enum=False, length=length, values_callable=_values)
 
 
 def one_of(column: str, enum: type[StrEnum]) -> CheckConstraint:

@@ -89,6 +89,18 @@ async def _delete_metric(client: AsyncClient, owner: Account) -> Probe:
     return Probe((await _own_metric(client, owner)).path)
 
 
+async def _own_exercise(client: AsyncClient, owner: Account) -> Probe:
+    path = f"/api/exercises/{uuid.uuid7()}"
+    body = {"name": "Тяга гантели к поясу", "kind": "weight_reps", "muscles": ["lats"]}
+    created = await client.put(path, headers=owner.headers, json=body)
+    assert created.status_code == 201
+    return Probe(path, {**body, "name": "Подменено"})
+
+
+async def _delete_exercise(client: AsyncClient, owner: Account) -> Probe:
+    return Probe((await _own_exercise(client, owner)).path)
+
+
 def _product_body() -> dict[str, Any]:
     return {
         "name": "Творог 5 %",
@@ -167,6 +179,8 @@ OWNERSHIP: dict[Route, OwnershipCase] = {
     ("DELETE", "/api/measurements/{measurement_id}"): _delete_measurement,
     ("PUT", "/api/metrics/{metric_id}"): _own_metric,
     ("DELETE", "/api/metrics/{metric_id}"): _delete_metric,
+    ("PUT", "/api/exercises/{exercise_id}"): _own_exercise,
+    ("DELETE", "/api/exercises/{exercise_id}"): _delete_exercise,
     ("PUT", "/api/diary/entries/{entry_id}"): _own_food_entry,
     ("DELETE", "/api/diary/entries/{entry_id}"): _delete_food_entry,
     ("PUT", "/api/diary/meals/{meal_id}"): _own_meal,

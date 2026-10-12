@@ -29,7 +29,36 @@ describe('защита маршрутов', () => {
       within(nav)
         .getAllByRole('link')
         .map((link) => link.textContent),
-    ).toEqual(['Главная', 'Питание', 'Замеры', 'Профиль'])
+    ).toEqual(['Главная', 'Питание', 'Тренировки', 'Замеры', 'Ещё', 'Профиль'])
+  })
+
+  it('под «Ещё» собраны профиль и, у администратора, управление', async () => {
+    await renderApp('/more', boris)
+
+    expect(await screen.findByRole('heading', { name: 'Ещё' })).toBeInTheDocument()
+    const main = within(screen.getByRole('main'))
+    expect(main.getAllByRole('link').map((link) => link.textContent)).toEqual([
+      'Профиль',
+      'Управление',
+    ])
+    expect(screen.getByRole('link', { name: 'Ещё' })).toHaveAttribute('aria-current', 'page')
+  })
+
+  it('обычный пользователь видит под «Ещё» только профиль', async () => {
+    await renderApp('/more', anna)
+
+    await screen.findByRole('heading', { name: 'Ещё' })
+    const main = within(screen.getByRole('main'))
+    expect(main.getAllByRole('link').map((link) => link.textContent)).toEqual(['Профиль'])
+  })
+
+  it('«Ещё» остаётся отмеченным на экранах, которые под ним собраны', async () => {
+    mockApi({ 'GET /api/health': json(200, { status: 'ok', version: '0.1.0' }) })
+    await renderApp('/profile', anna)
+
+    await screen.findByRole('heading', { name: 'Профиль' })
+    expect(screen.getByRole('link', { name: 'Ещё' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: 'Главная' })).not.toHaveAttribute('aria-current')
   })
 
   it('администратору показывает управление', async () => {

@@ -2,6 +2,7 @@
 
 from app.models.auth import Invite, LoginFailure, PasswordReset, RefreshToken
 from app.models.error_report import ErrorReport, ErrorSource
+from app.models.exercise import Exercise
 from app.models.measurement import Measurement, Metric, preset_metrics
 from app.models.nutrition import (
     BarcodeMiss,
@@ -18,6 +19,7 @@ __all__ = [
     "BarcodeMiss",
     "ErrorReport",
     "ErrorSource",
+    "Exercise",
     "FoodEntry",
     "Invite",
     "Language",

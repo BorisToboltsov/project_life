@@ -450,6 +450,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/exercises": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Exercises */
+        get: operations["list_exercises_api_exercises_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/exercises/presets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Preset Exercise
+         * @description Ставит штатное упражнение в список пользователя: заводит его или возвращает
+         *     убранное.
+         *
+         *     Штатное упражнение у пользователя одно, поэтому повтор запроса ничего не дублирует.
+         *     Новое встаёт в конец списка, возвращённое — на прежнее место.
+         */
+        post: operations["add_preset_exercise_api_exercises_presets_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/exercises/{exercise_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Save Exercise
+         * @description Добавляет в список пользователя своё упражнение или меняет у своего название и
+         *     мышцы: повтор запроса не плодит дубли (ADR 0002). Убранное упражнение этим же
+         *     запросом возвращается в список. Новое встаёт в конец списка. Штатное этим запросом
+         *     не меняется.
+         */
+        put: operations["save_exercise_api_exercises__exercise_id__put"];
+        post?: never;
+        /**
+         * Delete Exercise
+         * @description Убирает упражнение из списка. Записанное по нему остаётся: вернув упражнение в
+         *     список, пользователь получает и его историю.
+         */
+        delete: operations["delete_exercise_api_exercises__exercise_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -749,6 +818,12 @@ export interface components {
             product?: components["schemas"]["ProductOut"] | null;
             status: components["schemas"]["LookupStatus"];
         };
+        /**
+         * CardioField
+         * @description Необязательные поля подхода у кардио; время есть всегда.
+         * @enum {string}
+         */
+        CardioField: "distance" | "incline" | "level";
         /** CopyItem */
         CopyItem: {
             /**
@@ -872,6 +947,66 @@ export interface components {
          * @enum {string}
          */
         ErrorSource: "backend" | "frontend";
+        /**
+         * ExerciseIn
+         * @description Своё упражнение. Что записывает подход, задают один раз, при создании.
+         */
+        ExerciseIn: {
+            kind: components["schemas"]["ExerciseKind"];
+            /**
+             * Muscles
+             * @default []
+             */
+            muscles: components["schemas"]["Muscle"][];
+            /** Name */
+            name: string;
+        };
+        /**
+         * ExerciseKind
+         * @description Что записывает подход. Задаётся у упражнения один раз.
+         * @enum {string}
+         */
+        ExerciseKind: "weight_reps" | "reps" | "time" | "cardio";
+        /** ExerciseListOut */
+        ExerciseListOut: {
+            /** Catalog */
+            catalog: components["schemas"]["PresetExerciseOut"][];
+            /** Exercises */
+            exercises: components["schemas"]["ExerciseOut"][];
+        };
+        /**
+         * ExerciseOut
+         * @description Упражнение из списка пользователя.
+         */
+        ExerciseOut: {
+            /** Archived */
+            archived: boolean;
+            /** Cardio Fields */
+            cardio_fields: components["schemas"]["CardioField"][];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            kind: components["schemas"]["ExerciseKind"];
+            /** Muscles */
+            muscles: components["schemas"]["Muscle"][];
+            /** Name */
+            name: string | null;
+            preset: components["schemas"]["ExercisePreset"] | null;
+            /** Secondary */
+            secondary: components["schemas"]["Muscle"][];
+        };
+        /**
+         * ExercisePreset
+         * @description Штатные упражнения: название, технику и рисунок подбирает интерфейс.
+         * @enum {string}
+         */
+        ExercisePreset: "elliptical" | "treadmill_walk" | "exercise_bike" | "rowing_machine" | "lat_pulldown" | "dumbbell_bench_press" | "seated_dumbbell_press" | "rope_pushdown" | "seated_front_raise" | "ez_bar_curl" | "crunch" | "back_extension" | "deadlift" | "leg_press" | "leg_extension" | "lying_leg_curl" | "plank" | "goblet_squat" | "lever_row" | "lateral_overhead_raise" | "hammer_curl" | "kettlebell_swing" | "russian_twist" | "table_tennis" | "barbell_squat" | "bench_press" | "pull_up" | "push_up" | "dip" | "barbell_row" | "overhead_press" | "dumbbell_lunge" | "romanian_deadlift" | "calf_raise" | "lateral_raise" | "dumbbell_fly" | "seated_cable_row" | "french_press" | "hanging_leg_raise" | "glute_bridge";
+        /** ExercisePresetIn */
+        ExercisePresetIn: {
+            preset: components["schemas"]["ExercisePreset"];
+        };
         /**
          * ExternalProductOut
          * @description Продукт из Open Food Facts, которого нет в каталоге (ADR 0010). В каталог он
@@ -1195,6 +1330,11 @@ export interface components {
             metric_id: string;
             previous: components["schemas"]["MeasurementOut"] | null;
         };
+        /**
+         * Muscle
+         * @enum {string}
+         */
+        Muscle: "chest" | "delts" | "biceps" | "triceps" | "forearms" | "abs" | "obliques" | "traps" | "lats" | "lower_back" | "glutes" | "quads" | "hamstrings" | "calves";
         /** NutrientsOut */
         NutrientsOut: {
             /** Carbs G */
@@ -1301,6 +1441,20 @@ export interface components {
             kind: components["schemas"]["PortionKind"];
             /** Size */
             size: number;
+        };
+        /**
+         * PresetExerciseOut
+         * @description Штатное упражнение справочника.
+         */
+        PresetExerciseOut: {
+            /** Cardio Fields */
+            cardio_fields: components["schemas"]["CardioField"][];
+            kind: components["schemas"]["ExerciseKind"];
+            /** Muscles */
+            muscles: components["schemas"]["Muscle"][];
+            preset: components["schemas"]["ExercisePreset"];
+            /** Secondary */
+            secondary: components["schemas"]["Muscle"][];
         };
         /**
          * ProductDraftOut
@@ -2878,6 +3032,186 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_exercises_api_exercises_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExerciseListOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    add_preset_exercise_api_exercises_presets_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExercisePresetIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExerciseOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_exercise_api_exercises__exercise_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                exercise_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExerciseIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExerciseOut"];
+                };
+            };
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExerciseOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_exercise_api_exercises__exercise_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                exercise_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
