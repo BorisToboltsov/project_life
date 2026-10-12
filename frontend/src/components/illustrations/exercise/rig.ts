@@ -425,7 +425,7 @@ export function frontFigure(spec: FrontFigure): Figure {
     // На виде спереди человек выше, чем сбоку: пол и кадр стоят под его стопами.
     world: spec.world ?? [{ ...FLOOR, d: 'M14 119.4H106' }],
     upperArm: upper,
-    viewBox: spec.viewBox ?? '3 7.5 114 114',
+    viewBox: spec.viewBox ?? '0 2 120 120',
   }
 }
 

@@ -13,6 +13,36 @@ export function plate(radius = 10): Shape[] {
   ]
 }
 
+/** Гантель сбоку: рукоять поперёк предплечья, по блину с каждой стороны. */
+export const DUMBBELL_SIDE: Shape[] = [
+  { layer: 3, gear: 'bar', d: 'M-5 0H5' },
+  { layer: 3, gear: 'plate', d: 'M-8.6-4h3.2v8h-3.2z' },
+  { layer: 3, gear: 'plate', d: 'M5.4-4h3.2v8h-3.2z' },
+]
+
+/** Гиря: шар на дужке, висит под кистью — вдоль предплечья. */
+export const KETTLEBELL: Shape[] = [
+  { layer: 3, gear: 'bar', d: 'M-3.4-4.5C-4.6-1 4.6-1 3.4-4.5' },
+  { layer: 3, gear: 'plate', circle: [0, -9.5, 5.6] },
+]
+
+/** Гиря у груди: её держат за дужку, шар — под кистями. */
+export const KETTLEBELL_AT_CHEST: Shape[] = [
+  { layer: 3, gear: 'bar', d: 'M-2.6 3.4C-4.4 0 4.4 0 2.6 3.4' },
+  { layer: 3, gear: 'plate', circle: [1.5, 8, 5.6] },
+]
+
+/** Скамья сверху: подушка под спиной и головой лежащего. */
+export function benchFromAbove(left: number, right: number, top: number, end: number): Shape[] {
+  return [
+    {
+      layer: 0,
+      gear: 'pad',
+      d: `M${left + 3} ${top}H${right - 3}a3 3 0 0 1 3 3V${end - 3}a3 3 0 0 1-3 3H${left + 3}a3 3 0 0 1-3-3V${top + 3}a3 3 0 0 1 3-3Z`,
+    },
+  ]
+}
+
 /** Гантель с торца. */
 export const DUMBBELL_END: Shape[] = [
   { layer: 3, gear: 'plate', circle: [0, 0, 4.8] },
@@ -35,6 +65,18 @@ export function bench(left: number, right: number, top: number): Shape[] {
       layer: 0,
       gear: 'pad',
       d: `M${left + 2.5} ${top}H${right - 2.5}a2.5 2.5 0 0 1 0 5H${left + 2.5}a2.5 2.5 0 0 1 0-5Z`,
+    },
+    FLOOR,
+  ]
+}
+
+/** Подставка под носки: низкая ступенька на полу. */
+export function step(left: number, right: number, height = 5): Shape[] {
+  return [
+    {
+      layer: 0,
+      gear: 'pad',
+      d: `M${left} ${bottom - height}H${right}V${bottom}H${left}Z`,
     },
     FLOOR,
   ]
