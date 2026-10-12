@@ -58,6 +58,34 @@ describe('рисунок упражнения', () => {
     }
   })
 
+  it('подтягивания: тело и руки идут по шагам пути со своими ключевыми кадрами', () => {
+    const { container } = render(<ExerciseFigure preset="pull_up" />)
+
+    const stepped = [...container.querySelectorAll<SVGGElement>('.ex-t')]
+    const names = new Set(stepped.map((joint) => joint.style.animationName))
+    const css = container.querySelector('style')!.textContent
+    // Корень фигуры, плечо и предплечье; зеркальная рука берёт те же кадры по своему имени.
+    expect(names.size).toBe(5)
+    for (const name of names) expect(css).toContain(`@keyframes ${name}{`)
+    expect(css).toContain('40%{transform:')
+    expect(css).toContain('49%{transform:')
+    // Без анимации виден кадр в верхней точке.
+    expect(stepped.every((joint) => joint.style.transform !== '')).toBe(true)
+  })
+
+  it('миниатюре подтягиваний свои ключевые кадры не нужны', () => {
+    const { container } = render(<ExerciseFigure preset="pull_up" still />)
+
+    expect(container.querySelector('style')).toBeNull()
+  })
+
+  it('обычный рисунок обходится общими ключевыми кадрами', () => {
+    const { container } = render(<ExerciseFigure preset="deadlift" />)
+
+    expect(container.querySelector('style')).toBeNull()
+    expect(container.querySelectorAll('.ex-t')).toHaveLength(0)
+  })
+
   it('снаряд — цветом бренда, обстановка — контуром', () => {
     const { container } = render(<ExerciseFigure preset="dumbbell_bench_press" />)
 

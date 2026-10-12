@@ -273,13 +273,13 @@
 .ex-outline * {
   fill: none;
   stroke: currentColor;
-  stroke-width: 5;
+  stroke-width: calc(5px * var(--ex-k, 1));
   stroke-linejoin: round;
   stroke-linecap: round;
 }
 
 .ex-outline.ex-inner * {
-  stroke-width: 3.4;
+  stroke-width: calc(3.4px * var(--ex-k, 1));
 }
 
 .ex-fill * {
@@ -291,7 +291,7 @@
 .ex-pad {
   fill: none;
   stroke: currentColor;
-  stroke-width: 2.5;
+  stroke-width: calc(2.5px * var(--ex-k, 1));
   stroke-linejoin: round;
   stroke-linecap: round;
 }
@@ -304,7 +304,7 @@ circle.ex-steel {
 .ex-plate {
   fill: var(--illus-paper);
   stroke: var(--illus-accent);
-  stroke-width: 3;
+  stroke-width: calc(3px * var(--ex-k, 1));
 }
 
 .ex-hub {
@@ -335,8 +335,14 @@ circle.ex-steel {
   animation: ex-move 5s infinite both;
 }
 
+/* Сустав, который идёт по шагам пути: ключевые кадры у него свои, рядом с рисунком. */
+.ex-t {
+  animation: 5s linear infinite both;
+}
+
 .ex-still .ex-j,
-.ex-still .ex-m {
+.ex-still .ex-m,
+.ex-still .ex-t {
   animation: none;
 }
 

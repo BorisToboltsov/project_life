@@ -1,6 +1,6 @@
 import type { Schemas } from '@/api/client'
 
-import { bench, DUMBBELL_END, plate, pullUpBar } from './gear'
+import { bench, DUMBBELL_END, plate, pullUpFrame } from './gear'
 import { type Figure, frontFigure, type Pose, sideFigure } from './rig'
 
 type ExercisePreset = Schemas['ExercisePreset']
@@ -60,17 +60,12 @@ export const DRAWINGS: Partial<Record<ExercisePreset, Figure>> = {
     ],
     grip: true,
   }),
-  pull_up: sideFigure({
-    root: 'hand',
-    at: [58, 14],
-    poses: [
-      { s: 80, t: -5, u: 2, h: -8, a: 0, f: 0, g: 170 },
-      { s: 80, t: -12, u: 6, h: -20, a: 140, f: 0, g: 170 },
-    ],
-    arm: [14, 15.4],
+  pull_up: frontFigure({
+    hang: { out: 7.8, far: 37.5, near: 6 },
     grip: true,
-    world: pullUpBar(58, 14),
-    viewBox: '-2 -6 124 124',
+    // Вис выше обычного кадра: рисунок мельче, пол ниже.
+    world: pullUpFrame(27, 93, -11.9, 127),
+    viewBox: '-21 -32 162 162',
   }),
   lateral_raise: frontFigure({
     poses: [

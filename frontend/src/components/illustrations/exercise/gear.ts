@@ -40,11 +40,22 @@ export function bench(left: number, right: number, top: number): Shape[] {
   ]
 }
 
-/** Турник сбоку: стойка и перекладина с торца. */
-export function pullUpBar(x: number, y: number): Shape[] {
+/** Турник сбоку: стойка и перекладина с торца; `floor` — где под ним пол. */
+export function pullUpBar(x: number, y: number, floor = FLOOR_Y): Shape[] {
+  const foot = floor - 1.25
   return [
-    { layer: 0, gear: 'steel', d: `M${x} ${y}V${bottom}M${x - 6} ${bottom}H${x + 6}` },
-    FLOOR,
+    { layer: 0, gear: 'steel', d: `M${x} ${y}V${foot}M${x - 6} ${foot}H${x + 6}` },
+    { layer: 0, gear: 'steel', d: `M${x - 46} ${floor}H${x + 46}` },
     { layer: 3, gear: 'steel', circle: [x, y, 2.6] },
+  ]
+}
+
+/** Турник спереди: перекладина на двух стойках. */
+export function pullUpFrame(left: number, right: number, y: number, floor: number): Shape[] {
+  const foot = floor - 1.25
+  return [
+    { layer: 0, gear: 'steel', d: `M${left} ${y}V${foot}M${right} ${y}V${foot}` },
+    { layer: 0, gear: 'steel', d: `M${left - 8} ${floor}H${right + 8}` },
+    { layer: 3, gear: 'steel', d: `M${left} ${y}H${right}` },
   ]
 }

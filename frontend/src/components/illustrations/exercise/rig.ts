@@ -37,6 +37,13 @@ export interface Joint {
   delay?: number
   /** Сустав сам переезжает между позами — так движется корень фигуры. */
   move?: readonly [Point, Point]
+  /**
+   * Поворот по шагам пути от исходной позы к конечной — когда прямой переход между двумя
+   * углами не годится: кисть должна оставаться на перекладине, пока тело движется.
+   */
+  turnPath?: readonly number[]
+  /** То же для переезда сустава. */
+  movePath?: readonly Point[]
   /** Зеркальная половина: вторая рука на виде спереди. */
   flip?: boolean
   shapes: Shape[]
@@ -334,8 +341,21 @@ export interface FrontPose {
   f: number
 }
 
+/** Вис на перекладине на виде спереди: тело поднимается, кисти остаются на месте. */
+export interface FrontHang {
+  /** Насколько хват шире плеча. */
+  out: number
+  /** Насколько плечо ниже перекладины в висе и в верхней точке. */
+  far: number
+  near: number
+}
+
 export interface FrontFigure {
-  poses: readonly [FrontPose, FrontPose]
+  /** Позы рук, когда тело стоит на месте. */
+  poses?: readonly [FrontPose, FrontPose]
+  /** Вместо поз — вис: руки подбираются под перекладину на каждом шаге подъёма. */
+  hang?: FrontHang
+  viewBox?: string
   grip?: boolean
   /** Снаряд в каждой кисти: координаты от центра кисти. */
   held?: Shape[]
@@ -344,7 +364,10 @@ export interface FrontFigure {
 
 /** Собирает фигуру на виде спереди: тело стоит, двигаются руки — обе одинаково. */
 export function frontFigure(spec: FrontFigure): Figure {
-  const [from, to] = spec.poses
+  const rise = spec.hang && hangPath(spec.hang)
+  const [from, to] = rise
+    ? [rise[0].pose, rise[rise.length - 1].pose]
+    : (spec.poses ?? [REST, REST])
   const arm: Pair = [from.a, to.a]
   const forearm: Pair = [from.f, to.f]
   const upper = 20.5
@@ -362,7 +385,8 @@ export function frontFigure(spec: FrontFigure): Figure {
       ? [2 * FRONT_BODY.axis - FRONT_BODY.shoulder[0], FRONT_BODY.shoulder[1]]
       : FRONT_BODY.shoulder,
     turn: arm,
-    delay: -60,
+    // В висе суставы идут строго вместе: иначе кисть съедет с перекладины.
+    ...(rise ? { turnPath: rise.map((step) => step.pose.a) } : { delay: -60 }),
     flip,
     // Опущенная рука лежит поверх корпуса: её отделяют тонкие линии, как на виде сбоку.
     shapes: [
@@ -373,7 +397,7 @@ export function frontFigure(spec: FrontFigure): Figure {
       {
         at: [0, -upper],
         turn: sub(forearm, arm),
-        delay: 60,
+        ...(rise ? { turnPath: rise.map((step) => step.pose.f - step.pose.a) } : { delay: 60 }),
         shapes: [
           { layer: 2, d: lowerShape },
           palm(2),
@@ -389,6 +413,7 @@ export function frontFigure(spec: FrontFigure): Figure {
     root: {
       at: [30, 1],
       turn: STILL,
+      ...(rise && { movePath: rise.map((step): Point => [30, 1 - step.lift]) }),
       shapes: [half, { layer: 1, ellipse: FRONT_BODY.head }, { layer: 1, d: FRONT_BODY.neck }],
       kids: [
         // Вторая половина тела — зеркалом вокруг его оси.
@@ -397,8 +422,39 @@ export function frontFigure(spec: FrontFigure): Figure {
         armJoint(true),
       ],
     },
-    world: spec.world ?? [FLOOR],
+    // На виде спереди человек выше, чем сбоку: пол и кадр стоят под его стопами.
+    world: spec.world ?? [{ ...FLOOR, d: 'M14 119.4H106' }],
     upperArm: upper,
-    viewBox: '3 4 114 114',
+    viewBox: spec.viewBox ?? '3 7.5 114 114',
   }
+}
+
+const REST: FrontPose = { a: 172, f: 176 }
+/** Шагов на пути от виса к верхней точке. */
+const STEPS = 10
+/** Плавный разгон и торможение: доля времени → доля пути. */
+const ease = (x: number) => (x < 0.5 ? 4 * x ** 3 : 1 - (-2 * x + 2) ** 3 / 2)
+
+/** Путь подъёма в висе: на каждом шаге — насколько поднято тело и поза рук под перекладину. */
+function hangPath({ out, far, near }: FrontHang): { lift: number; pose: FrontPose }[] {
+  return Array.from({ length: STEPS + 1 }, (_, step) => {
+    const below = far + (near - far) * ease(step / STEPS)
+    return { lift: Math.round((far - below) * 100) / 100, pose: frontReach(out, below) }
+  })
+}
+
+/**
+ * Поза руки на виде спереди, при которой кисть лежит на перекладине: `out` — насколько хват
+ * шире плеча, `below` — насколько плечо ниже перекладины. Локоть уходит в сторону.
+ */
+export function frontReach(out: number, below: number): FrontPose {
+  const upper = 20.5
+  const lower = 16 + PALM
+  const span = Math.min(Math.hypot(out, below), upper + lower - 0.01)
+  const toHand = Math.atan2(out, below)
+  const bend = Math.acos((upper ** 2 + span ** 2 - lower ** 2) / (2 * upper * span))
+  const a = toHand + bend
+  const f = Math.atan2(out - upper * Math.sin(a), below - upper * Math.cos(a))
+  const degrees = (radians: number) => Math.round((radians * 1800) / Math.PI) / 10
+  return { a: degrees(a), f: degrees(f) }
 }

@@ -10,6 +10,9 @@ import type { Figure, Joint, Layer, Shape } from './rig'
 
 type ExercisePreset = Schemas['ExercisePreset']
 
+/** Ширина обычного кадра в единицах рисунка. */
+const FRAME = 114
+
 /** Проход по фигуре: контур, заливка или снаряд. */
 type Pass = 'outline' | 'fill' | 'gear'
 
@@ -40,14 +43,57 @@ function shapes(list: Shape[], layer: Layer, pass: Pass, mask: string): ReactNod
     .map((shape, i) => draw(shape, i, pass, mask))
 }
 
-function limb(joint: Joint, key: number, layer: Layer, pass: Pass, mask: string): ReactNode {
+/** Моменты цикла, %: движение к конечной позе, пауза в ней и возврат. */
+const THERE = [8, 40] as const
+const BACK = [49, 82] as const
+
+/** Ключевые кадры пути: туда по шагам, пауза, обратно теми же шагами. */
+function keyframes(name: string, steps: readonly string[]): string {
+  const last = steps.length - 1
+  const at = ([start, end]: readonly [number, number], share: number) =>
+    Math.round((start + (end - start) * share) * 100) / 100
+  const there = steps.map((step, i) => `${at(THERE, i / last)}%{transform:${step}}`)
+  const back = steps.map((step, i) => `${at(BACK, 1 - i / last)}%{transform:${step}}`).reverse()
+  return `@keyframes ${name}{0%{transform:${steps[0]}}${there.join('')}${back.join('')}100%{transform:${steps[0]}}}`
+}
+
+/** Стили суставов, которые идут по шагам пути: у каждого — свои ключевые кадры. */
+function paths(joint: Joint, name: string): string {
+  const own = [
+    joint.turnPath &&
+      keyframes(
+        name,
+        joint.turnPath.map((angle) => `rotate(${angle}deg)`),
+      ),
+    joint.movePath &&
+      keyframes(
+        `${name}m`,
+        joint.movePath.map(([x, y]) => `translate(${x}px,${y}px)`),
+      ),
+  ]
+  return [...own, ...joint.kids.map((kid, i) => paths(kid, `${name}-${i}`))]
+    .filter(Boolean)
+    .join('')
+}
+
+function limb(
+  joint: Joint,
+  key: number,
+  layer: Layer,
+  pass: Pass,
+  mask: string,
+  name: string,
+): ReactNode {
   const own = shapes(joint.shapes, layer, pass, mask)
-  const kids = joint.kids.map((kid, i) => limb(kid, i, layer, pass, mask)).filter(Boolean)
+  const kids = joint.kids
+    .map((kid, i) => limb(kid, i, layer, pass, mask, `${name}-${i}`))
+    .filter(Boolean)
   if (own.length === 0 && kids.length === 0) return null
   const [from, to] = joint.turn
   // Неподвижный сустав обходится без анимации.
-  const turning =
-    from === to
+  const turning = joint.turnPath
+    ? { className: 'ex-t', style: { transform: `rotate(${to}deg)`, animationName: name } }
+    : from === to
       ? { transform: `rotate(${to})` }
       : {
           className: 'ex-j',
@@ -64,6 +110,18 @@ function limb(joint: Joint, key: number, layer: Layer, pass: Pass, mask: string)
       {kids}
     </g>
   )
+  if (joint.movePath) {
+    const [x, y] = joint.movePath[joint.movePath.length - 1]
+    return (
+      <g
+        key={key}
+        className="ex-t"
+        style={{ transform: `translate(${x}px,${y}px)`, animationName: `${name}m` }}
+      >
+        {body}
+      </g>
+    )
+  }
   if (!joint.move) {
     return (
       <g key={key} transform={place}>
@@ -97,7 +155,10 @@ function limb(joint: Joint, key: number, layer: Layer, pass: Pass, mask: string)
 export function FigureDrawing({ figure, still }: { figure: Figure; still?: boolean }) {
   // Идентификатор маски — без двоеточий: они не годятся в ссылке `url(#…)`.
   const mask = `ex-fade-${useId().replaceAll(':', '')}`
-  const tree = (layer: Layer, pass: Pass) => limb(figure.root, 0, layer, pass, mask)
+  const scale = Number(figure.viewBox.split(' ')[2]) / FRAME
+  const tree = (layer: Layer, pass: Pass) => limb(figure.root, 0, layer, pass, mask, `${mask}-p`)
+  // Неподвижному кадру ключевые кадры не нужны.
+  const stepped = still ? '' : paths(figure.root, `${mask}-p`)
   const world = (layer: Layer) => shapes(figure.world, layer, 'gear', mask)
   // Порядок слоёв: обстановка и снаряд за телом, тело, рука поверх корпуса, снаряд спереди.
   const behind = { world: world(0), gear: tree(0, 'gear') }
@@ -109,8 +170,11 @@ export function FigureDrawing({ figure, still }: { figure: Figure; still?: boole
     <svg
       viewBox={figure.viewBox}
       className={cn('illus ex', still && 'ex-still')}
+      // Кадр крупнее обычного рисуется мельче: толщина линий растёт вместе с ним.
+      style={{ '--ex-k': scale } as CSSProperties}
       aria-hidden="true"
     >
+      {stepped && <style>{stepped}</style>}
       <defs>
         <linearGradient
           id={`${mask}-ramp`}
