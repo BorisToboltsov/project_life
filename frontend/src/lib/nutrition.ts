@@ -102,12 +102,6 @@ export interface Targets {
   carbs_g: number
 }
 
-/** Полных лет на дату `today`; обе даты — `ГГГГ-ММ-ДД`. */
-export function ageOn(birthDate: string, today: string): number {
-  const years = Number(today.slice(0, 4)) - Number(birthDate.slice(0, 4))
-  return today.slice(5) < birthDate.slice(5) ? years - 1 : years
-}
-
 /**
  * Ориентир цели на день. Основной обмен — по формуле Миффлина — Сан-Жеора, дальше
  * поправка на образ жизни и на цель. Калории округлены до десятков, углеводы — остаток,

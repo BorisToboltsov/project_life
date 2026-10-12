@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 
 import {
   ACTIVITIES,
-  ageOn,
   AIMS,
   formatGrams,
   formatKcal,
@@ -75,14 +74,6 @@ describe('калории по БЖУ', () => {
     expect(kcalIsTyped({ ...cheese, kcal: '145,5' }, 1)).toBe(true)
     // Калории без БЖУ считать было не из чего — значит, их ввели.
     expect(kcalIsTyped({ protein: '', fat: '', carbs: '', kcal: '2000' }, 0)).toBe(true)
-  })
-})
-
-describe('ageOn', () => {
-  it('считает полные годы', () => {
-    expect(ageOn('1990-05-17', '2026-05-16')).toBe(35)
-    expect(ageOn('1990-05-17', '2026-05-17')).toBe(36)
-    expect(ageOn('1990-05-17', '2026-10-11')).toBe(36)
   })
 })
 

@@ -132,4 +132,25 @@ describe('DateField', () => {
     expect(screen.getByText('Проверьте дату рождения')).toBeInTheDocument()
     expect(screen.getByLabelText('Дата')).toBeInvalid()
   })
+
+  it('подсказка стоит под полем и привязана к нему', () => {
+    render(<DateField label="Дата" value="1990-05-17" onChange={() => {}} hint="36 лет" />)
+
+    expect(screen.getByLabelText('Дата')).toHaveAccessibleDescription('36 лет')
+  })
+
+  it('ошибка заменяет подсказку', () => {
+    render(
+      <DateField
+        label="Дата"
+        value="1990-02-31"
+        onChange={() => {}}
+        error="validation.birthDate"
+        hint="36 лет"
+      />,
+    )
+
+    expect(screen.getByLabelText('Дата')).toHaveAccessibleDescription('Проверьте дату рождения')
+    expect(screen.queryByText('36 лет')).not.toBeInTheDocument()
+  })
 })

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { formatDelta, formatNumber, parseDecimal } from './numbers'
+import { formatDelta, formatNumber, formatYears, parseDecimal } from './numbers'
 
 describe('parseDecimal', () => {
   it.each([
@@ -30,6 +30,17 @@ describe('числа в записи языка', () => {
   it('не больше одного знака после разделителя, лишние нули не пишутся', () => {
     expect(formatNumber(72.449, 'en')).toBe('72.4')
     expect(formatNumber(72, 'en')).toBe('72')
+  })
+
+  it.each([
+    [1, 'ru', '1 год'],
+    [22, 'ru', '22 года'],
+    [36, 'ru', '36 лет'],
+    [111, 'ru', '111 лет'],
+    [1, 'en', '1 year'],
+    [36, 'en', '36 years'],
+  ])('%s в «%s» — «%s»: число лет согласовано со словом', (value, language, expected) => {
+    expect(formatYears(value, language)).toBe(expected)
   })
 
   it('изменение показывается со знаком', () => {

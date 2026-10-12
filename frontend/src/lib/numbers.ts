@@ -15,6 +15,15 @@ export function formatNumber(value: number, language: string, maximumFractionDig
   return new Intl.NumberFormat(intlLocale(language), { maximumFractionDigits }).format(value)
 }
 
+/** Число лет словами языка интерфейса: «36 лет», «31 год», «36 years». */
+export function formatYears(value: number, language: string): string {
+  return new Intl.NumberFormat(intlLocale(language), {
+    style: 'unit',
+    unit: 'year',
+    unitDisplay: 'long',
+  }).format(value)
+}
+
 /** Изменение со знаком: «+0,4», «-0,4», «0». */
 export function formatDelta(value: number, language: string): string {
   return new Intl.NumberFormat(intlLocale(language), {

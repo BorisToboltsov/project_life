@@ -6,7 +6,7 @@
 
 **Состояние:** готовы вход по приглашениям, профиль, замеры тела — вес, обхваты, процент
 жира и свои показатели, — дневник питания с каталогом продуктов, целью на день, сканером
-штрихкодов и поиском продуктов в Open Food Facts и учёт воды (фазы 1–6); выкладка на свой сервер описана в [docs/INSTALL.md](docs/INSTALL.md). Что
+штрихкодов и поиском продуктов в Open Food Facts и учёт воды (версии 0.1–0.6); выкладка на свой сервер описана в [docs/INSTALL.md](docs/INSTALL.md). Что
 будет дальше — в [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Что запланировано
@@ -32,7 +32,7 @@ make admin-invite    # ссылка, по которой регистрируе�
 
 - [docs/GUIDE.md](docs/GUIDE.md) — руководство пользователя и администратора.
 - [docs/INSTALL.md](docs/INSTALL.md) — установка на сервер, обновление, бэкапы.
-- [docs/ROADMAP.md](docs/ROADMAP.md) — фазы и их состояние.
+- [docs/ROADMAP.md](docs/ROADMAP.md) — минорные версии и их состояние.
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — как всё устроено.
 - [docs/INVARIANTS.md](docs/INVARIANTS.md) — контракты кодовой базы.
 - [docs/TESTS.md](docs/TESTS.md) — тесты и гейты.
@@ -45,4 +45,4 @@ make admin-invite    # ссылка, по которой регистрируе�
 [Open Food Facts](https://world.openfoodfacts.org) — открытой базы под лицензией
 [ODbL](https://opendatacommons.org/licenses/odbl/1-0/).
 
-Приложение не является медицинским изделием.
+Приложение не даёт медицинских рекомендаций и не заменяет консультацию врача.

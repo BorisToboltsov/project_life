@@ -34,13 +34,24 @@ interface DateFieldProps {
   max?: string
   /** Ключ словаря из схемы валидации. */
   error?: string
+  /** Готовая строка под полем; ошибка её заменяет. */
+  hint?: string
 }
 
 /**
  * Поле даты с календарём, показывающее дату как «день/месяц/год» (инвариант I7).
  * Нативное поле даты не годится: порядок частей в нём задаёт браузер, а не приложение.
  */
-export function DateField({ label, value, onChange, onBlur, min, max, error }: DateFieldProps) {
+export function DateField({
+  label,
+  value,
+  onChange,
+  onBlur,
+  min,
+  max,
+  error,
+  hint,
+}: DateFieldProps) {
   const { t, i18n } = useTranslation()
   const id = useId()
   const [text, setText] = useState(() => isoToDisplay(value))
@@ -75,7 +86,7 @@ export function DateField({ label, value, onChange, onBlur, min, max, error }: D
           placeholder={t('date.placeholder')}
           value={text}
           aria-invalid={error ? true : undefined}
-          aria-describedby={error ? `${id}-message` : undefined}
+          aria-describedby={error || hint ? `${id}-message` : undefined}
           className="h-11 pr-12 text-base"
           onChange={(event) => report(formatDateInput(event.target.value))}
           onBlur={onBlur}
@@ -114,7 +125,7 @@ export function DateField({ label, value, onChange, onBlur, min, max, error }: D
           </PopoverContent>
         </Popover>
       </div>
-      <FieldMessage id={`${id}-message`} error={error} />
+      <FieldMessage id={`${id}-message`} error={error} hint={hint} />
     </div>
   )
 }

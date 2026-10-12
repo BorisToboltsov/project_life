@@ -42,9 +42,9 @@ export const en: Dictionary = {
     apply: 'Update',
   },
   disclaimer: {
-    text: 'This app is not a medical device and does not replace a doctor’s advice.',
+    text: 'This app does not give medical advice and is not a substitute for seeing a doctor.',
     accept:
-      'I understand that this app is not a medical device and does not replace a doctor’s advice',
+      'I understand that this app does not give medical advice and is not a substitute for seeing a doctor',
   },
   login: {
     title: 'Sign in',
