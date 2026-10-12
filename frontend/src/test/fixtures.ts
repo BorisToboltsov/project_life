@@ -177,18 +177,30 @@ export const dailyGoal: Schemas['NutritionGoalOut'] = {
   protein_g: 130,
   fat_g: 70,
   carbs_g: 230,
+  water_ml: 2000,
   effective_from: '2026-10-01',
+}
+
+/** Порция воды в миллилитрах. */
+export function waterIntake(amount_ml: number): Schemas['WaterIntakeOut'] {
+  sequence += 1
+  return {
+    id: `0199b7a0-0000-7000-8000-${String(sequence).padStart(12, '0')}`,
+    local_date: '2026-10-11',
+    amount_ml,
+  }
 }
 
 /**
  * День дневника из записей: раскладывает их по приёмам пищи и считает итоги. Без `list` в
- * дне четыре предустановленных приёма.
+ * дне четыре предустановленных приёма, без `water` в нём ничего не выпито.
  */
 export function diaryDay(
   local_date: string,
   entries: Schemas['FoodEntryOut'][] = [],
   goal: Schemas['NutritionGoalOut'] | null = null,
   list: Schemas['MealOut'][] = Object.values(meals),
+  water: Schemas['WaterIntakeOut'][] = [],
 ): Schemas['DiaryDayOut'] {
   const dated = entries.map((entry) => ({ ...entry, local_date }))
   return {
@@ -198,6 +210,10 @@ export function diaryDay(
       return { ...meal, entries: own, totals: totalsOf(own) }
     }),
     totals: totalsOf(dated),
+    water: {
+      total_ml: water.reduce((total, intake) => total + intake.amount_ml, 0),
+      intakes: water.map((intake) => ({ ...intake, local_date })),
+    },
     goal,
   }
 }

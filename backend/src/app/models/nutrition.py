@@ -158,10 +158,29 @@ class FoodEntry(Base):
         return per_100.portion(self.amount)
 
 
+class WaterIntake(Base):
+    """Порция выпитой воды. Выпитое за день — сумма порций этого дня (ADR 0011)."""
+
+    __tablename__ = "water_intakes"
+    __table_args__ = (
+        # День воды одного пользователя.
+        Index("ix_water_intakes_user_date", "user_id", "local_date"),
+    )
+
+    # Ключ приходит от клиента (UUIDv7): повтор запроса не добавляет вторую порцию (ADR 0002).
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    # Календарный день пользователя, к которому относится порция (ADR 0003).
+    local_date: Mapped[date]
+    amount_ml: Mapped[int]
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
+
+
 class NutritionGoal(Base):
     """Цель на день. Действует с `effective_from` до следующей цели: прошлые дни сверяются
-    с той целью, что была у них. Пустой показатель — цели по нему нет; пустые все четыре —
-    цель с этого дня снята."""
+    с той целью, что была у них. Пустой показатель — цели по нему нет; пустые все — цель с
+    этого дня снята."""
 
     __tablename__ = "nutrition_goals"
 
@@ -174,5 +193,6 @@ class NutritionGoal(Base):
     protein_g: Mapped[int | None]
     fat_g: Mapped[int | None]
     carbs_g: Mapped[int | None]
+    water_ml: Mapped[int | None]
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())

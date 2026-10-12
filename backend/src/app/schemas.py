@@ -30,6 +30,7 @@ from app.models import (
     Sex,
     UnitSystem,
     User,
+    WaterIntake,
 )
 from app.nutrition import MealPreset, Nutrients, ProductSource, ProductUnit, energy_kcal
 from app.services.open_food_facts import OffListing, OffProduct
@@ -573,17 +574,52 @@ class FoodEntryOut(NutrientsOut):
         )
 
 
+# Порция воды в миллилитрах: от глотка до пяти литров — дальше опечатка.
+WaterAmount = Annotated[int, Field(ge=1, le=5000)]
+
+
+class WaterIntakeIn(Strict):
+    local_date: DiaryDate
+    amount_ml: WaterAmount
+
+
+class WaterIntakeOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    local_date: date
+    amount_ml: int
+
+
+class WaterDayOut(BaseModel):
+    """Вода за день: порции в порядке внесения и их сумма."""
+
+    total_ml: int
+    intakes: list[WaterIntakeOut]
+
+    @classmethod
+    def of(cls, intakes: list[WaterIntake]) -> Self:
+        return cls(
+            total_ml=sum(intake.amount_ml for intake in intakes),
+            intakes=[WaterIntakeOut.model_validate(intake) for intake in intakes],
+        )
+
+
 GoalKcal = Annotated[int, Field(ge=500, le=10000)]
 GoalMacro = Annotated[int, Field(ge=0, le=1000)]
+GoalWater = Annotated[int, Field(ge=100, le=10000)]
 
 
 class NutritionGoalIn(Strict):
-    """Цель на день. `null` — цели по этому показателю нет; все четыре `null` снимают цель."""
+    """Цель на день. `null` — цели по этому показателю нет; все `null` снимают цель."""
 
     kcal: GoalKcal | None
     protein_g: GoalMacro | None
     fat_g: GoalMacro | None
     carbs_g: GoalMacro | None
+    # Прежняя версия приложения о воде не знает и поле не присылает: тогда цель по воде
+    # остаётся какой была (ADR 0011).
+    water_ml: GoalWater | None = None
     # Сегодняшний день пользователя: с него цель начинает действовать.
     local_date: date
 
@@ -610,11 +646,12 @@ class NutritionGoalOut(BaseModel):
     protein_g: int | None
     fat_g: int | None
     carbs_g: int | None
+    water_ml: int | None
     effective_from: date
 
     def if_set(self) -> Self | None:
         """Снятая цель (все показатели пусты) — то же, что её отсутствие."""
-        targets = (self.kcal, self.protein_g, self.fat_g, self.carbs_g)
+        targets = (self.kcal, self.protein_g, self.fat_g, self.carbs_g, self.water_ml)
         return None if all(target is None for target in targets) else self
 
 
@@ -650,6 +687,7 @@ class DiaryDayOut(BaseModel):
     # Приёмы пищи из списка по порядку, включая пустые, и убранные — если в них есть записи.
     meals: list[DayMealOut]
     totals: NutrientsOut
+    water: WaterDayOut
     # Цель, действовавшая в этот день; `null` — цели тогда не было.
     goal: NutritionGoalOut | None
 

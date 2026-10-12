@@ -1,6 +1,6 @@
-/* Анимированные подсказки «как измерять». Рисунок — контуром цвета текста, лента и стрелка
-   весов — цветом бренда. Без анимации (prefers-reduced-motion) виден итоговый кадр:
-   лента намотана, человек стоит на весах. */
+/* Анимированные подсказки «как измерять» и стакан воды. Рисунок — контуром цвета текста,
+   лента, стрелка весов и вода — цветом бренда. Без анимации (prefers-reduced-motion) виден
+   итоговый кадр: лента намотана, человек стоит на весах, вода стоит на своём уровне. */
 
 .illus {
   color: var(--muted-foreground, #737373);
@@ -225,8 +225,39 @@
   }
 }
 
+/* Стакан воды: вода поднимается до доли цели, по её поверхности бежит волна. Длина волны —
+   60 единиц рамки: сдвиг ровно на неё замыкает анимацию без скачка. */
+.illus-level {
+  transition: transform 0.6s ease;
+}
+
+.illus-water {
+  fill: var(--illus-accent);
+  animation: illus-wave 3s linear infinite;
+}
+
+/* Отметка «цель выполнена» на краю стакана. */
+.illus-done {
+  fill: var(--illus-accent);
+}
+
+.illus-check {
+  fill: none;
+  stroke: var(--illus-paper);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+@keyframes illus-wave {
+  to {
+    transform: translateX(-60px);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .illus * {
     animation: none !important;
+    transition: none !important;
   }
 }

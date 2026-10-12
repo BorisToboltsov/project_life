@@ -9,6 +9,7 @@ from app.models.nutrition import (
     Meal,
     NutritionGoal,
     Product,
+    WaterIntake,
     preset_meals,
 )
 from app.models.user import Language, Role, Sex, UnitSystem, User
@@ -31,5 +32,6 @@ __all__ = [
     "Sex",
     "UnitSystem",
     "User",
+    "WaterIntake",
     "preset_meals",
 ]

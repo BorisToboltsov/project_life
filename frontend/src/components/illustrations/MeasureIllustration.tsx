@@ -6,7 +6,7 @@ import type { Schemas } from '@/api/client'
 
 type Metric = Schemas['Metric']
 
-function Frame({ children, ...props }: ComponentProps<'svg'>) {
+export function Frame({ children, ...props }: ComponentProps<'svg'>) {
   // Рисунок поясняет соседний текст и сам по себе ничего не сообщает скринридеру.
   return (
     <svg viewBox="0 0 120 120" className="illus" aria-hidden="true" {...props}>

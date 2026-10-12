@@ -13,6 +13,11 @@ export function formatGrams(value: number, language: string): string {
   return formatNumber(value, language, 1)
 }
 
+/** Миллилитры воды — целыми. */
+export function formatMl(value: number, language: string): string {
+  return formatNumber(value, language, 0)
+}
+
 /** Доля цели от 0 до 1 для шкалы; без цели шкала пуста. */
 export function share(eaten: number, goal: number): number {
   return goal > 0 ? Math.min(eaten / goal, 1) : 0
@@ -116,4 +121,16 @@ export function suggestTargets(body: Body, activity: Activity, aim: Aim): Target
   const fat_g = Math.round((kcal * FAT_SHARE) / KCAL_PER_G.fat)
   const rest = kcal - protein_g * KCAL_PER_G.protein - fat_g * KCAL_PER_G.fat
   return { kcal, protein_g, fat_g, carbs_g: Math.max(0, Math.floor(rest / KCAL_PER_G.carbs)) }
+}
+
+/** Миллилитров воды в день на килограмм веса — расхожий ориентир. */
+const WATER_ML_PER_KG = 30
+/** Границы цели по воде, которые принимает сервер. */
+const WATER_GOAL_MIN = 100
+const WATER_GOAL_MAX = 10000
+
+/** Ориентир цели по воде: 30 мл на килограмм веса, округлённые до 50 мл. */
+export function suggestWater(weightKg: number): number {
+  const rounded = Math.round((weightKg * WATER_ML_PER_KG) / 50) * 50
+  return Math.min(Math.max(rounded, WATER_GOAL_MIN), WATER_GOAL_MAX)
 }

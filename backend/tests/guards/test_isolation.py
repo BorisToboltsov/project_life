@@ -139,6 +139,18 @@ async def _delete_meal(client: AsyncClient, owner: Account) -> Probe:
     return Probe((await _own_meal(client, owner)).path)
 
 
+async def _own_water(client: AsyncClient, owner: Account) -> Probe:
+    body = {"local_date": datetime.now(UTC).date().isoformat(), "amount_ml": 250}
+    path = f"/api/diary/water/{uuid.uuid7()}"
+    created = await client.put(path, headers=owner.headers, json=body)
+    assert created.status_code == 201
+    return Probe(path, {**body, "amount_ml": 500})
+
+
+async def _delete_water(client: AsyncClient, owner: Account) -> Probe:
+    return Probe((await _own_water(client, owner)).path)
+
+
 OWNERSHIP: dict[Route, OwnershipCase] = {
     ("PUT", "/api/measurements/{measurement_id}"): _replace_measurement,
     ("DELETE", "/api/measurements/{measurement_id}"): _delete_measurement,
@@ -146,6 +158,8 @@ OWNERSHIP: dict[Route, OwnershipCase] = {
     ("DELETE", "/api/diary/entries/{entry_id}"): _delete_food_entry,
     ("PUT", "/api/diary/meals/{meal_id}"): _own_meal,
     ("DELETE", "/api/diary/meals/{meal_id}"): _delete_meal,
+    ("PUT", "/api/diary/water/{intake_id}"): _own_water,
+    ("DELETE", "/api/diary/water/{intake_id}"): _delete_water,
 }
 
 # Общий каталог: запись видят все вошедшие, меняет её автор или администратор. Сценарий

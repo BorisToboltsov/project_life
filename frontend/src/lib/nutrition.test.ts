@@ -6,11 +6,13 @@ import {
   AIMS,
   formatGrams,
   formatKcal,
+  formatMl,
   kcalFromMacros,
   kcalIsTyped,
   macrosEnergy,
   share,
   suggestTargets,
+  suggestWater,
 } from './nutrition'
 
 describe('запись чисел', () => {
@@ -19,6 +21,11 @@ describe('запись чисел', () => {
     expect(formatKcal(1240.6, 'en')).toBe('1,241')
     expect(formatGrams(67.58, 'ru')).toBe('67,6')
     expect(formatGrams(70, 'en')).toBe('70')
+  })
+
+  it('миллилитры воды — целыми', () => {
+    expect(formatMl(2150, 'ru')).toBe('2\u00a0150')
+    expect(formatMl(250, 'en')).toBe('250')
   })
 })
 
@@ -114,5 +121,19 @@ describe('suggestTargets', () => {
         }
       }
     }
+  })
+})
+
+describe('suggestWater', () => {
+  it('30 мл на килограмм, до 50 мл', () => {
+    expect(suggestWater(80)).toBe(2400)
+    // 72,4 × 30 = 2172.
+    expect(suggestWater(72.4)).toBe(2150)
+    expect(suggestWater(59)).toBe(1750)
+  })
+
+  it('не выходит за границы цели, которые принимает сервер', () => {
+    expect(suggestWater(2)).toBe(100)
+    expect(suggestWater(500)).toBe(10000)
   })
 })

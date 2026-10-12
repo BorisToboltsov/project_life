@@ -100,7 +100,7 @@
 | Группа | Маршруты |
 |--------|----------|
 | Открытые | `GET /api/health`; `POST /api/auth/…`: `login`, `register`, `refresh`, `logout`, `invite/check`, `password-reset`, `password-reset/check` |
-| Для вошедших | `GET` и `PATCH /api/me`; `POST /api/auth/password`, `POST /api/auth/logout-all`; `GET /api/metric-types`; `GET /api/measurements`, `GET /api/measurements/summary`, `PUT` и `DELETE /api/measurements/{id}`; `GET /api/products`, `GET /api/products/external`, `POST /api/products/lookup`, `GET`, `PUT` и `DELETE /api/products/{id}`; `GET /api/diary`, `GET /api/diary/suggestions`, `PUT` и `DELETE /api/diary/entries/{id}`, `PUT` и `DELETE /api/diary/meals/{id}`, `POST /api/diary/copy`, `GET` и `PUT /api/diary/goal`; `POST /api/errors` |
+| Для вошедших | `GET` и `PATCH /api/me`; `POST /api/auth/password`, `POST /api/auth/logout-all`; `GET /api/metric-types`; `GET /api/measurements`, `GET /api/measurements/summary`, `PUT` и `DELETE /api/measurements/{id}`; `GET /api/products`, `GET /api/products/external`, `POST /api/products/lookup`, `GET`, `PUT` и `DELETE /api/products/{id}`; `GET /api/diary`, `GET /api/diary/suggestions`, `PUT` и `DELETE /api/diary/entries/{id}`, `PUT` и `DELETE /api/diary/meals/{id}`, `PUT` и `DELETE /api/diary/water/{id}`, `POST /api/diary/copy`, `GET` и `PUT /api/diary/goal`; `POST /api/errors` |
 | Для администратора | `/api/admin/users`, `/api/admin/users/{id}/password-reset`, `/api/admin/invites`, `/api/admin/invites/{id}`, `/api/admin/errors`, `/api/admin/errors/{id}` |
 
 ### Таблицы
@@ -117,7 +117,8 @@
 | `barcode_misses` | штрихкоды, которых не оказалось в Open Food Facts, и когда их спрашивали |
 | `meals` | приёмы пищи пользователя: код предустановленного или своё название, место в дне, отметка «убран из списка» |
 | `food_entries` | записи дневника питания: день, приём пищи, количество и снимок продукта — название, единица и состав на 100 единиц |
-| `nutrition_goals` | цели на день по калориям и БЖУ, по любому набору показателей; у каждой — дата, с которой она действует |
+| `water_intakes` | порции выпитой воды: день и миллилитры |
+| `nutrition_goals` | цели на день по калориям, БЖУ и воде, по любому набору показателей; у каждой — дата, с которой она действует |
 | `error_reports` | сбои приложения: одна строка на место в коде — тип исключения, шаблон маршрута, стек, версия, счётчик повторов |
 
 ### Показатели
@@ -148,9 +149,14 @@
 записи, показывают его по-прежнему.
 
 `GET /api/diary?date=…` отдаёт день целиком: приёмы пищи из списка и убранные с записями
-этого дня, записи, съеденное за приём и за день и цель, действовавшую в этот день.
+этого дня, записи, съеденное за приём и за день, воду и цель, действовавшую в этот день.
 Съеденное считает сервер, в `app.nutrition`. Цель задаётся по любому набору показателей;
 её калории — предел для энергии белков, жиров и углеводов, это проверяет схема запроса.
+
+Вода — порции в таблице `water_intakes`: день и миллилитры, ключ от клиента. Выпитое за
+день — их сумма; в ответе дня она идёт вместе с самими порциями в порядке внесения. Цель
+по воде — показатель `water_ml` той же цели на день; запрос цели без него оставляет цель
+по воде прежней. Решения — в [ADR 0011](adr/0011-water.md).
 
 `POST /api/products/lookup` ищет продукт по штрихкоду: свой каталог → память о ненайденном
 (`barcode_misses`, семь дней) → Open Food Facts. Ответ — один из четырёх исходов: `found`
@@ -206,18 +212,20 @@
   после входа — язык из профиля.
 - `src/lib/` — пересчёт единиц, разбор и формат чисел и дат, линия тренда, генерация
   UUIDv7, сопоставление ошибок API ключам словаря, разбор стека исключения, калории по
-  БЖУ для форм и расчёт-подсказка цели по питанию, проверка штрихкода.
+  БЖУ для форм, расчёт-подсказка цели по питанию и по воде, проверка штрихкода.
 - `src/components/ui/` — компоненты shadcn/ui, добавляются из реестра как есть.
 - `src/components/form/` — поля форм с подписью, подсказкой и ошибкой, поле даты, проверка
   числовых полей, калории, которые следуют за БЖУ (`useAutoKcal`).
-- `src/components/illustrations/` — анимированные SVG-подсказки «как измерять».
+- `src/components/illustrations/` — анимированные SVG-подсказки «как измерять» и стакан
+  воды, который заполняется до цели (`WaterGlass`).
 - `src/components/chart/` — линейный график на ECharts; подгружается отдельным куском
   сборки при первом показе.
 - `src/components/scanner/` — сканер штрихкода: камера и цикл распознавания
   (`scanner.ts`), выбор распознавателя — встроенный в браузер или zxing-wasm, который
   подгружается, только когда нужен (`detector.ts`), и сам компонент.
 - `src/pages/` — экраны: `auth/` (вход, приглашение, сброс), `diary/` (день дневника,
-  добавление еды, сканер, правка записи, копирование, новый приём пищи, цель),
+  добавление еды, сканер, правка записи, копирование, новый приём пищи, цель, карточка
+  воды),
   `products/` (каталог и форма продукта), `measurements/` (ввод, история с графиком,
   правка), `profile/`, `admin/`.
 
