@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { getRouteApi, Link, useNavigate } from '@tanstack/react-router'
 import { ScanBarcode } from 'lucide-react'
 import { useRef, useState } from 'react'
-import { useForm } from 'react-hook-form'
+import { FormProvider, useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 
 import {
@@ -18,11 +18,10 @@ import {
   useSuggestions,
 } from '@/api/nutrition'
 import { FormError, TextField } from '@/components/form/fields'
-import { numberOf } from '@/components/form/validation'
 import { Button } from '@/components/ui/button'
 import { isoToDisplay } from '@/lib/dates'
 import type { ErrorKey } from '@/lib/errors'
-import { formatGrams } from '@/lib/nutrition'
+import { sizesOf } from '@/lib/portions'
 import { uuidv7 } from '@/lib/uuid'
 import { ExternalSearch } from '@/pages/products/ExternalSearch'
 import type { Missing } from '@/pages/products/lookup'
@@ -32,77 +31,83 @@ import { ProductLine } from '@/pages/products/ProductLine'
 
 import { useMealName } from './mealName'
 import { MealNotFound } from './MealNotFound'
-import { amountSchema, type AmountValues } from './values'
-
-/** Количество по умолчанию для продукта, который пользователь ещё не вносил. */
-const DEFAULT_AMOUNT = 100
+import {
+  type Entered,
+  entered,
+  firstQuantity,
+  howMuch,
+  type Quantity,
+  quantityOf,
+  quantitySchema,
+} from './quantity'
+import { QuantityField } from './QuantityField'
+import { useQuantityText } from './quantityText'
 
 function AmountForm({
   product,
-  amount,
+  quantity,
   date,
   meal,
   onAdded,
 }: {
   product: Product
-  amount: number
+  quantity: Quantity
   date: string
   meal: Meal
-  onAdded: (amount: number) => void
+  onAdded: (added: Entered) => void
 }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [failure, setFailure] = useState<ErrorKey>()
   // Ключ записи живёт, пока открыта форма: повторная отправка после сбоя не создаст дубль.
   const id = useRef(uuidv7())
-  const form = useForm<AmountValues>({
-    resolver: zodResolver(amountSchema),
-    defaultValues: { amount: String(amount) },
+  const sizes = sizesOf(product)
+  const form = useForm<Quantity>({
+    resolver: zodResolver(quantitySchema(sizes)),
+    defaultValues: quantity,
   })
-  const { errors, isSubmitting } = form.formState
 
-  async function submit(values: AmountValues) {
+  async function submit(values: Quantity) {
     setFailure(undefined)
-    const entered = numberOf(values.amount, 1)
     const result = await saveEntry(id.current, {
       local_date: date,
       meal_id: meal.id,
       product_id: product.id,
-      amount: entered,
+      ...howMuch(values),
     })
     if (result.failure) {
       setFailure(result.failure)
       return
     }
     await queryClient.invalidateQueries({ queryKey: DIARY_KEY })
-    onAdded(entered)
+    onAdded(entered(values, sizes))
   }
 
   return (
-    <form
-      onSubmit={(event) => void form.handleSubmit(submit)(event)}
-      noValidate
-      className="grid gap-3"
-    >
-      <FormError failure={failure} />
-      <TextField
-        label={t('addFood.amount', { unit: t(`productUnits.${product.unit}`) })}
-        inputMode="decimal"
-        autoComplete="off"
-        error={errors.amount?.message}
-        {...form.register('amount')}
-      />
-      <Button type="submit" className="h-11 justify-self-start" disabled={isSubmitting}>
-        {t('addFood.submit')}
-      </Button>
-    </form>
+    <FormProvider {...form}>
+      <form
+        onSubmit={(event) => void form.handleSubmit(submit)(event)}
+        noValidate
+        className="grid gap-3"
+      >
+        <FormError failure={failure} />
+        <QuantityField unit={product.unit} sizes={sizes} kcal={product.kcal} />
+        <Button
+          type="submit"
+          className="h-11 justify-self-start"
+          disabled={form.formState.isSubmitting}
+        >
+          {t('addFood.submit')}
+        </Button>
+      </form>
+    </FormProvider>
   )
 }
 
 interface Choice {
   product: Product
-  /** Сколько подставить в поле, в единицах продукта. */
-  amount: number
+  /** Что подставить в поле: мера и число в ней. */
+  quantity: Quantity
 }
 
 function ProductList({
@@ -121,14 +126,14 @@ function ProductList({
   onOpen: (key: string) => void
   date: string
   meal: Meal
-  onAdded: (product: Product, amount: number) => void
+  onAdded: (product: Product, added: Entered) => void
 }) {
   if (choices.length === 0) return null
   return (
     <section className="grid gap-2">
       <h2 className="text-sm font-medium text-muted-foreground">{title}</h2>
       <ul aria-label={title} className="grid gap-2">
-        {choices.map(({ product, amount }) => {
+        {choices.map(({ product, quantity }) => {
           const key = `${title}:${product.id}`
           const open = opened === key
           return (
@@ -144,7 +149,7 @@ function ProductList({
               {open && (
                 <AmountForm
                   product={product}
-                  amount={amount}
+                  quantity={quantity}
                   date={date}
                   meal={meal}
                   onAdded={(added) => onAdded(product, added)}
@@ -159,7 +164,8 @@ function ProductList({
 }
 
 function AddFood({ date, meal }: { date: string; meal: Meal }) {
-  const { t, i18n } = useTranslation()
+  const { t } = useTranslation()
+  const quantityText = useQuantityText()
   const {
     product: createdId,
     scanned: scannedId,
@@ -169,7 +175,7 @@ function AddFood({ date, meal }: { date: string; meal: Meal }) {
   const mealName = useMealName()
   const [query, setQuery] = useState('')
   const [opened, setOpened] = useState<string>()
-  const [added, setAdded] = useState<{ product: Product; amount: number }>()
+  const [added, setAdded] = useState<{ product: Product; quantity: Entered }>()
   // Продукт из Open Food Facts, состав которого нужно дополнить: вместо списков — форма.
   const [missing, setMissing] = useState<Missing>()
   const q = query.trim()
@@ -203,8 +209,8 @@ function AddFood({ date, meal }: { date: string; meal: Meal }) {
     : justCreated && `${titles.created}:${justCreated.id}`
   const lists = { opened: opened ?? (chosen || undefined), onOpen: setOpened, date, meal, onAdded }
 
-  function onAdded(product: Product, amount: number) {
-    setAdded({ product, amount })
+  function onAdded(product: Product, quantity: Entered) {
+    setAdded({ product, quantity })
     setOpened('')
     setQuery('')
     // Продукт, с которым пришли, внесён: при возврате на экран он снова не всплывёт.
@@ -237,15 +243,17 @@ function AddFood({ date, meal }: { date: string; meal: Meal }) {
   }
 
   const fresh = (products: Product[]): Choice[] =>
-    products.map((product) => ({ product, amount: DEFAULT_AMOUNT }))
+    products.map((product) => ({ product, quantity: firstQuantity(product) }))
   const remembered = (items: Suggestion[] = []): Choice[] =>
-    items.map((item) => ({ product: item, amount: item.amount }))
+    items.map((item) => ({ product: item, quantity: quantityOf(item) }))
   const inMeal = remembered(suggestions.data?.in_meal)
   // Знакомому продукту — количество из прошлого раза, лучше всего из этого же приёма пищи.
-  const lastAmount = (product: Product) =>
-    [...(suggestions.data?.in_meal ?? []), ...(suggestions.data?.recent ?? [])].find(
+  const lastQuantity = (product: Product) => {
+    const last = [...(suggestions.data?.in_meal ?? []), ...(suggestions.data?.recent ?? [])].find(
       (item) => item.id === product.id,
-    )?.amount ?? DEFAULT_AMOUNT
+    )
+    return last ? quantityOf(last) : firstQuantity(product)
+  }
   const nothingToSuggest = suggestions.data?.recent.length === 0 && !justCreated && !brought
 
   return (
@@ -257,8 +265,7 @@ function AddFood({ date, meal }: { date: string; meal: Meal }) {
         <p role="status" className="text-sm text-muted-foreground">
           {t('addFood.added', {
             name: added.product.name,
-            amount: formatGrams(added.amount, i18n.language),
-            unit: t(`productUnits.${added.product.unit}`),
+            quantity: quantityText({ ...added.quantity, unit: added.product.unit }),
           })}
         </p>
       )}
@@ -297,7 +304,7 @@ function AddFood({ date, meal }: { date: string; meal: Meal }) {
         <>
           <ProductList
             title={titles.brought}
-            choices={brought ? [{ product: brought, amount: lastAmount(brought) }] : []}
+            choices={brought ? [{ product: brought, quantity: lastQuantity(brought) }] : []}
             {...lists}
           />
           {brought?.source === 'open_food_facts' && (

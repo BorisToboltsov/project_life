@@ -32,9 +32,16 @@ test('поиск по названию: продукт из Open Food Facts → 
   await expect(
     page.getByText('Состав взят из Open Food Facts. Сверьте его с упаковкой.'),
   ).toBeVisible()
-  await picked.getByLabel('Сколько, г').fill('125')
+  // Порция и упаковка пришли вместе с ним: продукт, который человек ещё не вносил,
+  // открывается одной порцией.
+  await expect(picked.getByRole('radio', { name: 'порция · 125 г' })).toBeChecked()
+  await expect(picked.getByRole('radio', { name: 'упаковка · 350 г' })).toBeVisible()
+  await expect(picked.getByLabel('Сколько порций')).toHaveValue('1')
+  await expect(picked.getByText('= 125 г · 85 ккал')).toBeVisible()
   await picked.getByRole('button', { name: 'Добавить', exact: true }).click()
-  await expect(page.getByRole('status')).toHaveText('Добавлено: Йогурт натуральный, Стенд, 125 г')
+  await expect(page.getByRole('status')).toHaveText(
+    'Добавлено: Йогурт натуральный, Стенд, 1 порция · 125 г',
+  )
 
   // Второй раз Open Food Facts его не предлагает: он свой.
   await page.getByLabel('Поиск продукта').fill(text)
@@ -42,9 +49,15 @@ test('поиск по названию: продукт из Open Food Facts → 
   await expect(page.getByText('В Open Food Facts ничего не нашлось.')).toBeVisible()
 
   await page.getByRole('link', { name: 'Готово' }).click()
-  await expect(page.getByRole('list', { name: 'Завтрак' }).getByRole('listitem')).toContainText(
-    '125 г · 85 ккал',
-  )
+  const breakfast = page.getByRole('list', { name: 'Завтрак' }).getByRole('listitem')
+  await expect(breakfast).toContainText('1 порция · 125 г · 85 ккал')
+
+  // Запись правится в тех же порциях; граммы и калории считает сервер.
+  await breakfast.getByRole('link', { name: 'Изменить', exact: true }).click()
+  await expect(page.getByRole('radio', { name: 'порция · 125 г' })).toBeChecked()
+  await page.getByLabel('Сколько порций').fill('2')
+  await page.getByRole('button', { name: 'Сохранить' }).click()
+  await expect(breakfast).toContainText('2 порции · 250 г · 170 ккал')
 })
 
 test('поиск по названию в каталоге: неполный продукт дополняют с упаковки', async ({
@@ -72,6 +85,8 @@ test('поиск по названию в каталоге: неполный п�
   await expect(page.getByLabel('Название')).toHaveValue('Морс клюквенный, Стенд')
   await expect(page.getByLabel('В чём измеряется')).toHaveValue('ml')
   await expect(page.getByLabel('Штрихкод')).toHaveValue(barcode)
+  await expect(page.getByLabel('Упаковка')).toHaveValue('1000')
+  await expect(page.getByLabel('Порция')).toHaveValue('')
   await page.getByLabel('Название').fill(drink)
   await page.getByLabel('Белки, г').fill('0')
   await page.getByLabel('Жиры, г', { exact: true }).fill('0')

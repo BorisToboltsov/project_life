@@ -23,14 +23,25 @@ import httpx
 from app import __version__, barcodes
 from app.config import OFF_PRODUCTS_PER_MINUTE, OFF_SEARCHES_PER_MINUTE, get_settings
 from app.models import Language
-from app.nutrition import ProductUnit, energy_kcal
+from app.nutrition import MAX_AMOUNT, ProductUnit, energy_kcal
 from app.services.rate_limit import SlidingWindow
 
 # Сервис просит приложения называть себя и давать способ связаться.
 USER_AGENT = f"project_life/{__version__} (https://github.com/BorisToboltsov/project_life)"
 # Поля ответа, которые нужны для продукта каталога; названия — на всех языках приложения.
-FIELDS = (
-    "product_name,product_name_ru,product_name_en,brands,quantity,product_quantity_unit,nutriments"
+FIELDS = ",".join(
+    (
+        "product_name",
+        "product_name_ru",
+        "product_name_en",
+        "brands",
+        "quantity",
+        "product_quantity",
+        "product_quantity_unit",
+        "serving_quantity",
+        "serving_quantity_unit",
+        "nutriments",
+    )
 )
 # Дольше ждать нельзя: человек стоит с упаковкой в руке.
 TIMEOUT_SECONDS = 4
@@ -60,6 +71,7 @@ SEARCH_REMEMBERED = 200
 _KJ_PER_KCAL = Decimal("4.184")
 _KCAL_STEP = Decimal("0.1")
 _MACRO_STEP = Decimal("0.01")
+_SIZE_STEP = Decimal("0.1")
 _NAME_LENGTH = 120
 # Единицы объёма, как их пишут на упаковке; всё остальное считается массой.
 _VOLUME_UNITS = frozenset({"ml", "cl", "dl", "l", "мл", "л"})
@@ -91,6 +103,9 @@ class OffProduct:
     saturated_fat_g: Decimal | None = None
     fiber_g: Decimal | None = None
     salt_g: Decimal | None = None
+    # Сколько единиц продукта в порции и в упаковке (ADR 0013).
+    serving_size: Decimal | None = None
+    package_size: Decimal | None = None
 
 
 @dataclass(frozen=True)
@@ -107,8 +122,8 @@ def _object(value: Any) -> dict[str, Any] | None:
     return cast("dict[str, Any]", value) if isinstance(value, dict) else None
 
 
-def _number(nutriments: dict[str, Any], key: str) -> Decimal | None:
-    value = nutriments.get(key)
+def _number(values: dict[str, Any], key: str) -> Decimal | None:
+    value = values.get(key)
     if isinstance(value, bool) or not isinstance(value, int | float | str):
         return None
     try:
@@ -167,6 +182,19 @@ def _unit(product: dict[str, Any]) -> ProductUnit:
     return ProductUnit.ML if unit.casefold() in _VOLUME_UNITS else ProductUnit.G
 
 
+def _size(product: dict[str, Any], key: str, unit: ProductUnit) -> Decimal | None:
+    """Размер порции или упаковки в единицах продукта. Источник приводит его к граммам или
+    миллилитрам и называет единицу рядом; размер в другой единице, чем у продукта, неизвестен:
+    массу и объём друг в друга не пересчитываем."""
+    if _text(product, f"{key}_unit").casefold() != unit.value:
+        return None
+    size = _number(product, key)
+    if size is None:
+        return None
+    rounded = size.quantize(_SIZE_STEP, rounding=ROUND_HALF_UP)
+    return rounded if 0 < rounded <= MAX_AMOUNT else None
+
+
 def parse(product: dict[str, Any], language: Language) -> OffProduct:
     """Продукт из ответа Open Food Facts в мерках каталога."""
     nutriments = _object(product.get("nutriments")) or {}
@@ -186,9 +214,13 @@ def parse(product: dict[str, Any], language: Language) -> OffProduct:
     def label(key: str) -> Decimal | None:
         return _within(_number(nutriments, key), 100, _MACRO_STEP)
 
+    unit = _unit(product)
+    package = _size(product, "product_quantity", unit)
+    serving = _size(product, "serving_quantity", unit)
+
     return OffProduct(
         name=_name(product, language),
-        unit=_unit(product),
+        unit=unit,
         kcal=_within(energy, 900, _KCAL_STEP),
         protein_g=protein,
         fat_g=fat,
@@ -197,6 +229,9 @@ def parse(product: dict[str, Any], language: Language) -> OffProduct:
         saturated_fat_g=_part(label("saturated-fat_100g"), fat),
         fiber_g=label("fiber_100g"),
         salt_g=label("salt_100g"),
+        # Порция размером с упаковку — та же упаковка: второй раз её не предлагаем.
+        serving_size=None if serving == package else serving,
+        package_size=package,
     )
 
 

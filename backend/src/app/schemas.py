@@ -33,7 +33,15 @@ from app.models import (
     User,
     WaterIntake,
 )
-from app.nutrition import MealPreset, Nutrients, ProductSource, ProductUnit, energy_kcal
+from app.nutrition import (
+    MAX_AMOUNT,
+    MealPreset,
+    Nutrients,
+    PortionKind,
+    ProductSource,
+    ProductUnit,
+    energy_kcal,
+)
 from app.services.open_food_facts import OffListing, OffProduct
 
 
@@ -355,9 +363,10 @@ MealName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1,
 # Состав на 100 г или 100 мл. Энергии больше, чем в чистом жире, не бывает.
 Kcal = Annotated[Decimal, Field(ge=0, le=900, max_digits=4, decimal_places=1)]
 Macro = Annotated[Decimal, Field(ge=0, le=100, max_digits=5, decimal_places=2)]
-# Порция в единицах продукта: от грамма специй до пяти килограммов или литров — дальше
-# опечатка.
-Amount = Annotated[Decimal, Field(gt=0, le=5000, max_digits=5, decimal_places=1)]
+# Количество в единицах продукта — съеденное, размер порции или упаковки.
+Amount = Annotated[Decimal, Field(gt=0, le=MAX_AMOUNT, max_digits=5, decimal_places=1)]
+# Сколько порций или упаковок: половина, полторы, но не больше ста — дальше опечатка.
+PortionCount = Annotated[Decimal, Field(gt=0, le=100, max_digits=5, decimal_places=2)]
 
 
 def _barcode(value: str) -> str:
@@ -389,6 +398,9 @@ class ProductIn(Strict):
     saturated_fat_g: Macro | None = None
     fiber_g: Macro | None = None
     salt_g: Macro | None = None
+    # Сколько единиц продукта в его порции и в упаковке; `null` — такой меры у продукта нет.
+    serving_size: Amount | None = None
+    package_size: Amount | None = None
     # `null` — у продукта нет штрихкода.
     barcode: Barcode | None = None
 
@@ -420,6 +432,8 @@ class ProductOut(BaseModel):
     saturated_fat_g: float | None
     fiber_g: float | None
     salt_g: float | None
+    serving_size: float | None
+    package_size: float | None
     barcode: str | None
     source: ProductSource
     # Может ли продукт менять тот, кто спрашивает: автор или администратор.
@@ -439,6 +453,8 @@ class ProductOut(BaseModel):
             saturated_fat_g=_known(product.saturated_fat_g),
             fiber_g=_known(product.fiber_g),
             salt_g=_known(product.salt_g),
+            serving_size=_known(product.serving_size),
+            package_size=_known(product.package_size),
             barcode=product.barcode,
             source=product.source,
             editable=viewer.role == Role.ADMIN or product.created_by == viewer.id,
@@ -475,6 +491,8 @@ class ProductDraftOut(BaseModel):
     saturated_fat_g: float | None
     fiber_g: float | None
     salt_g: float | None
+    serving_size: float | None
+    package_size: float | None
 
     @classmethod
     def of(cls, found: OffProduct) -> Self:
@@ -489,6 +507,8 @@ class ProductDraftOut(BaseModel):
             saturated_fat_g=_known(found.saturated_fat_g),
             fiber_g=_known(found.fiber_g),
             salt_g=_known(found.salt_g),
+            serving_size=_known(found.serving_size),
+            package_size=_known(found.package_size),
         )
 
 
@@ -544,9 +564,35 @@ class ExternalSearchOut(BaseModel):
     next_page: int | None
 
 
+class PortionIn(Strict):
+    """Количество порциями или упаковками продукта."""
+
+    kind: PortionKind
+    count: PortionCount
+
+
+class PortionOut(BaseModel):
+    kind: PortionKind
+    # Сколько единиц продукта в одной порции или упаковке.
+    size: float
+    count: float
+
+    @classmethod
+    def of(
+        cls, kind: PortionKind | None, size: Decimal | None, count: Decimal | None
+    ) -> Self | None:
+        """Порция записи или подсказки; чего-то из трёх нет — нет и порции."""
+        if kind is None or size is None or count is None:
+            return None
+        return cls(kind=kind, size=float(size), count=float(count))
+
+
 class SuggestionOut(ProductOut):
     # Сколько этого продукта пользователь внёс в прошлый раз, в единицах продукта.
     amount: float
+    # Так же — порциями или упаковками, если в прошлый раз внесли ими и такая мера у
+    # продукта ещё есть; размер — нынешний.
+    portion: PortionOut | None
 
 
 class SuggestionsOut(BaseModel):
@@ -579,12 +625,20 @@ class FoodEntryIn(Strict):
     # Продукт каталога, с которого снимается состав. При правке записи тот же продукт
     # (или `null`) оставляет прежний снимок.
     product_id: UUID | None
-    # Сколько съедено, в единицах продукта.
-    amount: Amount
+    # Сколько съедено: либо в единицах продукта, либо его порциями или упаковками — тогда
+    # количество в единицах считает сервер.
+    amount: Amount | None = None
+    portion: PortionIn | None = None
+
+    @model_validator(mode="after")
+    def _says_how_much_one_way(self) -> Self:
+        if (self.amount is None) == (self.portion is None):
+            raise ValueError("either amount or portion")
+        return self
 
 
 class FoodEntryOut(NutrientsOut):
-    """Запись дневника; нутриенты — съеденной порции, по снимку продукта."""
+    """Запись дневника; нутриенты — съеденного, по снимку продукта."""
 
     id: UUID
     local_date: date
@@ -593,6 +647,8 @@ class FoodEntryOut(NutrientsOut):
     product_name: str
     amount: float
     unit: ProductUnit
+    # Как количество внесли, если не в единицах продукта; размер — на момент внесения.
+    portion: PortionOut | None
 
     @classmethod
     def of_entry(cls, entry: FoodEntry) -> Self:
@@ -604,6 +660,7 @@ class FoodEntryOut(NutrientsOut):
             product_name=entry.product_name,
             amount=float(entry.amount),
             unit=entry.unit,
+            portion=PortionOut.of(entry.portion_kind, entry.portion_size, entry.portion_count),
             **NutrientsOut.of(entry.eaten).model_dump(),
         )
 

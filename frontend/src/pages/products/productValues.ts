@@ -4,6 +4,7 @@ import { type Product, type ProductDraft, PRODUCT_UNITS } from '@/api/nutrition'
 import { message, numberIn, numberOf, optionalNumberIn } from '@/components/form/validation'
 import { normalizeBarcode } from '@/lib/barcode'
 import { parseDecimal } from '@/lib/numbers'
+import { AMOUNT_MAX, AMOUNT_MIN } from '@/lib/portions'
 
 /** Часть не больше целого; пока одно из полей пусто или с ошибкой, сравнивать нечего. */
 function within(part: string, whole: string): boolean {
@@ -29,6 +30,9 @@ export const productSchema = z
     sugars: optionalNumberIn(0, 100, 'validation.macroRange'),
     fiber: optionalNumberIn(0, 100, 'validation.macroRange'),
     salt: optionalNumberIn(0, 100, 'validation.macroRange'),
+    // Порция и упаковка в единицах продукта: с ними его вносят не только граммами.
+    serving: optionalNumberIn(AMOUNT_MIN, AMOUNT_MAX, 'validation.amountRange'),
+    package: optionalNumberIn(AMOUNT_MIN, AMOUNT_MAX, 'validation.amountRange'),
     // Штрихкода может не быть; введённый обязан быть штрихкодом товара.
     barcode: z
       .string()
@@ -76,6 +80,8 @@ export function productDefaults(seed: ProductSeed = {}): ProductValues {
     sugars: text(seed.sugars_g),
     fiber: text(seed.fiber_g),
     salt: text(seed.salt_g),
+    serving: text(seed.serving_size),
+    package: text(seed.package_size),
     barcode: seed.barcode ?? '',
   }
 }

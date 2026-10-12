@@ -136,6 +136,9 @@ export function summaryOf(
 /** Чего нет на этикетке или что с неё не внесли. */
 export const noLabel = { saturated_fat_g: null, sugars_g: null, fiber_g: null, salt_g: null }
 
+/** У продукта нет ни порции, ни упаковки: его вносят только в его единицах. */
+export const noPortions = { serving_size: null, package_size: null }
+
 /** Страница поиска в Open Food Facts. */
 export function outsideOf(
   items: Schemas['ExternalProductOut'][],
@@ -153,6 +156,7 @@ export const cottageCheese: Schemas['ProductOut'] = {
   fat_g: 5,
   carbs_g: 1.8,
   ...noLabel,
+  ...noPortions,
   barcode: null,
   source: 'user',
   editable: true,
@@ -167,6 +171,7 @@ export const oatmeal: Schemas['ProductOut'] = {
   fat_g: 6.2,
   carbs_g: 61.8,
   ...noLabel,
+  ...noPortions,
   barcode: null,
   source: 'user',
   editable: false,
@@ -181,9 +186,36 @@ export const kefir: Schemas['ProductOut'] = {
   fat_g: 1,
   carbs_g: 4,
   ...noLabel,
+  ...noPortions,
   barcode: null,
   source: 'user',
   editable: true,
+}
+
+/** Продукт с порцией и упаковкой: штука — 60 г, десяток — 600 г. */
+export const egg: Schemas['ProductOut'] = {
+  id: '0199b7a0-0000-7000-8000-0000000000c4',
+  name: 'Яйцо куриное',
+  unit: 'g',
+  kcal: 157,
+  protein_g: 12.7,
+  fat_g: 11.5,
+  carbs_g: 0.7,
+  ...noLabel,
+  serving_size: 60,
+  package_size: 600,
+  barcode: null,
+  source: 'user',
+  editable: true,
+}
+
+/** Подсказка: продукт и то, как его внесли в прошлый раз, — по умолчанию в его единицах. */
+export function suggestionOf(
+  product: Schemas['ProductOut'],
+  amount: number,
+  portion: Schemas['PortionOut'] | null = null,
+): Schemas['SuggestionOut'] {
+  return { ...product, amount, portion }
 }
 
 function presetMeal(preset: Schemas['MealPreset'], number: number): Schemas['MealOut'] {
@@ -225,6 +257,7 @@ export function foodEntry(
     product_name: product.name,
     amount,
     unit: product.unit,
+    portion: null,
     kcal: portion(product.kcal),
     protein_g: portion(product.protein_g),
     fat_g: portion(product.fat_g),

@@ -8,6 +8,7 @@ import { FormError } from '@/components/form/fields'
 import { Button } from '@/components/ui/button'
 import type { ErrorKey } from '@/lib/errors'
 import { formatNumber } from '@/lib/numbers'
+import { PORTION_KINDS, sizesOf } from '@/lib/portions'
 
 import { ProductForm } from './ProductForm'
 import { ProductLine } from './ProductLine'
@@ -72,6 +73,26 @@ function ProductLabel({ product }: { product: Product }) {
         <li key={name}>
           {t(`labelNutrients.${name}`, {
             value: formatNumber(product[name] ?? 0, i18n.language, 2),
+          })}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+/** Порция и упаковка продукта — те, что у него заданы. */
+function ProductSizes({ product }: { product: Product }) {
+  const { t, i18n } = useTranslation()
+  const sizes = sizesOf(product)
+  const kinds = PORTION_KINDS.filter((kind) => sizes[kind] !== undefined)
+  if (kinds.length === 0) return null
+  return (
+    <ul aria-label={t('products.portionsTitle')} className="mt-2 text-sm text-muted-foreground">
+      {kinds.map((kind) => (
+        <li key={kind}>
+          {t(`productSizes.${kind}`, {
+            size: formatNumber(sizes[kind] ?? 0, i18n.language),
+            unit: t(`productUnits.${product.unit}`),
           })}
         </li>
       ))}
@@ -150,6 +171,7 @@ export function ProductEditPage() {
         <div className="rounded-lg border p-3">
           <ProductLine product={product.data} />
           <ProductLabel product={product.data} />
+          <ProductSizes product={product.data} />
         </div>
         <ProductSource product={product.data} />
         <p className="text-sm text-muted-foreground">{t('products.readOnly')}</p>

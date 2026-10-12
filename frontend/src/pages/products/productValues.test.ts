@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { cottageCheese, kefir } from '@/test/fixtures'
+import { cottageCheese, egg, kefir } from '@/test/fixtures'
 
 import { productDefaults, productSchema } from './productValues'
 
@@ -23,6 +23,8 @@ describe('productSchema', () => {
       sugars: '',
       fiber: '',
       salt: '',
+      serving: '',
+      package: '',
       barcode: '',
     })
     expect(productSchema.safeParse(valid).success).toBe(true)
@@ -44,6 +46,8 @@ describe('productSchema', () => {
       sugars: '2.5',
       fiber: '',
       salt: '0',
+      serving: '',
+      package: '',
       barcode: '4600000000008',
     })
     // Источник знает только штрихкод: названия нет.
@@ -101,6 +105,27 @@ describe('productSchema', () => {
     // Пока в «целом» ошибка, на часть не жалуемся: хватит одной ошибки.
     expect(issues(productSchema.safeParse({ ...valid, fat: '', saturatedFat: '9' }))).toEqual([
       'validation.macroRange',
+    ])
+  })
+
+  it('порция и упаковка необязательны и заданы в единицах продукта', () => {
+    expect(productDefaults(egg)).toMatchObject({ serving: '60', package: '600' })
+    expect(productSchema.safeParse(productDefaults(egg)).success).toBe(true)
+    expect(productSchema.safeParse({ ...valid, serving: '0,1', package: '5000' }).success).toBe(
+      true,
+    )
+    // Порция бывает и больше упаковки: стакан сока и пакетик на 200 мл.
+    expect(productSchema.safeParse({ ...valid, serving: '250', package: '200' }).success).toBe(true)
+  })
+
+  it.each([
+    [{ serving: '0' }],
+    [{ serving: '5000,1' }],
+    [{ package: '-200' }],
+    [{ package: 'пачка' }],
+  ])('отклоняет размер %o', (fields) => {
+    expect(issues(productSchema.safeParse({ ...valid, ...fields }))).toEqual([
+      'validation.amountRange',
     ])
   })
 

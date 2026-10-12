@@ -9,11 +9,12 @@ import { FormError } from '@/components/form/fields'
 import { Button } from '@/components/ui/button'
 import { isoToDisplay, isRealDate, shiftDays } from '@/lib/dates'
 import type { ErrorKey } from '@/lib/errors'
-import { formatGrams, formatKcal } from '@/lib/nutrition'
+import { formatKcal } from '@/lib/nutrition'
 import { uuidv7 } from '@/lib/uuid'
 
 import { useMealName } from './mealName'
 import { MealNotFound } from './MealNotFound'
+import { useQuantityText } from './quantityText'
 import { DATE_MIN } from './values'
 
 const route = getRouteApi('/app/diary/$date/copy/$scope')
@@ -26,6 +27,7 @@ export function CopyPage() {
   const { t, i18n } = useTranslation()
   const { date, scope } = route.useParams() as { date: string; scope: string }
   const mealName = useMealName()
+  const quantityText = useQuantityText()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [from, setFrom] = useState(() => shiftDays(date, -1))
@@ -94,8 +96,7 @@ export function CopyPage() {
               {mealName(meal)}
               {' · '}
               {t('diary.entryLine', {
-                amount: formatGrams(entry.amount, i18n.language),
-                unit: t(`productUnits.${entry.unit}`),
+                quantity: quantityText(entry),
                 kcal: formatKcal(entry.kcal, i18n.language),
               })}
             </p>

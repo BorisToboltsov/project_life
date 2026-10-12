@@ -6,6 +6,8 @@
     "product_name": "Морс клюквенный",
     "brands": "Стенд",
     "quantity": "1 л",
+    "product_quantity": 1000,
+    "product_quantity_unit": "ml",
     "nutriments": {}
   }
 }

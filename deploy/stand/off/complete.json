@@ -6,6 +6,10 @@
     "product_name": "Йогурт натуральный",
     "brands": "Стенд",
     "quantity": "350 г",
+    "product_quantity": 350,
+    "product_quantity_unit": "g",
+    "serving_quantity": 125,
+    "serving_quantity_unit": "g",
     "nutriments": {
       "energy-kcal_100g": 68,
       "proteins_100g": 5,

@@ -2,34 +2,49 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useQueryClient } from '@tanstack/react-query'
 import { getRouteApi, Link, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
-import { useForm } from 'react-hook-form'
+import { FormProvider, useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
 
-import { type DayMeal, DIARY_KEY, type FoodEntry, saveEntry, useDiaryDay } from '@/api/nutrition'
-import { FormError, SelectField, TextField } from '@/components/form/fields'
-import { numberOf } from '@/components/form/validation'
+import {
+  type DayMeal,
+  DIARY_KEY,
+  type FoodEntry,
+  saveEntry,
+  useDiaryDay,
+  useProduct,
+} from '@/api/nutrition'
+import { FormError, SelectField } from '@/components/form/fields'
 import { Button } from '@/components/ui/button'
 import type { ErrorKey } from '@/lib/errors'
+import { type PortionSizes, sizesOf } from '@/lib/portions'
 
 import { useMealName } from './mealName'
-import { amountSchema } from './values'
+import { checkQuantity, howMuch, type Quantity, quantityOf, quantityShape } from './quantity'
+import { QuantityField } from './QuantityField'
 
-const schema = amountSchema.extend({ meal: z.string() })
+type Values = Quantity & { meal: string }
 
-type Values = z.infer<typeof schema>
-
-function EditForm({ entry, meals }: { entry: FoodEntry; meals: DayMeal[] }) {
+function EditForm({
+  entry,
+  meals,
+  sizes,
+}: {
+  entry: FoodEntry
+  meals: DayMeal[]
+  sizes: PortionSizes
+}) {
   const { t } = useTranslation()
   const mealName = useMealName()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [failure, setFailure] = useState<ErrorKey>()
   const form = useForm<Values>({
-    resolver: zodResolver(schema),
-    defaultValues: { amount: String(entry.amount), meal: entry.meal_id },
+    resolver: zodResolver(
+      z.object({ ...quantityShape, meal: z.string() }).superRefine(checkQuantity(sizes)),
+    ),
+    defaultValues: { ...quantityOf(entry), meal: entry.meal_id },
   })
-  const { errors, isSubmitting } = form.formState
 
   async function submit(values: Values) {
     setFailure(undefined)
@@ -38,7 +53,7 @@ function EditForm({ entry, meals }: { entry: FoodEntry; meals: DayMeal[] }) {
       meal_id: values.meal,
       // Продукт тот же — запись остаётся со своим снимком состава.
       product_id: entry.product_id,
-      amount: numberOf(values.amount, 1),
+      ...howMuch(values),
     })
     if (result.failure) {
       setFailure(result.failure)
@@ -49,43 +64,40 @@ function EditForm({ entry, meals }: { entry: FoodEntry; meals: DayMeal[] }) {
   }
 
   return (
-    <form
-      onSubmit={(event) => void form.handleSubmit(submit)(event)}
-      noValidate
-      className="grid gap-4"
-    >
-      <h1 className="text-2xl font-semibold">
-        {t('entry.editTitle')}: {entry.product_name}
-      </h1>
-      <FormError failure={failure} />
-      <TextField
-        label={t('entry.amount', { unit: t(`productUnits.${entry.unit}`) })}
-        inputMode="decimal"
-        autoComplete="off"
-        error={errors.amount?.message}
-        {...form.register('amount')}
-      />
-      <SelectField label={t('entry.meal')} {...form.register('meal')}>
-        {/* Приёмы из списка и тот, где запись лежит сейчас, даже если его из списка убрали. */}
-        {meals
-          .filter((meal) => !meal.archived || meal.id === entry.meal_id)
-          .map((meal) => (
-            <option key={meal.id} value={meal.id}>
-              {mealName(meal)}
-            </option>
-          ))}
-      </SelectField>
-      <div className="flex gap-3">
-        <Button type="submit" className="h-11" disabled={isSubmitting}>
-          {t('common.save')}
-        </Button>
-        <Button asChild variant="ghost" className="h-11">
-          <Link to="/diary/$date" params={{ date: entry.local_date }}>
-            {t('diary.cancel')}
-          </Link>
-        </Button>
-      </div>
-    </form>
+    <FormProvider {...form}>
+      <form
+        onSubmit={(event) => void form.handleSubmit(submit)(event)}
+        noValidate
+        className="grid gap-4"
+      >
+        <h1 className="text-2xl font-semibold">
+          {t('entry.editTitle')}: {entry.product_name}
+        </h1>
+        <FormError failure={failure} />
+        {/* Калории на 100 единиц — из самой записи: она хранит состав на момент внесения. */}
+        <QuantityField unit={entry.unit} sizes={sizes} kcal={(entry.kcal / entry.amount) * 100} />
+        <SelectField label={t('entry.meal')} {...form.register('meal')}>
+          {/* Приёмы из списка и тот, где запись лежит сейчас, даже если его из списка убрали. */}
+          {meals
+            .filter((meal) => !meal.archived || meal.id === entry.meal_id)
+            .map((meal) => (
+              <option key={meal.id} value={meal.id}>
+                {mealName(meal)}
+              </option>
+            ))}
+        </SelectField>
+        <div className="flex gap-3">
+          <Button type="submit" className="h-11" disabled={form.formState.isSubmitting}>
+            {t('common.save')}
+          </Button>
+          <Button asChild variant="ghost" className="h-11">
+            <Link to="/diary/$date" params={{ date: entry.local_date }}>
+              {t('diary.cancel')}
+            </Link>
+          </Button>
+        </div>
+      </form>
+    </FormProvider>
   )
 }
 
@@ -97,8 +109,10 @@ export function EntryEditPage() {
   const day = useDiaryDay(date)
   const meals = day.data?.meals ?? []
   const entry = meals.flatMap((meal) => meal.entries).find((item) => item.id === id)
+  // Меры, на которые запись можно перевести, — у продукта каталога, если он ещё есть.
+  const product = useProduct(entry?.product_id ?? undefined)
 
-  if (day.isPending) {
+  if (day.isPending || product.isLoading) {
     return <p className="text-muted-foreground">{t('common.loading')}</p>
   }
   if (!entry) {
@@ -113,5 +127,10 @@ export function EntryEditPage() {
       </div>
     )
   }
-  return <EditForm entry={entry} meals={meals} />
+  const sizes = {
+    ...(product.data && sizesOf(product.data)),
+    // Своя мера записи — того размера, с каким её внесли: сервер считает по нему же.
+    ...(entry.portion && { [entry.portion.kind]: entry.portion.size }),
+  }
+  return <EditForm entry={entry} meals={meals} sizes={sizes} />
 }

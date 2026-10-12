@@ -9,7 +9,9 @@ from tests.conftest import Account, MakeUser
 from tests.nutrition import (
     BY_HAND,
     COTTAGE_CHEESE,
+    EGG,
     OATMEAL,
+    PORTIONS,
     PRESETS,
     TODAY,
     YESTERDAY,
@@ -18,9 +20,12 @@ from tests.nutrition import (
     add_product,
     meal_id_of,
     meal_of,
+    packages,
     put_entry,
     put_meal,
+    put_product,
     read_day,
+    servings,
 )
 
 pytestmark = pytest.mark.anyio
@@ -82,6 +87,7 @@ async def test_entry_is_created_with_a_snapshot_of_the_product(
         "product_name": "Овсяные хлопья",
         "amount": 60,
         "unit": "g",
+        "portion": None,
         # 60 г от состава на 100 г.
         "kcal": 211.2,
         "protein_g": 7.38,
@@ -190,6 +196,16 @@ async def test_liquid_is_entered_in_millilitres(client: AsyncClient, make_user: 
         {"amount": -50},
         {"amount": 5000.1},
         {"amount": 12.34},
+        {"amount": None},
+        # Количество называют одним способом: в единицах продукта или порциями.
+        {"portion": {"kind": "serving", "count": 2}},
+        {"amount": None, "portion": {"kind": "serving", "count": 0}},
+        {"amount": None, "portion": {"kind": "serving", "count": -1}},
+        {"amount": None, "portion": {"kind": "serving", "count": 100.5}},
+        {"amount": None, "portion": {"kind": "serving", "count": 1.234}},
+        {"amount": None, "portion": {"kind": "slice", "count": 1}},
+        {"amount": None, "portion": {"kind": "serving"}},
+        {"amount": None, "portion": {"kind": "serving", "count": 1, "size": 60}},
         {"meal_id": "brunch"},
         {"local_date": "1899-12-31"},
         {"local_date": str(TODAY + timedelta(days=400))},
@@ -235,6 +251,139 @@ async def test_entry_is_deleted(client: AsyncClient, make_user: MakeUser) -> Non
 
     assert (deleted.status_code, again.status_code) == (204, 404)
     assert (await read_day(client, user))["totals"]["kcal"] == 0
+
+
+# --- Порции ------------------------------------------------------------------------------
+
+TWO_EGGS = {"kind": "serving", "size": 60, "count": 2}
+
+
+async def test_entry_is_made_in_servings_of_the_product(
+    client: AsyncClient, make_user: MakeUser
+) -> None:
+    user = await make_user()
+    egg = await add_product(client, user, **EGG)
+
+    response = await put_entry(client, user, egg, servings(2))
+
+    assert response.status_code == 201
+    entry = response.json()
+    # Две порции по 60 г — 120 г от состава на 100 г.
+    assert (entry["amount"], entry["unit"], entry["kcal"]) == (120, "g", 188.4)
+    assert entry["portion"] == TWO_EGGS
+    day = await read_day(client, user)
+    assert meal_of(day, "breakfast")["entries"] == [entry]
+    assert day["totals"]["kcal"] == 188.4
+
+
+@pytest.mark.parametrize(
+    ("sizes", "portion", "amount"),
+    [
+        (PORTIONS, servings(1.5), 90),
+        (PORTIONS, servings(0.25), 15),
+        (PORTIONS, packages(1), 600),
+        (PORTIONS, packages(0.5), 300),
+        # Количество хранится до десятой: треть упаковки округляется.
+        ({"package_size": 200}, packages(0.33), 66),
+        ({"serving_size": 33.3}, servings(0.5), 16.7),
+        ({"package_size": 5000}, packages(1), 5000),
+    ],
+)
+async def test_amount_is_counted_from_portions(
+    client: AsyncClient,
+    make_user: MakeUser,
+    sizes: dict[str, float],
+    portion: dict[str, Any],
+    amount: float,
+) -> None:
+    user = await make_user()
+    product_id = await add_product(client, user, **sizes)
+
+    response = await put_entry(client, user, product_id, portion)
+
+    assert response.status_code == 201
+    assert response.json()["amount"] == amount
+    assert response.json()["portion"]["count"] == portion["count"]
+
+
+async def test_product_is_not_counted_in_a_portion_it_does_not_have(
+    client: AsyncClient, make_user: MakeUser
+) -> None:
+    user = await make_user()
+    cheese = await add_product(client, user, package_size=200)
+
+    response = await put_entry(client, user, cheese, servings(1))
+
+    assert (response.status_code, response.json()) == (404, {"detail": "portion_not_found"})
+    assert meal_of(await read_day(client, user), "breakfast")["entries"] == []
+
+
+@pytest.mark.parametrize(
+    ("sizes", "portion"),
+    [
+        ({"package_size": 5000}, packages(1.01)),
+        ({"serving_size": 600}, servings(100)),
+        # Меньше десятой доли единицы продукта — в записи это ноль.
+        ({"serving_size": 0.1}, servings(0.25)),
+    ],
+)
+async def test_portions_beyond_a_plausible_amount_are_rejected(
+    client: AsyncClient, make_user: MakeUser, sizes: dict[str, float], portion: dict[str, Any]
+) -> None:
+    user = await make_user()
+    product_id = await add_product(client, user, **sizes)
+
+    response = await put_entry(client, user, product_id, portion)
+
+    assert (response.status_code, response.json()) == (400, {"detail": "amount_out_of_range"})
+    assert meal_of(await read_day(client, user), "breakfast")["entries"] == []
+
+
+async def test_entry_goes_from_portions_to_units_and_to_another_portion(
+    client: AsyncClient, make_user: MakeUser
+) -> None:
+    user = await make_user()
+    egg = await add_product(client, user, **EGG)
+    entry_id = await add_entry(client, user, egg, servings(2))
+
+    in_grams = await put_entry(client, user, egg, 100, entry_id=entry_id)
+    in_packages = await put_entry(client, user, None, packages(1), entry_id=entry_id)
+
+    assert (in_grams.json()["amount"], in_grams.json()["portion"]) == (100, None)
+    assert in_packages.json()["amount"] == 600
+    assert in_packages.json()["portion"] == {"kind": "package", "size": 600, "count": 1}
+    assert len(meal_of(await read_day(client, user), "breakfast")["entries"]) == 1
+
+
+async def test_entry_of_a_deleted_product_does_not_get_a_new_portion(
+    client: AsyncClient, make_user: MakeUser
+) -> None:
+    user = await make_user()
+    egg = await add_product(client, user, **EGG)
+    entry_id = await add_entry(client, user, egg, 100)
+    await client.delete(f"/api/products/{egg}", headers=user.headers)
+
+    response = await put_entry(client, user, None, servings(2), entry_id=entry_id)
+
+    # Размер порции взять неоткуда: запись остаётся в единицах продукта.
+    assert (response.status_code, response.json()) == (404, {"detail": "portion_not_found"})
+    [entry] = meal_of(await read_day(client, user), "breakfast")["entries"]
+    assert (entry["amount"], entry["portion"]) == (100, None)
+
+
+async def test_changing_the_product_takes_the_portion_of_the_new_one(
+    client: AsyncClient, make_user: MakeUser
+) -> None:
+    user = await make_user()
+    egg = await add_product(client, user, **EGG)
+    quail = await add_product(client, user, **{**EGG, "name": "Перепелиное", "serving_size": 12})
+    entry_id = await add_entry(client, user, egg, servings(2))
+
+    response = await put_entry(client, user, quail, servings(2), entry_id=entry_id)
+
+    assert response.json()["product_name"] == "Перепелиное"
+    assert response.json()["amount"] == 24
+    assert response.json()["portion"] == {"kind": "serving", "size": 12, "count": 2}
 
 
 # --- День --------------------------------------------------------------------------------
@@ -433,6 +582,18 @@ async def test_copy_keys_must_be_client_uuid7(client: AsyncClient, make_user: Ma
     assert (status, empty.status_code) == (422, 422)
 
 
+async def test_copy_keeps_the_portions(client: AsyncClient, make_user: MakeUser) -> None:
+    user = await make_user()
+    egg = await add_product(client, user, **EGG)
+    source = await add_entry(client, user, egg, servings(2), day=YESTERDAY)
+
+    status = await copy(client, user, [source])
+
+    assert status == 204
+    [entry] = meal_of(await read_day(client, user), "breakfast")["entries"]
+    assert (entry["amount"], entry["portion"]) == (120, TWO_EGGS)
+
+
 # --- Подсказки ---------------------------------------------------------------------------
 
 
@@ -477,6 +638,7 @@ async def test_suggestions_are_recent_and_frequent_products(
         "id": cheese,
         "editable": True,
         "amount": 200,
+        "portion": None,
     }
 
 
@@ -544,6 +706,52 @@ async def test_meal_suggestions_never_show_another_persons_meal(
 
     assert foreign == {"in_meal": [], "recent": [], "frequent": []}
     assert malformed.status_code == 422
+
+
+async def how_entered(client: AsyncClient, account: Account, kind: str) -> dict[str, Any]:
+    """Подсказки завтрака одного вида: название → количество и порции прошлого раза."""
+    response = await client.get(
+        "/api/diary/suggestions",
+        params={"meal_id": await meal_id_of(client, account, "breakfast")},
+        headers=account.headers,
+    )
+    assert response.status_code == 200, response.text
+    return {item["name"]: (item["amount"], item["portion"]) for item in response.json()[kind]}
+
+
+async def test_suggestion_repeats_the_way_the_product_was_entered(
+    client: AsyncClient, make_user: MakeUser
+) -> None:
+    user = await make_user()
+    egg = await add_product(client, user, **EGG)
+    cheese = await add_product(client, user)
+    for _ in range(2):
+        await add_entry(client, user, cheese, 200)
+        await add_entry(client, user, egg, packages(1))
+    # В подсказку идёт последний раз: до этого вносили упаковкой.
+    await add_entry(client, user, egg, servings(2))
+
+    expected = {"Яйцо куриное": (120, TWO_EGGS), "Творог 5 %": (200, None)}
+    for kind in ("in_meal", "recent", "frequent"):
+        assert await how_entered(client, user, kind) == expected
+
+
+async def test_suggested_portion_follows_the_product(
+    client: AsyncClient, make_user: MakeUser
+) -> None:
+    """Порция предлагается нынешнего размера; когда её у продукта больше нет, остаётся
+    количество в его единицах."""
+    user = await make_user()
+    egg = await add_product(client, user, **EGG)
+    await add_entry(client, user, egg, servings(2))
+
+    await put_product(client, user, {**EGG, "serving_size": 55}, egg)
+    resized = await how_entered(client, user, "recent")
+    await put_product(client, user, {**EGG, "serving_size": None}, egg)
+    removed = await how_entered(client, user, "recent")
+
+    assert resized == {"Яйцо куриное": (120, {**TWO_EGGS, "size": 55})}
+    assert removed == {"Яйцо куриное": (120, None)}
 
 
 # --- Приёмы пищи -------------------------------------------------------------------------

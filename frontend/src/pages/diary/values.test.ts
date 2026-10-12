@@ -1,20 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { amountSchema, goalSchema, mealSchema, waterSchema } from './values'
+import { goalSchema, mealSchema, waterSchema } from './values'
 
 function issues(result: { success: boolean; error?: { issues: { message: string }[] } }) {
   return result.success ? [] : result.error!.issues.map((issue) => issue.message)
 }
-
-describe('amountSchema', () => {
-  it.each(['150', '0,1', '5000', ' 62.5 '])('принимает %s', (amount) => {
-    expect(amountSchema.safeParse({ amount }).success).toBe(true)
-  })
-
-  it.each(['', '0', '0,05', '5000,1', '-5', 'много'])('отклоняет «%s»', (amount) => {
-    expect(issues(amountSchema.safeParse({ amount }))).toEqual(['validation.amountRange'])
-  })
-})
 
 describe('waterSchema', () => {
   it.each(['1', '250', '5000', ' 330 '])('принимает %s', (amount) => {

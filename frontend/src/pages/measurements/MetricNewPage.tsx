@@ -15,6 +15,7 @@ import {
   useMetrics,
 } from '@/api/measurements'
 import { useUser } from '@/auth/useSession'
+import { ChoiceChip } from '@/components/form/ChoiceChip'
 import { FormError, TextField } from '@/components/form/fields'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -71,19 +72,10 @@ function OwnMetricForm() {
             <legend className="mb-2 text-sm font-medium">{t('metric.quantity')}</legend>
             <div className="flex flex-wrap gap-2">
               {QUANTITIES.map((quantity) => (
-                <label
-                  key={quantity}
-                  className="flex h-11 cursor-pointer items-center rounded-full border px-4 text-sm has-checked:border-primary has-checked:bg-primary has-checked:text-primary-foreground has-focus-visible:ring-2 has-focus-visible:ring-ring"
-                >
-                  <input
-                    type="radio"
-                    value={quantity}
-                    className="sr-only"
-                    {...form.register('quantity')}
-                  />
+                <ChoiceChip key={quantity} value={quantity} {...form.register('quantity')}>
                   {t(`quantityNames.${quantity}`)},{' '}
                   {t(`unitNames.${inputUnit({ quantity }, user.unit_system)}`)}
-                </label>
+                </ChoiceChip>
               ))}
             </div>
           </fieldset>
