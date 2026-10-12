@@ -5,11 +5,20 @@ import { describe, expect, it } from 'vitest'
 import { localDateToIso, today } from '@/lib/dates'
 import { callsTo, json, mockApi, sequence } from '@/test/api'
 import { renderApp } from '@/test/app'
-import { anna, measurement, metricTypes, summaryOf } from '@/test/fixtures'
+import {
+  anna,
+  biceps,
+  bodyFat,
+  measurement,
+  metricList,
+  metrics,
+  summaryOf,
+  wrist,
+} from '@/test/fixtures'
 
 const SAVE = 'PUT /api/measurements/*'
 const base = {
-  'GET /api/metric-types': json(200, metricTypes),
+  'GET /api/metrics': json(200, metricList()),
   'GET /api/measurements/summary': json(200, summaryOf({})),
 }
 const save = () => userEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
@@ -27,8 +36,18 @@ describe('новый замер', () => {
     expect(await screen.findByRole('heading', { name: 'Здравствуйте, Анна!' })).toBeInTheDocument()
     const saved = callsTo(calls, SAVE)
     expect(saved.map((call) => call.body)).toEqual([
-      expect.objectContaining({ metric: 'weight', value: 72.4, unit: 'kg', local_date: today() }),
-      expect.objectContaining({ metric: 'waist', value: 86, unit: 'cm', local_date: today() }),
+      expect.objectContaining({
+        metric_id: metrics.weight.id,
+        value: 72.4,
+        unit: 'kg',
+        local_date: today(),
+      }),
+      expect.objectContaining({
+        metric_id: metrics.waist.id,
+        value: 86,
+        unit: 'cm',
+        local_date: today(),
+      }),
     ])
     for (const call of saved) {
       expect(idOf(call.path)).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab]/)
@@ -66,8 +85,8 @@ describe('новый замер', () => {
 
     await screen.findByRole('heading', { name: 'Здравствуйте, Анна!' })
     expect(callsTo(calls, SAVE).map((call) => call.body)).toEqual([
-      expect.objectContaining({ metric: 'weight', value: 165.4, unit: 'lb' }),
-      expect.objectContaining({ metric: 'neck', value: 15.5, unit: 'in' }),
+      expect.objectContaining({ metric_id: metrics.weight.id, value: 165.4, unit: 'lb' }),
+      expect.objectContaining({ metric_id: metrics.neck.id, value: 15.5, unit: 'in' }),
     ])
   })
 
@@ -128,5 +147,77 @@ describe('новый замер', () => {
     await screen.findByRole('heading', { name: 'Здравствуйте, Анна!' })
     const [first, second] = callsTo(calls, SAVE)
     expect(idOf(second.path)).toBe(idOf(first.path))
+  })
+
+  it('свой и рекомендуемый вид — поля со штатной картинкой; как мерить, сказано только у штатного', async () => {
+    const list = [...Object.values(metrics), biceps, bodyFat, wrist]
+    const calls = mockApi({
+      'GET /api/metrics': json(200, metricList(list)),
+      [SAVE]: json(201, measurement(today(), 16.5)),
+    })
+    const { container } = await renderApp('/measurements/new', anna)
+
+    const own = await screen.findByLabelText('Запястье')
+    expect(container.querySelectorAll('svg.illus')).toHaveLength(7)
+    expect(screen.getByLabelText('Бицепс')).toHaveAccessibleDescription(/посередине плеча/)
+    expect(own).not.toHaveAccessibleDescription()
+    await userEvent.type(own, '16,5')
+    await userEvent.type(screen.getByLabelText('Процент жира'), '18,5')
+    await save()
+
+    await screen.findByRole('heading', { name: 'Здравствуйте, Анна!' })
+    expect(callsTo(calls, SAVE).map((call) => call.body)).toEqual([
+      expect.objectContaining({ metric_id: bodyFat.id, value: 18.5, unit: 'percent' }),
+      expect.objectContaining({ metric_id: wrist.id, value: 16.5, unit: 'cm' }),
+    ])
+  })
+
+  it('проценты и свой вид проверяются по своему диапазону', async () => {
+    const calls = mockApi({ 'GET /api/metrics': json(200, metricList([bodyFat, wrist])) })
+    await renderApp('/measurements/new', anna)
+
+    await userEvent.type(await screen.findByLabelText('Процент жира'), '90')
+    await userEvent.type(screen.getByLabelText('Запястье'), '400')
+    await save()
+
+    expect(await screen.findAllByText('Значение вне допустимого диапазона')).toHaveLength(2)
+    expect(callsTo(calls, SAVE)).toEqual([])
+  })
+
+  it('убранного вида в форме нет', async () => {
+    mockApi({
+      'GET /api/metrics': json(
+        200,
+        metricList([metrics.weight, { ...metrics.neck, archived: true }, metrics.waist]),
+      ),
+    })
+    await renderApp('/measurements/new', anna)
+
+    await screen.findByLabelText('Вес')
+    expect(screen.getByLabelText('Талия')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Шея')).not.toBeInTheDocument()
+  })
+
+  it('под полями — «+»: путь к своему замеру', async () => {
+    mockApi(base)
+    await renderApp('/measurements/new', anna)
+
+    await userEvent.click(await screen.findByRole('link', { name: 'Добавить свой замер' }))
+
+    expect(await screen.findByRole('heading', { name: 'Свой замер' })).toBeInTheDocument()
+  })
+
+  it('когда список пуст, вместо формы — путь к добавлению', async () => {
+    mockApi({
+      'GET /api/metrics': json(
+        200,
+        metricList(Object.values(metrics).map((metric) => ({ ...metric, archived: true }))),
+      ),
+    })
+    await renderApp('/measurements/new', anna)
+
+    expect(await screen.findByText('В списке нет ни одного замера.')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Добавить свой замер' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Сохранить' })).not.toBeInTheDocument()
   })
 })

@@ -102,3 +102,71 @@ test('замеры в имперской системе вводятся и по
   await expect(page.getByRole('link', { name: /Вес/ })).toContainText('75 кг')
   await expect(page.getByRole('link', { name: /Талия/ })).toContainText('87,6 см')
 })
+
+test('свои замеры: рекомендуемый и свой вид, переименование, удаление из списка и возврат', async ({
+  page,
+}, testInfo) => {
+  const problems: string[] = []
+  page.on('console', (message) => {
+    if (message.type() === 'error') problems.push(message.text())
+  })
+  page.on('pageerror', (error) => problems.push(error.message))
+
+  const email = `own-${testInfo.project.name}-${Date.now()}@example.com`
+  await register(page, adminInviteLink(), 'Глеб', email)
+
+  // «+» на главной: рекомендуемый вид добавляется одним касанием.
+  await page.getByRole('link', { name: 'Свой замер' }).click()
+  await page.getByRole('button', { name: 'Добавить: Бицепс' }).click()
+  await expect(page.getByRole('status')).toContainText('Бицепс')
+  await expect(page.getByRole('button', { name: 'Добавить: Бицепс' })).toHaveCount(0)
+
+  // Свой вид в процентах: после добавления — сразу форма замера.
+  await page.getByLabel('Название').fill('Доля мышц')
+  await page.getByText('Процент, %').click()
+  await page.getByRole('button', { name: 'Добавить', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Новый замер' })).toBeVisible()
+  await expect(page.locator('svg.illus')).toHaveCount(6)
+  await page.getByLabel('Бицепс').fill('36')
+  await page.getByLabel('Доля мышц').fill('41,5')
+  await page.getByRole('button', { name: 'Сохранить' }).click()
+  await expect(page.getByRole('link', { name: /Бицепс/ })).toContainText('36 см')
+  await expect(page.getByRole('link', { name: /Доля мышц/ })).toContainText('41,5 %')
+
+  // История своего вида; новое название видно во вкладках.
+  await page.getByRole('link', { name: /Доля мышц/ }).click()
+  const tabs = page.getByRole('navigation', { name: 'Замеры' })
+  const history = page.getByRole('list', { name: 'История' }).getByRole('listitem')
+  await expect(history.first()).toContainText('41,5 %')
+  await page.getByRole('button', { name: 'Переименовать' }).click()
+  await page.getByLabel('Название').fill('Мышцы')
+  await page.getByRole('button', { name: 'Сохранить' }).click()
+  await expect(tabs.getByRole('link', { name: 'Мышцы' })).toHaveAttribute('aria-current', 'page')
+
+  // Убранный вид пропадает из списка, а после возврата приходит со своим замером.
+  await page.getByRole('button', { name: 'Убрать из списка' }).click()
+  await page.getByRole('button', { name: 'Да, убрать' }).click()
+  await expect(tabs.getByRole('link', { name: 'Вес' })).toHaveAttribute('aria-current', 'page')
+  await expect(tabs.getByRole('link', { name: 'Мышцы' })).toHaveCount(0)
+  await page.getByRole('link', { name: 'Главная' }).click()
+  await expect(page.getByRole('link', { name: /Бицепс/ })).toBeVisible()
+  await expect(page.getByRole('link', { name: /Мышцы/ })).toHaveCount(0)
+  await page.getByRole('link', { name: 'Свой замер' }).click()
+  await page.getByRole('button', { name: 'Вернуть: Мышцы' }).click()
+  await expect(page.getByRole('status')).toContainText('Мышцы')
+  await page.getByRole('link', { name: 'Главная' }).click()
+  await expect(page.getByRole('link', { name: /Мышцы/ })).toContainText('41,5 %')
+
+  // Штатный вид тоже убирается — и снова стоит среди рекомендуемых.
+  await page.getByRole('link', { name: /Шея/ }).click()
+  await page.getByRole('button', { name: 'Убрать из списка' }).click()
+  await page.getByRole('button', { name: 'Да, убрать' }).click()
+  await expect(tabs.getByRole('link', { name: 'Шея' })).toHaveCount(0)
+  await page.getByRole('link', { name: 'Внести замер' }).click()
+  await expect(page.getByLabel('Вес')).toBeVisible()
+  await expect(page.getByLabel('Шея')).toHaveCount(0)
+  await page.getByRole('link', { name: 'Добавить свой замер' }).click()
+  await expect(page.getByRole('button', { name: 'Добавить: Шея' })).toBeVisible()
+
+  expect(problems).toEqual([])
+})

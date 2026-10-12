@@ -19,6 +19,14 @@ describe('единицы профиля', () => {
       'in',
     ])
   })
+
+  it('проценты одни и те же в обеих системах', () => {
+    expect([displayUnit('percent', 'metric'), displayUnit('percent', 'imperial')]).toEqual([
+      'percent',
+      'percent',
+    ])
+    expect([toCanonical(18.5, 'percent'), fromCanonical(18.5, 'percent')]).toEqual([18.5, 18.5])
+  })
 })
 
 describe('пересчёт', () => {

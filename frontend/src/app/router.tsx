@@ -9,7 +9,6 @@ import {
   type RouterHistory,
 } from '@tanstack/react-router'
 
-import { type Metric, METRICS } from '@/api/measurements'
 import { session, type SessionState } from '@/auth/session'
 import { isRealDate, today } from '@/lib/dates'
 
@@ -29,9 +28,17 @@ const screens = {
     () => import('@/pages/measurements/MeasurementEntryPage'),
     'MeasurementEntryPage',
   ),
+  measurementsIndex: lazyRouteComponent(
+    () => import('@/pages/measurements/MeasurementsIndexPage'),
+    'MeasurementsIndexPage',
+  ),
   measurements: lazyRouteComponent(
     () => import('@/pages/measurements/MeasurementsPage'),
     'MeasurementsPage',
+  ),
+  metricNew: lazyRouteComponent(
+    () => import('@/pages/measurements/MetricNewPage'),
+    'MetricNewPage',
   ),
   measurementEdit: lazyRouteComponent(
     () => import('@/pages/measurements/MeasurementEditPage'),
@@ -81,23 +88,16 @@ const appRoute = createRoute({
   },
 })
 
-/** Показатель из адреса; незнакомое значение уводит на вес. */
-function metricParam(value: string): Metric {
-  if (METRICS.includes(value as Metric)) return value as Metric
-  throw redirect({ to: '/measurements/$metric', params: { metric: 'weight' } })
-}
-
+// `$metric` — ключ вида замера из списка пользователя; есть ли такой, решает экран.
 const measurementsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/measurements/$metric',
-  params: { parse: ({ metric }) => ({ metric: metricParam(metric) }) },
   component: screens.measurements,
 })
 
 const measurementEditRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/measurements/$metric/$id',
-  params: { parse: ({ metric, id }) => ({ metric: metricParam(metric), id }) },
   component: screens.measurementEdit,
 })
 
@@ -178,14 +178,17 @@ const routeTree = rootRoute.addChildren([
     createRoute({
       getParentRoute: () => appRoute,
       path: '/measurements',
-      beforeLoad: () => {
-        throw redirect({ to: '/measurements/$metric', params: { metric: 'weight' } })
-      },
+      component: screens.measurementsIndex,
     }),
     createRoute({
       getParentRoute: () => appRoute,
       path: '/measurements/new',
       component: screens.measurementEntry,
+    }),
+    createRoute({
+      getParentRoute: () => appRoute,
+      path: '/measurements/metrics/new',
+      component: screens.metricNew,
     }),
     measurementsRoute,
     measurementEditRoute,

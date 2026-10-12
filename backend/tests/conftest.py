@@ -114,7 +114,7 @@ _numbers = count(1)
 def make_user() -> MakeUser:
     async def make(*, admin: bool = False, email: str | None = None) -> Account:
         from app.db import session_factory
-        from app.models import Language, Role, User, preset_meals
+        from app.models import Language, Role, User, preset_meals, preset_metrics
         from app.security.passwords import hash_password
         from app.security.tokens import create_access_token
 
@@ -130,8 +130,10 @@ def make_user() -> MakeUser:
         async with session_factory() as session:
             session.add(user)
             await session.flush()
-            # Как при регистрации: пользователь начинает с предустановленных приёмов пищи.
+            # Как при регистрации: пользователь начинает с предустановленных приёмов пищи
+            # и штатных видов замеров.
             session.add_all(preset_meals(user.id))
+            session.add_all(preset_metrics(user.id))
             await session.commit()
         token, _ = create_access_token(user.id)
         return Account(str(user.id), user.email, PASSWORD, {"Authorization": f"Bearer {token}"})

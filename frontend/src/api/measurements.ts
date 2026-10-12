@@ -4,22 +4,51 @@ import { attempt } from '@/lib/errors'
 
 import { api, type Schemas } from './client'
 
-export type Metric = Schemas['Metric']
+export type Metric = Schemas['MetricOut']
+export type MetricPreset = Schemas['MetricPreset']
 export type Measurement = Schemas['MeasurementOut']
-export type MetricType = Schemas['MetricTypeOut']
 
-/** Порядок показателей в интерфейсе. */
-export const METRICS: Metric[] = ['weight', 'neck', 'waist', 'hips']
+/** Список видов замеров пользователя: добавление, переименование и удаление сбрасывают его. */
+export const METRICS_KEY = ['metrics'] as const
 
 /** Все запросы замеров начинаются с этого ключа: сохранение сбрасывает их разом. */
 export const MEASUREMENTS_KEY = ['measurements'] as const
 
-export function useMetricTypes() {
+const NO_METRICS: Schemas['MetricListOut'] = { metrics: [], available: [] }
+
+/**
+ * Виды замеров пользователя по порядку, вместе с убранными, и штатные виды, которых в
+ * списке нет.
+ */
+export function useMetrics() {
   return useQuery({
-    queryKey: ['metric-types'],
-    staleTime: Infinity,
-    queryFn: async () => (await api.GET('/api/metric-types')).data ?? [],
+    queryKey: METRICS_KEY,
+    queryFn: async () => (await api.GET('/api/metrics')).data ?? NO_METRICS,
   })
+}
+
+/** Виды, которые сейчас в списке: по ним вносят замеры. */
+export function listed(metrics: Metric[] | undefined): Metric[] {
+  return (metrics ?? []).filter((metric) => !metric.archived)
+}
+
+/** Свой вид замера: создаёт, переименовывает или возвращает убранный в список. */
+export function saveMetric(id: string, body: Schemas['MetricIn']) {
+  return attempt(() =>
+    api.PUT('/api/metrics/{metric_id}', { params: { path: { metric_id: id } }, body }),
+  )
+}
+
+/** Ставит штатный вид замера в список: новый или убранный раньше. */
+export function addPresetMetric(preset: MetricPreset) {
+  return attempt(() => api.POST('/api/metrics/presets', { body: { preset } }))
+}
+
+/** Убирает вид замера из списка; внесённые по нему замеры остаются. */
+export function deleteMetric(id: string) {
+  return attempt(() =>
+    api.DELETE('/api/metrics/{metric_id}', { params: { path: { metric_id: id } } }),
+  )
 }
 
 export function useMeasurementSummary() {
@@ -29,12 +58,12 @@ export function useMeasurementSummary() {
   })
 }
 
-/** История показателя, новые записи первыми; `from` — с какой местной даты. */
-export function useMeasurementHistory(metric: Metric, from?: string) {
+/** История вида замера, новые записи первыми; `from` — с какой местной даты. */
+export function useMeasurementHistory(metricId: string, from?: string) {
   return useQuery({
-    queryKey: [...MEASUREMENTS_KEY, 'history', metric, from ?? 'all'],
+    queryKey: [...MEASUREMENTS_KEY, 'history', metricId, from ?? 'all'],
     queryFn: async () => {
-      const query = from ? { metric, from } : { metric }
+      const query = from ? { metric_id: metricId, from } : { metric_id: metricId }
       return (await api.GET('/api/measurements', { params: { query } })).data ?? []
     },
   })

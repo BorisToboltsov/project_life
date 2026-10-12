@@ -1,5 +1,5 @@
 // Пересчёт единиц на границе интерфейса (ADR 0004). В API и в базе значения лежат в
-// канонических единицах: килограммы и сантиметры. В единицу, в которой пользователь ввёл
+// канонических единицах: килограммы, сантиметры, проценты. В единицу, в которой пользователь ввёл
 // значение, его пересчитывает сервер; здесь — только вывод в единицах профиля.
 
 import type { Schemas } from '@/api/client'
@@ -19,11 +19,12 @@ const CANONICAL_PER_UNIT: Record<Unit, number> = {
   lb: KG_PER_POUND,
   cm: 1,
   in: CM_PER_INCH,
+  percent: 1,
 }
 
 const DISPLAY_UNITS: Record<UnitSystem, Record<Quantity, Unit>> = {
-  metric: { mass: 'kg', length: 'cm' },
-  imperial: { mass: 'lb', length: 'in' },
+  metric: { mass: 'kg', length: 'cm', percent: 'percent' },
+  imperial: { mass: 'lb', length: 'in', percent: 'percent' },
 }
 
 /** Единица, в которой величину видит и вводит пользователь с такой системой единиц. */

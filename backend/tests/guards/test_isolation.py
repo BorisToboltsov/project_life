@@ -52,10 +52,11 @@ class Probe:
 OwnershipCase = Callable[[AsyncClient, Account], Awaitable[Probe]]
 
 
-def _measurement_body() -> dict[str, Any]:
+async def _measurement_body(client: AsyncClient, owner: Account) -> dict[str, Any]:
     now = datetime.now(UTC)
+    listed = await client.get("/api/metrics", headers=owner.headers)
     return {
-        "metric": "weight",
+        "metric_id": listed.json()["metrics"][0]["id"],
         "value": 72.4,
         "unit": "kg",
         "measured_at": now.isoformat(),
@@ -63,19 +64,29 @@ def _measurement_body() -> dict[str, Any]:
     }
 
 
-async def _own_measurement(client: AsyncClient, owner: Account) -> str:
+async def _own_measurement(client: AsyncClient, owner: Account) -> Probe:
+    body = await _measurement_body(client, owner)
     path = f"/api/measurements/{uuid.uuid7()}"
-    created = await client.put(path, headers=owner.headers, json=_measurement_body())
+    created = await client.put(path, headers=owner.headers, json=body)
     assert created.status_code == 201
-    return path
-
-
-async def _replace_measurement(client: AsyncClient, owner: Account) -> Probe:
-    return Probe(await _own_measurement(client, owner), _measurement_body())
+    return Probe(path, body)
 
 
 async def _delete_measurement(client: AsyncClient, owner: Account) -> Probe:
-    return Probe(await _own_measurement(client, owner))
+    return Probe((await _own_measurement(client, owner)).path)
+
+
+async def _own_metric(client: AsyncClient, owner: Account) -> Probe:
+    path = f"/api/metrics/{uuid.uuid7()}"
+    created = await client.put(
+        path, headers=owner.headers, json={"name": "Запястье", "quantity": "length"}
+    )
+    assert created.status_code == 201
+    return Probe(path, {"name": "Подменено", "quantity": "length"})
+
+
+async def _delete_metric(client: AsyncClient, owner: Account) -> Probe:
+    return Probe((await _own_metric(client, owner)).path)
 
 
 def _product_body() -> dict[str, Any]:
@@ -152,8 +163,10 @@ async def _delete_water(client: AsyncClient, owner: Account) -> Probe:
 
 
 OWNERSHIP: dict[Route, OwnershipCase] = {
-    ("PUT", "/api/measurements/{measurement_id}"): _replace_measurement,
+    ("PUT", "/api/measurements/{measurement_id}"): _own_measurement,
     ("DELETE", "/api/measurements/{measurement_id}"): _delete_measurement,
+    ("PUT", "/api/metrics/{metric_id}"): _own_metric,
+    ("DELETE", "/api/metrics/{metric_id}"): _delete_metric,
     ("PUT", "/api/diary/entries/{entry_id}"): _own_food_entry,
     ("DELETE", "/api/diary/entries/{entry_id}"): _delete_food_entry,
     ("PUT", "/api/diary/meals/{meal_id}"): _own_meal,

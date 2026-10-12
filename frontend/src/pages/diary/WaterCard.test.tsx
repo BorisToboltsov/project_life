@@ -6,7 +6,7 @@ import type { Schemas } from '@/api/client'
 import { today } from '@/lib/dates'
 import { callsTo, json, mockApi, sequence } from '@/test/api'
 import { renderApp } from '@/test/app'
-import { anna, dailyGoal, diaryDay, metricTypes, summaryOf, waterIntake } from '@/test/fixtures'
+import { anna, dailyGoal, diaryDay, metricList, summaryOf, waterIntake } from '@/test/fixtures'
 
 const DAY = 'GET /api/diary'
 const SAVE = 'PUT /api/diary/water/*'
@@ -15,7 +15,7 @@ const PAST = '2026-10-09'
 
 /** Что ещё спрашивает главная, кроме дня дневника. */
 const HOME = {
-  'GET /api/metric-types': json(200, metricTypes),
+  'GET /api/metrics': json(200, metricList()),
   'GET /api/measurements/summary': json(200, summaryOf({})),
 }
 

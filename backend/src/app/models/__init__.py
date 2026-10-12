@@ -2,7 +2,7 @@
 
 from app.models.auth import Invite, LoginFailure, PasswordReset, RefreshToken
 from app.models.error_report import ErrorReport, ErrorSource
-from app.models.measurement import Measurement
+from app.models.measurement import Measurement, Metric, preset_metrics
 from app.models.nutrition import (
     BarcodeMiss,
     FoodEntry,
@@ -24,6 +24,7 @@ __all__ = [
     "LoginFailure",
     "Meal",
     "Measurement",
+    "Metric",
     "NutritionGoal",
     "PasswordReset",
     "Product",
@@ -34,4 +35,5 @@ __all__ = [
     "User",
     "WaterIntake",
     "preset_meals",
+    "preset_metrics",
 ]

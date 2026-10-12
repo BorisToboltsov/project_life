@@ -82,8 +82,9 @@
 - `app.errors` — коды ошибок API (`ErrorCode`) и исключение `ApiError`.
 - `app.schemas` — схемы запросов и ответов вместе с ограничениями значений.
 - `app.models` — модели SQLAlchemy.
-- `app.metrics` — справочник показателей (вес, шея, талия, бёдра): величина, каноническая
-  единица, допустимый диапазон; здесь же пересчёт единиц.
+- `app.metrics` — справочник штатных показателей (четыре начальных и семь рекомендуемых):
+  величина, каноническая единица, допустимый диапазон; общий диапазон своего показателя;
+  здесь же пересчёт единиц.
 - `app.nutrition` — предустановленные приёмы пищи, единицы продукта, источники продукта,
   энергия белков, жиров и углеводов и пересчёт состава на 100 единиц в съеденную порцию.
 - `app.barcodes` — штрихкод продукта: проверка контрольной цифры и единый вид записи.
@@ -100,7 +101,7 @@
 | Группа | Маршруты |
 |--------|----------|
 | Открытые | `GET /api/health`; `POST /api/auth/…`: `login`, `register`, `refresh`, `logout`, `invite/check`, `password-reset`, `password-reset/check` |
-| Для вошедших | `GET` и `PATCH /api/me`; `POST /api/auth/password`, `POST /api/auth/logout-all`; `GET /api/metric-types`; `GET /api/measurements`, `GET /api/measurements/summary`, `PUT` и `DELETE /api/measurements/{id}`; `GET /api/products`, `GET /api/products/external`, `POST /api/products/lookup`, `GET`, `PUT` и `DELETE /api/products/{id}`; `GET /api/diary`, `GET /api/diary/suggestions`, `PUT` и `DELETE /api/diary/entries/{id}`, `PUT` и `DELETE /api/diary/meals/{id}`, `PUT` и `DELETE /api/diary/water/{id}`, `POST /api/diary/copy`, `GET` и `PUT /api/diary/goal`; `POST /api/errors` |
+| Для вошедших | `GET` и `PATCH /api/me`; `POST /api/auth/password`, `POST /api/auth/logout-all`; `GET /api/metrics`, `POST /api/metrics/presets`, `PUT` и `DELETE /api/metrics/{id}`; `GET /api/measurements`, `GET /api/measurements/summary`, `PUT` и `DELETE /api/measurements/{id}`; `GET /api/products`, `GET /api/products/external`, `POST /api/products/lookup`, `GET`, `PUT` и `DELETE /api/products/{id}`; `GET /api/diary`, `GET /api/diary/suggestions`, `PUT` и `DELETE /api/diary/entries/{id}`, `PUT` и `DELETE /api/diary/meals/{id}`, `PUT` и `DELETE /api/diary/water/{id}`, `POST /api/diary/copy`, `GET` и `PUT /api/diary/goal`; `POST /api/errors` |
 | Для администратора | `/api/admin/users`, `/api/admin/users/{id}/password-reset`, `/api/admin/invites`, `/api/admin/invites/{id}`, `/api/admin/errors`, `/api/admin/errors/{id}` |
 
 ### Таблицы
@@ -112,7 +113,8 @@
 | `invites` | хэши ссылок-приглашений с ролью, сроком и отметкой об использовании |
 | `password_resets` | хэши ссылок для сброса пароля |
 | `login_failures` | неудачные попытки входа для ограничения частоты |
-| `measurements` | измерения показателей: значение в канонической единице, исходное значение и единица, момент и местная дата, источник |
+| `metrics` | виды замеров пользователя: код штатного или своё название, величина (длина, масса, процент), место в списке, отметка «убран из списка» |
+| `measurements` | измерения: вид замера, значение в канонической единице, исходное значение и единица, момент и местная дата, источник |
 | `products` | общий каталог продуктов: название, единица (г или мл), состав на 100 единиц — калории, белки, жиры, углеводы и необязательные сахара, насыщенные жиры, клетчатка, соль, — штрихкод (один на продукт), источник, автор |
 | `barcode_misses` | штрихкоды, которых не оказалось в Open Food Facts, и когда их спрашивали |
 | `meals` | приёмы пищи пользователя: код предустановленного или своё название, место в дне, отметка «убран из списка» |
@@ -123,11 +125,18 @@
 
 ### Показатели
 
-Все числовые показатели лежат в одной таблице `measurements` и различаются кодом из
-справочника `app.metrics`. Клиент присылает значение и единицу, как их ввёл пользователь;
-сервер пересчитывает в каноническую единицу и хранит оба значения
-([ADR 0004](adr/0004-units.md)). Ключ записи выбирает клиент
-([ADR 0002](adr/0002-record-ids.md)), местную дату — тоже ([ADR 0003](adr/0003-time.md)).
+Все числовые показатели лежат в одной таблице `measurements` и различаются видом замера —
+записью из списка пользователя в таблице `metrics` ([ADR 0012](adr/0012-own-metrics.md)).
+Штатный вид хранит код из справочника `app.metrics`, свой — название и величину. Каждый
+начинает с четырёх штатных; остальные штатные добавляются по коду, свои — с ключом от
+клиента. Вид убирают из списка, а не удаляют: замеры остаются (инвариант I13), сводка
+отдаёт последний замер и по убранным видам.
+
+Клиент присылает значение и единицу, как их ввёл пользователь; сервер проверяет, что
+единица той же величины, что у вида, а значение — в его диапазоне, пересчитывает в
+каноническую единицу и хранит оба значения ([ADR 0004](adr/0004-units.md)). Ключ записи
+выбирает клиент ([ADR 0002](adr/0002-record-ids.md)), местную дату — тоже
+([ADR 0003](adr/0003-time.md)).
 
 ### Питание
 
@@ -227,7 +236,7 @@
   добавление еды, сканер, правка записи, копирование, новый приём пищи, цель, карточка
   воды),
   `products/` (каталог и форма продукта), `measurements/` (ввод, история с графиком,
-  правка), `profile/`, `admin/`.
+  правка, добавление вида замера), `profile/`, `admin/`.
 
 Маршруты делятся на гостевые (`/login`, `/invite`, `/reset`) и приложение (`/`,
 `/diary/…`, `/products/…`, `/measurements/…`, `/profile`, `/admin`). Проверка на маршруте — удобство, а не защита: данные закрывает

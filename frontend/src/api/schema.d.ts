@@ -494,6 +494,8 @@ export interface paths {
         /**
          * List Measurements
          * @description История показателя, новые записи первыми; период — по местной дате, включительно.
+         *
+         *     По чужому виду замера ответ тот же, что по несуществующему, — пустой список.
          */
         get: operations["list_measurements_api_measurements_get"];
         put?: never;
@@ -511,7 +513,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Summarize Measurements */
+        /**
+         * Summarize Measurements
+         * @description Последний и предыдущий замер по каждому виду из списка пользователя, включая
+         *     убранные: расчёты берут последний вес, даже когда его нет на экране.
+         */
         get: operations["summarize_measurements_api_measurements_summary_get"];
         put?: never;
         post?: never;
@@ -542,18 +548,68 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/metric-types": {
+    "/api/metrics": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** List Metric Types */
-        get: operations["list_metric_types_api_metric_types_get"];
+        /** List Metrics */
+        get: operations["list_metrics_api_metrics_get"];
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/metrics/presets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Preset Metric
+         * @description Ставит штатный вид замера в список пользователя: заводит его или возвращает убранный.
+         *
+         *     Штатный вид у пользователя один, поэтому повтор запроса ничего не дублирует. Новый вид
+         *     встаёт в конец списка, возвращённый — на прежнее место.
+         */
+        post: operations["add_preset_metric_api_metrics_presets_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/metrics/{metric_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Save Metric
+         * @description Добавляет в список пользователя свой вид замера или даёт своему новое название:
+         *     повтор запроса не плодит дубли (ADR 0002). Убранный вид этим же запросом возвращается
+         *     в список. Новый вид встаёт в конец списка. Штатный вид этим запросом не меняется.
+         */
+        put: operations["save_metric_api_metrics__metric_id__put"];
+        post?: never;
+        /**
+         * Delete Metric
+         * @description Убирает вид замера из списка. Внесённые по нему замеры остаются: вернув вид в
+         *     список, пользователь получает и его историю.
+         */
+        delete: operations["delete_metric_api_metrics__metric_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -751,7 +807,7 @@ export interface components {
          * @description Коды ошибок API. Текст для пользователя подбирает фронтенд по коду.
          * @enum {string}
          */
-        ErrorCode: "not_authenticated" | "forbidden" | "not_found" | "invalid_credentials" | "too_many_attempts" | "invite_invalid" | "reset_invalid" | "email_taken" | "wrong_password" | "product_not_found" | "meal_not_found" | "barcode_taken";
+        ErrorCode: "not_authenticated" | "forbidden" | "not_found" | "invalid_credentials" | "too_many_attempts" | "invite_invalid" | "reset_invalid" | "email_taken" | "wrong_password" | "product_not_found" | "meal_not_found" | "metric_not_found" | "barcode_taken";
         /** ErrorFrameIn */
         ErrorFrameIn: {
             /** Column */
@@ -1037,7 +1093,11 @@ export interface components {
              * Format: date-time
              */
             measured_at: string;
-            metric: components["schemas"]["Metric"];
+            /**
+             * Metric Id
+             * Format: uuid
+             */
+            metric_id: string;
             unit: components["schemas"]["Unit"];
             /** Value */
             value: number | string;
@@ -1059,7 +1119,11 @@ export interface components {
              * Format: date-time
              */
             measured_at: string;
-            metric: components["schemas"]["Metric"];
+            /**
+             * Metric Id
+             * Format: uuid
+             */
+            metric_id: string;
             original_unit: components["schemas"]["Unit"];
             /** Original Value */
             original_value: number;
@@ -1068,28 +1132,65 @@ export interface components {
             value: number;
         };
         /**
-         * Metric
+         * MetricIn
+         * @description Свой вид замера. Величину задают один раз, при создании.
+         */
+        MetricIn: {
+            /** Name */
+            name: string;
+            quantity: components["schemas"]["Quantity"];
+        };
+        /** MetricListOut */
+        MetricListOut: {
+            /** Available */
+            available: components["schemas"]["MetricPreset"][];
+            /** Metrics */
+            metrics: components["schemas"]["MetricOut"][];
+        };
+        /**
+         * MetricOut
+         * @description Вид замера из списка пользователя.
+         */
+        MetricOut: {
+            /** Archived */
+            archived: boolean;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Max Value */
+            max_value: number;
+            /** Min Value */
+            min_value: number;
+            /** Name */
+            name: string | null;
+            preset: components["schemas"]["MetricPreset"] | null;
+            quantity: components["schemas"]["Quantity"];
+            unit: components["schemas"]["Unit"];
+        };
+        /**
+         * MetricPreset
+         * @description Штатные показатели: название и подсказку «как измерять» подбирает интерфейс.
          * @enum {string}
          */
-        Metric: "weight" | "neck" | "waist" | "hips";
+        MetricPreset: "weight" | "neck" | "waist" | "hips" | "chest" | "shoulders" | "biceps" | "forearm" | "thigh" | "calf" | "body_fat";
+        /** MetricPresetIn */
+        MetricPresetIn: {
+            preset: components["schemas"]["MetricPreset"];
+        };
         /**
          * MetricSummary
          * @description Последнее измерение показателя и предыдущее — для сравнения.
          */
         MetricSummary: {
             latest: components["schemas"]["MeasurementOut"] | null;
-            metric: components["schemas"]["Metric"];
+            /**
+             * Metric Id
+             * Format: uuid
+             */
+            metric_id: string;
             previous: components["schemas"]["MeasurementOut"] | null;
-        };
-        /** MetricTypeOut */
-        MetricTypeOut: {
-            code: components["schemas"]["Metric"];
-            /** Max Value */
-            max_value: number;
-            /** Min Value */
-            min_value: number;
-            quantity: components["schemas"]["Quantity"];
-            unit: components["schemas"]["Unit"];
         };
         /** NutrientsOut */
         NutrientsOut: {
@@ -1290,7 +1391,7 @@ export interface components {
          * Quantity
          * @enum {string}
          */
-        Quantity: "mass" | "length";
+        Quantity: "mass" | "length" | "percent";
         /** RegisterIn */
         RegisterIn: {
             /**
@@ -1383,7 +1484,7 @@ export interface components {
          * Unit
          * @enum {string}
          */
-        Unit: "kg" | "lb" | "cm" | "in";
+        Unit: "kg" | "lb" | "cm" | "in" | "percent";
         /**
          * UnitSystem
          * @enum {string}
@@ -2844,7 +2945,7 @@ export interface operations {
     list_measurements_api_measurements_get: {
         parameters: {
             query: {
-                metric: components["schemas"]["Metric"];
+                metric_id: string;
                 from?: string | null;
                 to?: string | null;
             };
@@ -3021,7 +3122,7 @@ export interface operations {
             };
         };
     };
-    list_metric_types_api_metric_types_get: {
+    list_metrics_api_metrics_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -3036,7 +3137,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MetricTypeOut"][];
+                    "application/json": components["schemas"]["MetricListOut"];
                 };
             };
             /** @description Unauthorized */
@@ -3046,6 +3147,157 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    add_preset_metric_api_metrics_presets_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MetricPresetIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_metric_api_metrics__metric_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                metric_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MetricIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricOut"];
+                };
+            };
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_metric_api_metrics__metric_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                metric_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

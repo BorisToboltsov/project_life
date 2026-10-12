@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { User } from '@/auth/session'
 import { json, mockApi } from '@/test/api'
 import { renderApp } from '@/test/app'
-import { anna, metricTypes } from '@/test/fixtures'
+import { anna, metricList, metrics } from '@/test/fixtures'
 
 /** Открывает историю веса, которая падает при отрисовке: сервер ответил не списком. */
 async function openCrashedScreen(user: User = anna) {
@@ -13,11 +13,11 @@ async function openCrashedScreen(user: User = anna) {
   const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   mockApi({
-    'GET /api/metric-types': json(200, metricTypes),
+    'GET /api/metrics': json(200, metricList()),
     'GET /api/measurements': json(200, { unexpected: 'weight 72.4' }),
     'POST /api/errors': json(204),
   })
-  await renderApp('/measurements/weight', user)
+  await renderApp(`/measurements/${metrics.weight.id}`, user)
   return { crash: await screen.findByRole('alert'), logged }
 }
 

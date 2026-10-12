@@ -5,7 +5,7 @@ import { useState } from 'react'
 import { type Control, useForm, useWatch } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 
-import { type Measurement, useMeasurementSummary } from '@/api/measurements'
+import { type Measurement, useMeasurementSummary, useMetrics } from '@/api/measurements'
 import { DIARY_KEY, type NutritionGoal, saveGoal, useNutritionGoal } from '@/api/nutrition'
 import type { User } from '@/auth/session'
 import { useUser } from '@/auth/useSession'
@@ -345,11 +345,14 @@ export function GoalPage() {
   const { t } = useTranslation()
   const user = useUser()
   const goal = useNutritionGoal()
+  const metrics = useMetrics()
   const summary = useMeasurementSummary()
 
-  if (goal.isPending || summary.isPending) {
+  if (goal.isPending || metrics.isPending || summary.isPending) {
     return <p className="text-muted-foreground">{t('common.loading')}</p>
   }
-  const weight = summary.data?.find((item) => item.metric === 'weight')?.latest ?? null
+  // Вес берётся и тогда, когда его убрали из списка замеров: замеры остаются.
+  const weightId = metrics.data?.metrics.find((metric) => metric.preset === 'weight')?.id
+  const weight = summary.data?.find((item) => item.metric_id === weightId)?.latest ?? null
   return <GoalForm goal={goal.data ?? null} body={bodyOf(user, weight?.value)} weight={weight} />
 }

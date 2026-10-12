@@ -3,7 +3,7 @@ import { describe, expect, it, onTestFinished, vi } from 'vitest'
 
 import { callsTo, json, mockApi } from '@/test/api'
 import { renderApp } from '@/test/app'
-import { anna, metricTypes } from '@/test/fixtures'
+import { anna, metricList, metrics } from '@/test/fixtures'
 
 import { installErrorReporting } from './errorReporting'
 
@@ -47,13 +47,13 @@ describe('сбор ошибок', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const calls = mockApi({
-      'GET /api/metric-types': json(200, metricTypes),
+      'GET /api/metrics': json(200, metricList()),
       // Сервер ответил не списком — экран истории на этом падает.
       'GET /api/measurements': json(200, { unexpected: 'weight 72.4' }),
       [REPORT]: json(204),
     })
 
-    await renderApp('/measurements/weight', anna)
+    await renderApp(`/measurements/${metrics.weight.id}`, anna)
 
     await waitFor(() => expect(callsTo(calls, REPORT)).toHaveLength(1))
     const [report] = callsTo(calls, REPORT)

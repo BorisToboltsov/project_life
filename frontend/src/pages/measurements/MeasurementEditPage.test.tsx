@@ -5,21 +5,22 @@ import { describe, expect, it } from 'vitest'
 import { localDateToIso } from '@/lib/dates'
 import { callsTo, json, mockApi } from '@/test/api'
 import { renderApp } from '@/test/app'
-import { anna, measurement, metricTypes } from '@/test/fixtures'
+import { anna, measurement, metricList, metrics, wrist } from '@/test/fixtures'
 
 const LIST = 'GET /api/measurements'
 const SAVE = 'PUT /api/measurements/*'
 const item = measurement('2026-10-03', 72.8)
 const routes = {
-  'GET /api/metric-types': json(200, metricTypes),
+  'GET /api/metrics': json(200, metricList()),
   [LIST]: json(200, [measurement('2026-10-05', 72.4), item]),
 }
+const WEIGHT = `/measurements/${metrics.weight.id}`
 const save = () => userEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
 
 describe('правка замера', () => {
   it('открывается из истории с прежними значениями', async () => {
     mockApi(routes)
-    await renderApp('/measurements/weight', anna)
+    await renderApp(WEIGHT, anna)
 
     const rows = await within(await screen.findByRole('list', { name: 'История' })).findAllByRole(
       'listitem',
@@ -33,7 +34,7 @@ describe('правка замера', () => {
 
   it('сохраняет под тем же ключом; момент измерения при прежней дате не меняется', async () => {
     const calls = mockApi({ ...routes, [SAVE]: json(200, { ...item, value: 72.5 }) })
-    await renderApp(`/measurements/weight/${item.id}`, anna)
+    await renderApp(`${WEIGHT}/${item.id}`, anna)
 
     const value = await screen.findByLabelText('Значение')
     await userEvent.clear(value)
@@ -44,7 +45,7 @@ describe('правка замера', () => {
     const [call] = callsTo(calls, SAVE)
     expect(call.path).toBe(`/api/measurements/${item.id}`)
     expect(call.body).toEqual({
-      metric: 'weight',
+      metric_id: metrics.weight.id,
       value: 72.5,
       unit: 'kg',
       measured_at: item.measured_at,
@@ -54,7 +55,7 @@ describe('правка замера', () => {
 
   it('при смене даты момент измерения — полдень нового дня', async () => {
     const calls = mockApi({ ...routes, [SAVE]: json(200, item) })
-    await renderApp(`/measurements/weight/${item.id}`, anna)
+    await renderApp(`${WEIGHT}/${item.id}`, anna)
 
     const date = await screen.findByLabelText('Дата')
     await userEvent.clear(date)
@@ -69,7 +70,7 @@ describe('правка замера', () => {
 
   it('в имперской системе значение показывается и уходит в фунтах', async () => {
     const calls = mockApi({ ...routes, [SAVE]: json(200, item) })
-    await renderApp(`/measurements/weight/${item.id}`, { ...anna, unit_system: 'imperial' })
+    await renderApp(`${WEIGHT}/${item.id}`, { ...anna, unit_system: 'imperial' })
 
     const value = await screen.findByLabelText('Значение')
     expect(value).toHaveValue('160.5')
@@ -83,7 +84,7 @@ describe('правка замера', () => {
 
   it('пустое значение не отправляет', async () => {
     const calls = mockApi(routes)
-    await renderApp(`/measurements/weight/${item.id}`, anna)
+    await renderApp(`${WEIGHT}/${item.id}`, anna)
 
     await userEvent.clear(await screen.findByLabelText('Значение'))
     await save()
@@ -94,7 +95,7 @@ describe('правка замера', () => {
 
   it('показывает отказ сервера', async () => {
     mockApi({ ...routes, [SAVE]: json(404, { detail: 'not_found' }) })
-    await renderApp(`/measurements/weight/${item.id}`, anna)
+    await renderApp(`${WEIGHT}/${item.id}`, anna)
 
     await screen.findByLabelText('Значение')
     await save()
@@ -104,7 +105,7 @@ describe('правка замера', () => {
 
   it('«Отмена» возвращает к истории', async () => {
     mockApi(routes)
-    await renderApp(`/measurements/weight/${item.id}`, anna)
+    await renderApp(`${WEIGHT}/${item.id}`, anna)
 
     await userEvent.click(await screen.findByRole('link', { name: 'Отмена' }))
 
@@ -113,10 +114,46 @@ describe('правка замера', () => {
 
   it('несуществующий замер — пояснение и путь назад', async () => {
     mockApi(routes)
-    await renderApp('/measurements/weight/0199b7a0-0000-7000-8000-ffffffffffff', anna)
+    await renderApp(`${WEIGHT}/0199b7a0-0000-7000-8000-ffffffffffff`, anna)
 
     expect(await screen.findByText('Такого замера нет.')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('link', { name: 'К истории' }))
     expect(await screen.findByRole('navigation', { name: 'Замеры' })).toBeInTheDocument()
+  })
+
+  it('замер своего вида правится под его названием и в его единице', async () => {
+    const reading = measurement('2026-10-03', 16.5, {
+      metric_id: wrist.id,
+      unit: 'cm',
+      original_unit: 'cm',
+    })
+    const calls = mockApi({
+      'GET /api/metrics': json(200, metricList([...Object.values(metrics), wrist])),
+      [LIST]: json(200, [reading]),
+      [SAVE]: json(200, reading),
+    })
+    await renderApp(`/measurements/${wrist.id}/${reading.id}`, anna)
+
+    expect(
+      await screen.findByRole('heading', { name: 'Изменить замер: Запястье' }),
+    ).toBeInTheDocument()
+    const value = screen.getByLabelText('Значение')
+    await userEvent.clear(value)
+    await userEvent.type(value, '17')
+    await save()
+
+    await screen.findByRole('navigation', { name: 'Замеры' })
+    expect(callsTo(calls, SAVE)[0].body).toMatchObject({
+      metric_id: wrist.id,
+      value: 17,
+      unit: 'cm',
+    })
+  })
+
+  it('незнакомый вид замера — то же пояснение', async () => {
+    mockApi(routes)
+    await renderApp(`/measurements/${wrist.id}/${item.id}`, anna)
+
+    expect(await screen.findByText('Такого замера нет.')).toBeInTheDocument()
   })
 })

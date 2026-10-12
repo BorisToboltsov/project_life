@@ -6,11 +6,11 @@ import { Controller, useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 
 import {
+  listed,
   MEASUREMENTS_KEY,
   type Metric,
-  type MetricType,
   saveMeasurement,
-  useMetricTypes,
+  useMetrics,
 } from '@/api/measurements'
 import { useUser } from '@/auth/useSession'
 import { DateField } from '@/components/form/DateField'
@@ -25,39 +25,45 @@ import { parseDecimal } from '@/lib/numbers'
 import type { UnitSystem } from '@/lib/units'
 import { uuidv7 } from '@/lib/uuid'
 
+import { AddMetricLink } from './AddMetricLink'
 import { DATE_MIN, entrySchema, type EntryValues, inputUnit, measuredAt } from './entryValues'
+import { useMetricName } from './metricName'
 
-function EntryForm({ types, system }: { types: MetricType[]; system: UnitSystem }) {
+function EntryForm({ metrics, system }: { metrics: Metric[]; system: UnitSystem }) {
   const { t } = useTranslation()
+  const name = useMetricName()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [failure, setFailure] = useState<ErrorKey>()
   const [nothingEntered, setNothingEntered] = useState(false)
   // Ключи записей живут, пока открыта форма: повторная отправка после сбоя не создаст дубли.
-  const ids = useRef(new Map<Metric, string>())
+  const ids = useRef(new Map<string, string>())
   const form = useForm<EntryValues>({
-    resolver: zodResolver(entrySchema(types, system)),
-    defaultValues: { date: today(), weight: '', neck: '', waist: '', hips: '' },
+    resolver: zodResolver(entrySchema(metrics, system)),
+    defaultValues: {
+      date: today(),
+      values: Object.fromEntries(metrics.map((metric) => [metric.id, ''])),
+    },
   })
   const { errors, isSubmitting } = form.formState
 
   async function submit(values: EntryValues) {
     setFailure(undefined)
-    const entered = types.flatMap((type) => {
-      const value = parseDecimal(values[type.code])
-      return value === null ? [] : [{ type, value }]
+    const entered = metrics.flatMap((metric) => {
+      const value = parseDecimal(values.values[metric.id])
+      return value === null ? [] : [{ metric, value }]
     })
     setNothingEntered(entered.length === 0)
     if (entered.length === 0) return
 
     const results = await Promise.all(
-      entered.map(({ type, value }) => {
-        const id = ids.current.get(type.code) ?? uuidv7()
-        ids.current.set(type.code, id)
+      entered.map(({ metric, value }) => {
+        const id = ids.current.get(metric.id) ?? uuidv7()
+        ids.current.set(metric.id, id)
         return saveMeasurement(id, {
-          metric: type.code,
+          metric_id: metric.id,
           value,
-          unit: inputUnit(type, system),
+          unit: inputUnit(metric, system),
           measured_at: measuredAt(values.date),
           local_date: values.date,
         })
@@ -91,26 +97,27 @@ function EntryForm({ types, system }: { types: MetricType[]; system: UnitSystem 
           />
         )}
       />
-      {types.map((type) => (
-        <Card key={type.code}>
+      {metrics.map((metric) => (
+        <Card key={metric.id}>
           <CardContent className="flex items-start gap-4">
             <div className="w-24 shrink-0 sm:w-28">
-              <MeasureIllustration metric={type.code} />
+              <MeasureIllustration preset={metric.preset} />
             </div>
             <div className="min-w-0 flex-1">
               <TextField
-                label={t(`metrics.${type.code}`)}
+                label={name(metric)}
                 inputMode="decimal"
                 autoComplete="off"
-                suffix={t(`unitNames.${inputUnit(type, system)}`)}
-                hint={t(`howToMeasure.${type.code}`)}
-                error={errors[type.code]?.message}
-                {...form.register(type.code)}
+                suffix={t(`unitNames.${inputUnit(metric, system)}`)}
+                hint={metric.preset ? t(`howToMeasure.${metric.preset}`) : undefined}
+                error={errors.values?.[metric.id]?.message}
+                {...form.register(`values.${metric.id}`)}
               />
             </div>
           </CardContent>
         </Card>
       ))}
+      <AddMetricLink label={t('metric.addLong')} />
       {nothingEntered && (
         <Alert variant="destructive">
           <AlertDescription>{t('validation.measurementRequired')}</AlertDescription>
@@ -127,10 +134,20 @@ function EntryForm({ types, system }: { types: MetricType[]; system: UnitSystem 
 export function MeasurementEntryPage() {
   const { t } = useTranslation()
   const user = useUser()
-  const types = useMetricTypes()
+  const metrics = useMetrics()
 
-  if (!types.data?.length) {
+  if (metrics.isPending) {
     return <p className="text-muted-foreground">{t('common.loading')}</p>
   }
-  return <EntryForm types={types.data} system={user.unit_system} />
+  const inList = listed(metrics.data?.metrics)
+  if (inList.length === 0) {
+    return (
+      <div className="grid gap-4">
+        <h1 className="text-2xl font-semibold">{t('measurements.newTitle')}</h1>
+        <p className="text-muted-foreground">{t('metric.listEmpty')}</p>
+        <AddMetricLink label={t('metric.addLong')} />
+      </div>
+    )
+  }
+  return <EntryForm metrics={inList} system={user.unit_system} />
 }

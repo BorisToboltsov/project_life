@@ -5,15 +5,24 @@ import { describe, expect, it } from 'vitest'
 import { today } from '@/lib/dates'
 import { callsTo, json, mockApi } from '@/test/api'
 import { renderApp } from '@/test/app'
-import { anna, dailyGoal, diaryDay, measurement, summaryOf } from '@/test/fixtures'
+import {
+  anna,
+  dailyGoal,
+  diaryDay,
+  measurement,
+  metricList,
+  metrics,
+  summaryOf,
+} from '@/test/fixtures'
 
 const GOAL = 'GET /api/diary/goal'
 const SAVE = 'PUT /api/diary/goal'
 const SUMMARY = 'GET /api/measurements/summary'
+const METRICS = 'GET /api/metrics'
 
 // 36 лет на 11.10.2026, 180 см, 80 кг: основной обмен 1750 ккал.
 const boris = { ...anna, sex: 'male', birth_date: '1990-05-17', height_cm: 180 } as const
-const weight = summaryOf({ weight: [measurement('2026-10-10', 80)] })
+const weight = summaryOf({ [metrics.weight.id]: [measurement('2026-10-10', 80)] })
 
 function fields() {
   return {
@@ -195,10 +204,26 @@ describe('цель на день', () => {
     expect(screen.queryByText(/Действует с/)).not.toBeInTheDocument()
   })
 
+  it('берёт последний вес и тогда, когда вес убран из списка замеров', async () => {
+    const removed = { ...metrics.weight, archived: true }
+    mockApi({
+      [GOAL]: json(200, null),
+      [SUMMARY]: json(200, weight),
+      [METRICS]: json(200, metricList([removed, metrics.neck, metrics.waist, metrics.hips])),
+    })
+    await renderApp('/diary/goal', boris)
+
+    expect(
+      await screen.findByText('2 410 ккал · белки 121 г · жиры 80 г · углеводы 301 г'),
+    ).toBeInTheDocument()
+    expect(fields().water).toHaveValue('2400')
+  })
+
   it('предлагает расчёт по профилю и последнему весу и подставляет его в форму', async () => {
     const calls = mockApi({
       [GOAL]: json(200, null),
       [SUMMARY]: json(200, weight),
+      [METRICS]: json(200, metricList()),
       [SAVE]: json(200, dailyGoal),
     })
     await renderApp('/diary/goal', boris)
@@ -240,6 +265,7 @@ describe('цель на день', () => {
     const calls = mockApi({
       [GOAL]: json(200, { ...dailyGoal, water_ml: null }),
       [SUMMARY]: json(200, weight),
+      [METRICS]: json(200, metricList()),
       [SAVE]: json(200, dailyGoal),
     })
     await renderApp('/diary/goal', anna)
@@ -262,6 +288,7 @@ describe('цель на день', () => {
     const calls = mockApi({
       [GOAL]: json(200, dailyGoal),
       [SUMMARY]: json(200, weight),
+      [METRICS]: json(200, metricList()),
       [SAVE]: json(200, dailyGoal),
     })
     await renderApp('/diary/goal', anna)
@@ -295,7 +322,11 @@ describe('цель на день', () => {
   })
 
   it('вес в подсказке воды — в единицах профиля', async () => {
-    mockApi({ [GOAL]: json(200, null), [SUMMARY]: json(200, weight) })
+    mockApi({
+      [GOAL]: json(200, null),
+      [SUMMARY]: json(200, weight),
+      [METRICS]: json(200, metricList()),
+    })
     await renderApp('/diary/goal', { ...anna, unit_system: 'imperial' })
 
     expect(

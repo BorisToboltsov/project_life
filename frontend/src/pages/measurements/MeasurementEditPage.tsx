@@ -8,10 +8,10 @@ import { useTranslation } from 'react-i18next'
 import {
   type Measurement,
   MEASUREMENTS_KEY,
-  type MetricType,
+  type Metric,
   saveMeasurement,
   useMeasurementHistory,
-  useMetricTypes,
+  useMetrics,
 } from '@/api/measurements'
 import { useUser } from '@/auth/useSession'
 import { DateField } from '@/components/form/DateField'
@@ -23,23 +23,25 @@ import { parseDecimal } from '@/lib/numbers'
 import { measuredIn, type UnitSystem } from '@/lib/units'
 
 import { DATE_MIN, editSchema, type EditValues, inputUnit, measuredAt } from './entryValues'
+import { useMetricName } from './metricName'
 
 function EditForm({
   item,
-  type,
+  metric,
   system,
 }: {
   item: Measurement
-  type: MetricType
+  metric: Metric
   system: UnitSystem
 }) {
   const { t } = useTranslation()
+  const name = useMetricName()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [failure, setFailure] = useState<ErrorKey>()
-  const unit = inputUnit(type, system)
+  const unit = inputUnit(metric, system)
   const form = useForm<EditValues>({
-    resolver: zodResolver(editSchema(type, system)),
+    resolver: zodResolver(editSchema(metric, system)),
     defaultValues: { date: item.local_date, value: String(measuredIn(item, unit)) },
   })
   const { errors, isSubmitting } = form.formState
@@ -47,7 +49,7 @@ function EditForm({
   async function submit(values: EditValues) {
     setFailure(undefined)
     const result = await saveMeasurement(item.id, {
-      metric: item.metric,
+      metric_id: metric.id,
       value: parseDecimal(values.value) ?? 0,
       unit,
       // Дату не меняли — момент измерения остаётся прежним.
@@ -59,7 +61,7 @@ function EditForm({
       return
     }
     await queryClient.invalidateQueries({ queryKey: MEASUREMENTS_KEY })
-    await navigate({ to: '/measurements/$metric', params: { metric: item.metric } })
+    await navigate({ to: '/measurements/$metric', params: { metric: metric.id } })
   }
 
   return (
@@ -69,7 +71,7 @@ function EditForm({
       className="grid gap-4"
     >
       <h1 className="text-2xl font-semibold">
-        {t('measurements.editTitle')}: {t(`metrics.${item.metric}`)}
+        {t('measurements.editTitle')}: {name(metric)}
       </h1>
       <FormError failure={failure} />
       <Controller
@@ -100,7 +102,7 @@ function EditForm({
           {t('common.save')}
         </Button>
         <Button asChild variant="ghost" className="h-11">
-          <Link to="/measurements/$metric" params={{ metric: item.metric }}>
+          <Link to="/measurements/$metric" params={{ metric: metric.id }}>
             {t('measurements.cancel')}
           </Link>
         </Button>
@@ -113,27 +115,27 @@ const route = getRouteApi('/app/measurements/$metric/$id')
 
 export function MeasurementEditPage() {
   const { t } = useTranslation()
-  const { metric, id } = route.useParams()
+  const { metric: metricId, id } = route.useParams()
   const user = useUser()
-  const types = useMetricTypes()
-  const history = useMeasurementHistory(metric)
-  const type = types.data?.find((candidate) => candidate.code === metric)
+  const metrics = useMetrics()
+  const history = useMeasurementHistory(metricId)
+  const metric = metrics.data?.metrics.find((candidate) => candidate.id === metricId)
   const item = history.data?.find((candidate) => candidate.id === id)
 
-  if (!type || history.isPending) {
+  if (metrics.isPending || history.isPending) {
     return <p className="text-muted-foreground">{t('common.loading')}</p>
   }
-  if (!item) {
+  if (!metric || !item) {
     return (
       <div className="grid gap-4">
         <p>{t('measurements.notFound')}</p>
         <Button asChild variant="outline" className="h-11 justify-self-start">
-          <Link to="/measurements/$metric" params={{ metric }}>
+          <Link to="/measurements/$metric" params={{ metric: metricId }}>
             {t('measurements.back')}
           </Link>
         </Button>
       </div>
     )
   }
-  return <EditForm item={item} type={type} system={user.unit_system} />
+  return <EditForm item={item} metric={metric} system={user.unit_system} />
 }

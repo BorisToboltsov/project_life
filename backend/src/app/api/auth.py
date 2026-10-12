@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from app.api.deps import CurrentUser
 from app.db import SessionDep
 from app.errors import ApiError, ErrorCode, error_responses
-from app.models import User, preset_meals
+from app.models import User, preset_meals, preset_metrics
 from app.schemas import (
     InviteInfo,
     LoginIn,
@@ -92,6 +92,7 @@ async def register(body: RegisterIn, response: Response, db: SessionDep) -> Sess
     invite.used_at = now
     invite.used_by = user.id
     db.add_all(preset_meals(user.id))
+    db.add_all(preset_metrics(user.id))
 
     issued = sessions.start_session(db, user)
     await db.commit()

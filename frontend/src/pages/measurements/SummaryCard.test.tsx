@@ -4,14 +4,23 @@ import { describe, expect, it } from 'vitest'
 
 import { json, mockApi } from '@/test/api'
 import { renderApp } from '@/test/app'
-import { anna, measurement, metricTypes, summaryOf } from '@/test/fixtures'
+import {
+  anna,
+  biceps,
+  girthOf,
+  measurement,
+  metricList,
+  metrics,
+  summaryOf,
+  wrist,
+} from '@/test/fixtures'
 
 const summary = summaryOf({
-  weight: [measurement('2026-10-05', 72.4), measurement('2026-10-03', 72.8)],
-  waist: [measurement('2026-10-04', 86, { metric: 'waist', unit: 'cm', original_unit: 'cm' })],
+  [metrics.weight.id]: [measurement('2026-10-05', 72.4), measurement('2026-10-03', 72.8)],
+  [metrics.waist.id]: [girthOf(metrics.waist, '2026-10-04', 86)],
 })
 const routes = {
-  'GET /api/metric-types': json(200, metricTypes),
+  'GET /api/metrics': json(200, metricList()),
   'GET /api/measurements/summary': json(200, summary),
 }
 
@@ -58,5 +67,52 @@ describe('замеры на главной', () => {
       'aria-current',
       'page',
     )
+  })
+
+  it('свои и рекомендуемые виды стоят плитками после начальных, убранных среди них нет', async () => {
+    const list = [
+      metrics.weight,
+      { ...metrics.neck, archived: true },
+      metrics.waist,
+      metrics.hips,
+      biceps,
+      wrist,
+    ]
+    mockApi({
+      'GET /api/metrics': json(200, metricList(list)),
+      'GET /api/measurements/summary': json(
+        200,
+        summaryOf(
+          {
+            [metrics.neck.id]: [girthOf(metrics.neck, '2026-10-01', 38)],
+            [wrist.id]: [girthOf(wrist, '2026-10-05', 16.5), girthOf(wrist, '2026-10-01', 16)],
+          },
+          list,
+        ),
+      ),
+    })
+    await renderApp('/', anna)
+
+    const tile = await screen.findByRole('link', { name: /Запястье/ })
+    expect(tile).toHaveTextContent('16,5 см')
+    expect(tile).toHaveTextContent('05/10/2026 · +0,5 см')
+    expect(screen.getByRole('link', { name: /Бицепс/ })).toHaveTextContent('Нет замеров')
+    expect(screen.queryByRole('link', { name: /Шея/ })).not.toBeInTheDocument()
+    const card = tile.parentElement!
+    expect(
+      within(card)
+        .getAllByRole('link')
+        .map((link) => link.textContent.replace(/[0-9].*|Нет замеров/, '')),
+    ).toEqual(['Вес', 'Талия', 'Бёдра', 'Бицепс', 'Запястье', 'Свой замер'])
+  })
+
+  it('последняя плитка — «+»: ведёт к добавлению своего замера', async () => {
+    mockApi(routes)
+    await renderApp('/', anna)
+
+    await userEvent.click(await screen.findByRole('link', { name: 'Свой замер' }))
+
+    expect(await screen.findByRole('heading', { name: 'Свой замер' })).toBeInTheDocument()
+    expect(screen.getByRole('list', { name: 'Рекомендуемые' })).toBeInTheDocument()
   })
 })
