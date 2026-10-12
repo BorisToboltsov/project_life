@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
+import { shiftDays, today } from '@/lib/dates'
 import { anna } from '@/test/fixtures'
 
-import { buildProfilePatch, profileDefaults, profileSchema } from './profileValues'
+import {
+  ageFromBirthDate,
+  buildProfilePatch,
+  profileDefaults,
+  profileSchema,
+} from './profileValues'
 
 const filled = { ...anna, sex: 'female' as const, birth_date: '1990-05-17', height_cm: 168.5 }
 
@@ -87,5 +93,24 @@ describe('проверка формы профиля', () => {
     [{ birth_date: '2999-01-01' }, 'validation.birthDate'],
   ])('%o → %s', (values, expected) => {
     expect(messages(values)).toEqual([expected])
+  })
+})
+
+describe('возраст по дате рождения', () => {
+  const year = Number(today().slice(0, 4))
+
+  it('полных лет на сегодня', () => {
+    expect(ageFromBirthDate(`${year - 30}-01-01`)).toBe(30)
+    expect(ageFromBirthDate(today())).toBe(0)
+  })
+
+  it.each([
+    ['пустой', ''],
+    ['недописанной', '17/0'],
+    ['несуществующей', '1990-02-31'],
+    ['слишком давней', '1850-01-01'],
+    ['завтрашней', shiftDays(today(), 1)],
+  ])('по %s дате возраста нет', (_name, value) => {
+    expect(ageFromBirthDate(value)).toBeNull()
   })
 })

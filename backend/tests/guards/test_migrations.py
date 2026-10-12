@@ -51,7 +51,7 @@ def _execute(query: LiteralString, *params: Any) -> None:
 
 @pytest.mark.usefixtures("at_head")
 def test_meal_migration_carries_the_diary_over_and_back() -> None:
-    """Данные фазы 3 переживают переход к списку приёмов пищи и откат с него."""
+    """Данные версии 0.3 переживают переход к списку приёмов пищи и откат с него."""
     config = alembic_config()
     user, product = uuid.uuid7(), uuid.uuid7()
     command.downgrade(config, BEFORE_MEALS)
@@ -127,7 +127,7 @@ def test_meal_migration_carries_the_diary_over_and_back() -> None:
 
 @pytest.mark.usefixtures("at_head")
 def test_metric_migration_carries_the_measurements_over_and_back() -> None:
-    """Замеры фазы 2 переживают переход к списку видов замеров и откат с него."""
+    """Замеры версии 0.2 переживают переход к списку видов замеров и откат с него."""
     config = alembic_config()
     user, other = uuid.uuid7(), uuid.uuid7()
     command.downgrade(config, BEFORE_METRICS)

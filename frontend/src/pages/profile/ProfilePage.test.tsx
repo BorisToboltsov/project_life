@@ -62,6 +62,29 @@ describe('профиль', () => {
     expect(callsTo(calls, 'PATCH /api/me')[0].body).toEqual({ birth_date: '1990-05-23' })
   })
 
+  it('под датой рождения — возраст на сегодня, он следует за полем', async () => {
+    const year = new Date().getFullYear()
+    mockApi(HEALTH)
+    await renderApp('/profile', { ...anna, birth_date: `${year - 36}-01-01` })
+
+    const field = await screen.findByLabelText('Дата рождения')
+    expect(field).toHaveAccessibleDescription('36 лет')
+
+    await userEvent.clear(field)
+    expect(field).not.toHaveAccessibleDescription()
+
+    await userEvent.type(field, `0101${year - 21}`)
+    expect(field).toHaveAccessibleDescription('21 год')
+  })
+
+  it('возраст — в записи языка интерфейса', async () => {
+    const year = new Date().getFullYear()
+    mockApi(HEALTH)
+    await renderApp('/profile', { ...anna, language: 'en', birth_date: `${year - 36}-01-01` })
+
+    expect(await screen.findByLabelText('Date of birth')).toHaveAccessibleDescription('36 years')
+  })
+
   it.each([
     ['несуществующую', '31021990'],
     ['недописанную', '1705'],

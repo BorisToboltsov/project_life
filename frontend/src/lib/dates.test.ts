@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  ageOn,
   displayToIso,
   formatDateInput,
   formatDateTime,
@@ -12,6 +13,14 @@ import {
   shiftDays,
   today,
 } from './dates'
+
+describe('ageOn', () => {
+  it('считает полные годы', () => {
+    expect(ageOn('1990-05-17', '2026-05-16')).toBe(35)
+    expect(ageOn('1990-05-17', '2026-05-17')).toBe(36)
+    expect(ageOn('1990-05-17', '2026-10-11')).toBe(36)
+  })
+})
 
 describe('formatDateTime', () => {
   it.each([

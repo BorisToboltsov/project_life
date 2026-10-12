@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMemo, useState } from 'react'
-import { Controller, useForm } from 'react-hook-form'
+import { Controller, useForm, useWatch } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 
 import { api } from '@/api/client'
@@ -12,8 +12,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { LANGUAGE_NAMES, LANGUAGES } from '@/i18n'
 import { today } from '@/lib/dates'
 import { attempt, type ErrorKey } from '@/lib/errors'
+import { formatYears } from '@/lib/numbers'
 
 import {
+  ageFromBirthDate,
   BIRTH_DATE_MIN,
   buildProfilePatch,
   profileDefaults,
@@ -26,7 +28,7 @@ function timezones(current: string): string[] {
 }
 
 export function ProfileForm({ user }: { user: User }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [failure, setFailure] = useState<ErrorKey>()
   const [saved, setSaved] = useState(false)
   const zones = useMemo(() => timezones(user.timezone), [user.timezone])
@@ -35,6 +37,8 @@ export function ProfileForm({ user }: { user: User }) {
     defaultValues: profileDefaults(user),
   })
   const { errors, isSubmitting, isDirty, dirtyFields } = form.formState
+  // Возраст считается по тому, что сейчас в поле, — ещё до сохранения.
+  const age = ageFromBirthDate(useWatch({ control: form.control, name: 'birth_date' }))
 
   async function submit(values: ProfileValues) {
     setFailure(undefined)
@@ -86,6 +90,7 @@ export function ProfileForm({ user }: { user: User }) {
                 min={BIRTH_DATE_MIN}
                 max={today()}
                 error={errors.birth_date?.message}
+                hint={age === null ? undefined : formatYears(age, i18n.language)}
               />
             )}
           />

@@ -14,13 +14,12 @@ import { useAutoKcal } from '@/components/form/useAutoKcal'
 import { optionalNumberOf } from '@/components/form/validation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { isoToDisplay, today } from '@/lib/dates'
+import { ageOn, isoToDisplay, today } from '@/lib/dates'
 import type { ErrorKey } from '@/lib/errors'
 import { formatNumber, parseDecimal } from '@/lib/numbers'
 import {
   ACTIVITIES,
   type Activity,
-  ageOn,
   type Aim,
   AIMS,
   type Body,

@@ -18,7 +18,7 @@ def main() -> int:
     if backend != frontend:
         errors.append(f"версии расходятся: бэкенд {backend}, фронтенд {frontend}")
     if not re.fullmatch(r"\d+\.\d+\.\d+", backend):
-        errors.append(f"версия {backend} не в формате <major>.<фаза>.<фикс>")
+        errors.append(f"версия {backend} не в формате <major>.<minor>.<patch>")
     if not re.search(rf"^## {re.escape(backend)}\b", changelog, re.MULTILINE):
         errors.append(f"в CHANGELOG.md нет раздела «## {backend}»")
 

@@ -86,6 +86,12 @@ export function today(): string {
   return localDateToIso(new Date())
 }
 
+/** Полных лет на дату `on`; обе даты — `ГГГГ-ММ-ДД`. */
+export function ageOn(birthDate: string, on: string): number {
+  const years = Number(on.slice(0, 4)) - Number(birthDate.slice(0, 4))
+  return on.slice(5) < birthDate.slice(5) ? years - 1 : years
+}
+
 /** `ГГГГ-ММ-ДД` → `ДД/ММ` — подпись на оси графика. */
 export function isoToDayMonth(iso: string): string {
   return isoToDisplay(iso).slice(0, 5)

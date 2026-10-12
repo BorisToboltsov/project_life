@@ -3,7 +3,7 @@ import { z } from 'zod'
 import type { Schemas } from '@/api/client'
 import type { User } from '@/auth/session'
 import { message } from '@/components/form/validation'
-import { isRealDate, today } from '@/lib/dates'
+import { ageOn, isRealDate, today } from '@/lib/dates'
 import { cmToFeetInches, feetInchesToCm } from '@/lib/units'
 
 export type HeightMode = User['unit_system']
@@ -12,6 +12,15 @@ export const BIRTH_DATE_MIN = '1900-01-01'
 
 const HEIGHT_MIN_CM = 30
 const HEIGHT_MAX_CM = 275
+
+function isBirthDate(value: string): boolean {
+  return isRealDate(value) && value >= BIRTH_DATE_MIN && value <= today()
+}
+
+/** Полных лет на сегодня по дате из поля; пустая или негодная дата — `null`. */
+export function ageFromBirthDate(value: string): number | null {
+  return isBirthDate(value) ? ageOn(value, today()) : null
+}
 
 function isNumberIn(text: string, min: number, max: number): boolean {
   const value = Number(text)
@@ -32,11 +41,7 @@ export const profileSchema = z
     sex: z.enum(['', 'male', 'female']),
     birth_date: z
       .string()
-      .refine(
-        (value) =>
-          value === '' || (isRealDate(value) && value >= BIRTH_DATE_MIN && value <= today()),
-        message('validation.birthDate'),
-      ),
+      .refine((value) => value === '' || isBirthDate(value), message('validation.birthDate')),
     height_cm: z
       .string()
       .refine(
