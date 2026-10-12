@@ -2,14 +2,16 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 
+import i18n from '@/i18n'
 import { shiftDays, today } from '@/lib/dates'
 import { callsTo, json, mockApi, sequence } from '@/test/api'
-import { renderApp } from '@/test/app'
+import { renderApp, textOf } from '@/test/app'
 import {
   anna,
   cottageCheese,
   dailyGoal,
   diaryDay,
+  egg,
   foodEntry,
   kefir,
   meals,
@@ -53,7 +55,7 @@ describe('день дневника', () => {
     )
 
     const breakfast = within(screen.getByRole('list', { name: 'Завтрак' })).getAllByRole('listitem')
-    expect(breakfast.map((row) => row.textContent)).toEqual([
+    expect(breakfast.map(textOf)).toEqual([
       'Овсяные хлопья60 г · 211 ккал',
       'Творог 5 %150 г · 182 ккал',
     ])
@@ -106,6 +108,62 @@ describe('день дневника', () => {
 
     const breakfast = await screen.findByRole('list', { name: 'Завтрак' })
     expect(within(breakfast).getByRole('listitem')).toHaveTextContent('Кефир 1 %250 мл · 100 ккал')
+  })
+
+  describe('запись, внесённая порциями', () => {
+    const entries = () =>
+      (
+        [
+          [60, 'serving', 60, 1],
+          [120, 'serving', 60, 2],
+          [300, 'serving', 60, 5],
+          [90, 'serving', 60, 1.5],
+          [600, 'package', 600, 1],
+          [400, 'package', 200, 2],
+          [500, 'package', 100, 5],
+        ] as const
+      ).map(([amount, kind, size, count]) =>
+        foodEntry(egg, amount, { portion: { kind, size, count } }),
+      )
+    const rows = () =>
+      within(screen.getByRole('list', { name: /Завтрак|Breakfast/ }))
+        .getAllByRole('listitem')
+        .map((row) => textOf(row).replace('Яйцо куриное', ''))
+
+    it('показана так, как её внесли: слово к числу — по правилам языка', async () => {
+      mockApi({ [DAY]: json(200, diaryDay(DATE, entries())) })
+      await renderApp(`/diary/${DATE}`, anna)
+
+      await screen.findByRole('list', { name: 'Завтрак' })
+      expect(rows()).toEqual([
+        '1 порция · 60 г · 94 ккал',
+        '2 порции · 120 г · 188 ккал',
+        '5 порций · 300 г · 471 ккал',
+        '1,5 порции · 90 г · 141 ккал',
+        '1 упаковка · 600 г · 942 ккал',
+        '2 упаковки · 400 г · 628 ккал',
+        '5 упаковок · 500 г · 785 ккал',
+      ])
+    })
+
+    it('по-английски — в единственном и множественном числе', async () => {
+      mockApi({ [DAY]: json(200, diaryDay(DATE, entries())) })
+      await renderApp(`/diary/${DATE}`, anna)
+      await screen.findByRole('list', { name: 'Завтрак' })
+
+      await i18n.changeLanguage('en')
+
+      await screen.findByRole('list', { name: 'Breakfast' })
+      expect(rows()).toEqual([
+        '1 serving · 60 g · 94 kcal',
+        '2 servings · 120 g · 188 kcal',
+        '5 servings · 300 g · 471 kcal',
+        '1.5 servings · 90 g · 141 kcal',
+        '1 package · 600 g · 942 kcal',
+        '2 packages · 400 g · 628 kcal',
+        '5 packages · 500 g · 785 kcal',
+      ])
+    })
   })
 
   it('превышение цели отмечает шкалой', async () => {

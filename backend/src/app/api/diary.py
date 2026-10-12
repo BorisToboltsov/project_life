@@ -2,7 +2,7 @@ from collections import defaultdict
 from collections.abc import Iterable
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
-from typing import Annotated
+from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Query, Response, status
@@ -15,7 +15,7 @@ from app.api.deps import CurrentUser
 from app.db import SessionDep
 from app.errors import ApiError, ErrorCode, error_responses
 from app.models import FoodEntry, Meal, NutritionGoal, Product, WaterIntake
-from app.nutrition import total
+from app.nutrition import MAX_AMOUNT, PortionKind, portions_amount, total
 from app.schemas import (
     DayMealOut,
     DiaryCopyIn,
@@ -28,6 +28,7 @@ from app.schemas import (
     NutrientsOut,
     NutritionGoalIn,
     NutritionGoalOut,
+    PortionOut,
     ProductOut,
     RecordId,
     SuggestionOut,
@@ -117,7 +118,14 @@ def _last_use(user_id: UUID, meal_id: UUID | None = None) -> Subquery:
         .label("recency")
     )
     ranked = (
-        select(FoodEntry.product_id, FoodEntry.amount, FoodEntry.created_at, recency)
+        select(
+            FoodEntry.product_id,
+            FoodEntry.amount,
+            FoodEntry.portion_kind,
+            FoodEntry.portion_count,
+            FoodEntry.created_at,
+            recency,
+        )
         .where(*_with_product(user_id, meal_id))
         .subquery()
     )
@@ -137,21 +145,25 @@ def _uses(user_id: UUID, meal_id: UUID | None = None) -> Subquery:
     )
 
 
+# Продукт и то, как его внесли в прошлый раз: количество, вид порции и их число.
+type _Used = Row[Product, Decimal, PortionKind | None, Decimal | None]
+
+
 @router.get("/suggestions")
 async def suggest_products(
     user: CurrentUser, db: SessionDep, meal_id: UUID | None = None
 ) -> SuggestionsOut:
     """Продукты, которые пользователь вносит: чаще всего в приём пищи `meal_id`, недавно и
-    часто вообще. У каждого — количество, внесённое в прошлый раз."""
+    часто вообще. У каждого — количество, внесённое в прошлый раз, и то, как его внесли."""
     last, uses = _last_use(user.id), _uses(user.id)
     recent = await db.execute(
-        select(Product, last.c.amount)
+        select(Product, last.c.amount, last.c.portion_kind, last.c.portion_count)
         .join(last, last.c.product_id == Product.id)
         .order_by(last.c.created_at.desc(), Product.id)
         .limit(SUGGESTIONS)
     )
     frequent = await db.execute(
-        select(Product, last.c.amount)
+        select(Product, last.c.amount, last.c.portion_kind, last.c.portion_count)
         .join(last, last.c.product_id == Product.id)
         .join(uses, uses.c.product_id == Product.id)
         .where(uses.c.times > 1)
@@ -159,10 +171,16 @@ async def suggest_products(
         .limit(SUGGESTIONS)
     )
 
-    def suggestions(rows: Iterable[Row[Product, Decimal]]) -> list[SuggestionOut]:
+    def suggestions(rows: Iterable[_Used]) -> list[SuggestionOut]:
         return [
-            SuggestionOut(**ProductOut.of(product, user).model_dump(), amount=float(amount))
-            for product, amount in rows
+            SuggestionOut(
+                **ProductOut.of(product, user).model_dump(),
+                amount=float(amount),
+                # Порция предлагается нынешнего размера; если её у продукта больше нет,
+                # остаётся количество в его единицах.
+                portion=PortionOut.of(kind, product.size_of(kind) if kind else None, count),
+            )
+            for product, amount, kind, count in rows
         ]
 
     in_meal: list[SuggestionOut] = []
@@ -173,7 +191,9 @@ async def suggest_products(
             await db.execute(
                 # Количество — из прошлого раза в этом же приёме: на завтрак и на ужин
                 # одного продукта едят по-разному.
-                select(Product, last_here.c.amount)
+                select(
+                    Product, last_here.c.amount, last_here.c.portion_kind, last_here.c.portion_count
+                )
                 .join(last_here, last_here.c.product_id == Product.id)
                 .join(uses_here, uses_here.c.product_id == Product.id)
                 .order_by(uses_here.c.times.desc(), last_here.c.created_at.desc(), Product.id)
@@ -263,9 +283,42 @@ async def _own_entry(db: AsyncSession, entry_id: UUID, user_id: UUID) -> FoodEnt
     return entry
 
 
+async def _how_much(
+    db: AsyncSession, body: FoodEntryIn, entry: FoodEntry | None, product: Product | None
+) -> dict[str, Any]:
+    """Количество записи: в единицах продукта и — если его внесли порциями или упаковками —
+    какими, сколько и какого размера.
+
+    `product` — продукт, с которого запись снимается заново; `None` — снимок прежний. Размер
+    порции живёт по тем же правилам, что состав: пока продукт и вид порции в записи те же,
+    он прежний, что бы ни стало с продуктом (инвариант I10).
+    """
+    if body.portion is None:
+        return {
+            "amount": body.amount,
+            "portion_kind": None,
+            "portion_size": None,
+            "portion_count": None,
+        }
+    kind, count = body.portion.kind, body.portion.count
+    if product is None and entry is not None and entry.portion_kind == kind:
+        size = entry.portion_size
+    else:
+        # Запись в единицах или в другой мере переходит на эту: размер — из каталога.
+        if product is None and entry is not None and entry.product_id is not None:
+            product = await db.get(Product, entry.product_id)
+        size = product.size_of(kind) if product else None
+    if size is None:
+        raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.PORTION_NOT_FOUND)
+    amount = portions_amount(count, size)
+    if not 0 < amount <= MAX_AMOUNT:
+        raise ApiError(status.HTTP_400_BAD_REQUEST, ErrorCode.AMOUNT_OUT_OF_RANGE)
+    return {"amount": amount, "portion_kind": kind, "portion_size": size, "portion_count": count}
+
+
 @router.put(
     "/entries/{entry_id}",
-    responses={201: {"model": FoodEntryOut}, **error_responses(404)},
+    responses={201: {"model": FoodEntryOut}, **error_responses(400, 404)},
 )
 async def save_entry(
     entry_id: RecordId,
@@ -277,12 +330,14 @@ async def save_entry(
     """Создаёт запись или заменяет свою же: повтор запроса не плодит дубли (ADR 0002).
 
     Состав продукта снимается в запись при создании и при смене продукта. Пока продукт
-    тот же, снимок прежний — даже если продукт в каталоге с тех пор исправили.
+    тот же, снимок прежний — даже если продукт в каталоге с тех пор исправили. Так же
+    снимается размер порции, если количество внесли порциями или упаковками (ADR 0013).
     """
     # Запоминаем заранее: откат ниже сбросил бы загруженные поля пользователя.
     user_id = user.id
     entry = await _own_entry(db, entry_id, user_id)
     await _require_meal(db, body.meal_id, user_id)
+    product: Product | None = None
     if entry is None or body.product_id not in (None, entry.product_id):
         product = await db.get(Product, body.product_id) if body.product_id else None
         if product is None:
@@ -305,7 +360,7 @@ async def save_entry(
     fields = {
         "local_date": body.local_date,
         "meal_id": body.meal_id,
-        "amount": body.amount,
+        **await _how_much(db, body, entry, product),
         **snapshot,
     }
     if entry is None:
@@ -423,6 +478,9 @@ async def copy_entries(body: DiaryCopyIn, user: CurrentUser, db: SessionDep) -> 
             "local_date": body.to_date,
             "meal_id": body.to_meal_id or source.meal_id,
             "amount": source.amount,
+            "portion_kind": source.portion_kind,
+            "portion_size": source.portion_size,
+            "portion_count": source.portion_count,
             "product_id": source.product_id,
             "product_name": source.product_name,
             "unit": source.unit,

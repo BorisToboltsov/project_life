@@ -97,7 +97,7 @@ export const ru = {
     add: 'Добавить',
     addTo: 'Добавить: {{meal}}',
     emptyMeal: 'Пока пусто.',
-    entryLine: '{{amount}} {{unit}} · {{kcal}} ккал',
+    entryLine: '{{quantity}} · {{kcal}} ккал',
     edit: 'Изменить',
     delete: 'Удалить',
     deleteConfirm: 'Удалить запись?',
@@ -148,6 +148,38 @@ export const ru = {
     g: 'Граммы',
     ml: 'Миллилитры',
   },
+  quantity: {
+    // Число и единица не разрываются переносом строки: между ними неразрывный пробел.
+    units: '{{amount}}\u00a0{{unit}}',
+    portions: '{{portions}} · {{units}}',
+    legend: 'В чём вносить',
+    modes: {
+      serving: 'порция · {{size}} {{unit}}',
+      package: 'упаковка · {{size}} {{unit}}',
+    },
+    howMany: {
+      unit: 'Сколько, {{unit}}',
+      serving: 'Сколько порций',
+      package: 'Сколько упаковок',
+    },
+    equals: '= {{units}} · {{kcal}} ккал',
+  },
+  // Слово к числу подбирается по правилам языка: «1 порция», «2 порции», «5 порций»,
+  // «1,5 порции».
+  portionCounts: {
+    serving: {
+      one: '{{number}} порция',
+      few: '{{number}} порции',
+      many: '{{number}} порций',
+      other: '{{number}} порции',
+    },
+    package: {
+      one: '{{number}} упаковка',
+      few: '{{number}} упаковки',
+      many: '{{number}} упаковок',
+      other: '{{number}} упаковки',
+    },
+  },
   nutrients: {
     kcal: 'Калории',
     protein: 'Белки',
@@ -165,9 +197,8 @@ export const ru = {
     hint: 'Введите название продукта. Если его нет в каталоге — создайте.',
     createProduct: 'Создать продукт',
     per100: '{{kcal}} ккал · Б {{protein}} · Ж {{fat}} · У {{carbs}} на 100 {{unit}}',
-    amount: 'Сколько, {{unit}}',
     submit: 'Добавить',
-    added: 'Добавлено: {{name}}, {{amount}} {{unit}}',
+    added: 'Добавлено: {{name}}, {{quantity}}',
     done: 'Готово',
     scan: 'Сканировать штрихкод',
     scanned: 'По штрихкоду',
@@ -213,7 +244,6 @@ export const ru = {
   entry: {
     editTitle: 'Изменить запись',
     meal: 'Приём пищи',
-    amount: 'Сколько, {{unit}}',
     notFound: 'Такой записи нет.',
     back: 'К дневнику',
   },
@@ -247,6 +277,10 @@ export const ru = {
     sugars: 'Сахара, г',
     fiber: 'Клетчатка, г',
     salt: 'Соль, г',
+    portionsTitle: 'Порция и упаковка',
+    portionsHint: 'Необязательно. Если указать, продукт можно вносить порциями и упаковками.',
+    serving: 'Порция',
+    package: 'Упаковка',
     barcode: 'Штрихкод',
     barcodeHint: 'Необязательно. По нему продукт находится сканером.',
     fromOpenFoodFacts: 'Состав взят из Open Food Facts. Сверьте его с упаковкой.',
@@ -265,6 +299,10 @@ export const ru = {
     sugars_g: 'Сахара — {{value}} г',
     fiber_g: 'Клетчатка — {{value}} г',
     salt_g: 'Соль — {{value}} г',
+  },
+  productSizes: {
+    serving: 'Порция — {{size}} {{unit}}',
+    package: 'Упаковка — {{size}} {{unit}}',
   },
   goal: {
     title: 'Цель на день',
@@ -471,6 +509,9 @@ export const ru = {
     product_not_found: 'Этого продукта больше нет в каталоге.',
     meal_not_found: 'Этого приёма пищи больше нет в списке.',
     metric_not_found: 'Этого замера больше нет в списке.',
+    portion_not_found: 'У этого продукта больше нет такой порции или упаковки.',
+    amount_out_of_range:
+      'Столько за раз не вносят: должно получиться от 0,1 до 5000 в единицах продукта.',
     barcode_taken: 'Продукт с таким штрихкодом уже есть в каталоге.',
     unknown: 'Что-то пошло не так. Попробуйте ещё раз.',
     network: 'Нет связи с сервером.',
@@ -498,6 +539,8 @@ export const ru = {
     saturatedOverFat: 'Насыщенные жиры — не больше жиров',
     sugarsOverCarbs: 'Сахара — не больше углеводов',
     amountRange: 'От 0,1 до 5000',
+    portionCountRange: 'От 0,01 до 100',
+    portionsAmount: 'Должно получиться от 0,1 до 5000 в единицах продукта',
     goalKcalRange: 'Калории — от 500 до 10 000',
     goalMacroRange: 'От 0 до 1000 г',
     goalOverKcal: 'Белки, жиры и углеводы не помещаются в эти калории',

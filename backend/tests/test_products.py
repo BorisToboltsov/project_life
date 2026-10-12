@@ -15,6 +15,7 @@ from tests.nutrition import (
     EAN_13,
     LABEL,
     OATMEAL,
+    PORTIONS,
     UPC_A,
     UPC_A_AS_EAN_13,
     add_product,
@@ -216,6 +217,60 @@ async def test_product_keeps_what_else_is_on_the_label(
         "salt_g": None,
     }
     assert cleared.json() == {**created.json(), **BY_HAND}
+
+
+async def test_product_keeps_its_serving_and_package(
+    client: AsyncClient, make_user: MakeUser
+) -> None:
+    author = await make_user()
+
+    created = await put_product(client, author, {**COTTAGE_CHEESE, **PORTIONS})
+    # Размеры необязательны по одному, а запрос без них их стирает: это замена продукта.
+    partly = await put_product(
+        client, author, {**COTTAGE_CHEESE, "package_size": 200.5}, created.json()["id"]
+    )
+    cleared = await put_product(client, author, COTTAGE_CHEESE, created.json()["id"])
+
+    assert created.status_code == 201
+    assert created.json() == {
+        **COTTAGE_CHEESE,
+        **BY_HAND,
+        **PORTIONS,
+        "id": created.json()["id"],
+        "editable": True,
+    }
+    assert {name: partly.json()[name] for name in PORTIONS} == {
+        "serving_size": None,
+        "package_size": 200.5,
+    }
+    assert cleared.json() == {**created.json(), **BY_HAND}
+
+
+@pytest.mark.parametrize("size", [0, -60, 5000.1, 12.34])
+@pytest.mark.parametrize("name", ["serving_size", "package_size"])
+async def test_implausible_size_is_rejected(
+    client: AsyncClient, make_user: MakeUser, name: str, size: float
+) -> None:
+    author = await make_user()
+
+    response = await put_product(client, author, {**COTTAGE_CHEESE, name: size})
+
+    assert response.status_code == 422
+    assert await search(client, author.headers) == []
+
+
+async def test_serving_may_be_bigger_than_the_package(
+    client: AsyncClient, make_user: MakeUser
+) -> None:
+    """Порция и упаковка — две независимые меры: стакан сока больше пакетика на 200 мл."""
+    author = await make_user()
+    juice = {**COTTAGE_CHEESE, "name": "Сок", "unit": "ml"}
+
+    response = await put_product(
+        client, author, {**juice, "serving_size": 250, "package_size": 200}
+    )
+
+    assert response.status_code == 201
 
 
 async def test_part_may_equal_the_whole(client: AsyncClient, make_user: MakeUser) -> None:

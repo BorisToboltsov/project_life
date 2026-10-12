@@ -181,6 +181,78 @@ def test_part_is_not_bigger_than_the_whole(
     assert found.saturated_fat_g == (Decimal(saturated) if saturated else None)
 
 
+@pytest.mark.parametrize(
+    ("product", "serving", "package"),
+    [
+        # Источник приводит оба размера к граммам или миллилитрам и называет единицу.
+        (
+            {
+                "product_quantity": 400,
+                "product_quantity_unit": "g",
+                "serving_quantity": 15,
+                "serving_quantity_unit": "g",
+            },
+            "15.0",
+            "400.0",
+        ),
+        (
+            {
+                "product_quantity": "1000",
+                "product_quantity_unit": "ml",
+                "serving_quantity": 250.04,
+                "serving_quantity_unit": "ml",
+            },
+            "250.0",
+            "1000.0",
+        ),
+        # Порция размером с упаковку — та же упаковка.
+        (
+            {
+                "product_quantity": 330,
+                "product_quantity_unit": "ml",
+                "serving_quantity": 330,
+                "serving_quantity_unit": "ml",
+            },
+            None,
+            "330.0",
+        ),
+        ({"product_quantity": 400, "product_quantity_unit": "g"}, None, "400.0"),
+        # Единица без числа — как у продуктов, где порцию не заполнили.
+        (
+            {"product_quantity": 400, "product_quantity_unit": "g", "serving_quantity_unit": "g"},
+            None,
+            "400.0",
+        ),
+        # Размер в другой единице, чем у продукта, неизвестен: массу в объём не пересчитать.
+        (
+            {
+                "product_quantity": 400,
+                "product_quantity_unit": "g",
+                "serving_quantity": 30,
+                "serving_quantity_unit": "ml",
+            },
+            None,
+            "400.0",
+        ),
+        ({"quantity": "0,5 л", "product_quantity": 0.5, "product_quantity_unit": "l"}, None, None),
+        # Число без единицы может быть чем угодно.
+        ({"product_quantity": 400, "serving_quantity": 15}, None, None),
+        # Вне пределов, которые принимает каталог, размера всё равно что нет.
+        ({"product_quantity": 20000, "product_quantity_unit": "g"}, None, None),
+        ({"product_quantity": 0, "product_quantity_unit": "g"}, None, None),
+        ({"product_quantity": "много", "product_quantity_unit": "g"}, None, None),
+        ({}, None, None),
+    ],
+)
+def test_serving_and_package_come_in_the_units_of_the_product(
+    product: dict[str, Any], serving: str | None, package: str | None
+) -> None:
+    parsed = parse({"product_name": "Продукт", **product}, Language.RU)
+
+    assert parsed.serving_size == (Decimal(serving) if serving else None)
+    assert parsed.package_size == (Decimal(package) if package else None)
+
+
 def test_product_without_nutrition_facts_is_parsed_too() -> None:
     assert parse({"product_name": "Чай", "nutriments": "нет"}, Language.RU) == OffProduct(
         name="Чай", unit=ProductUnit.G, kcal=None, protein_g=None, fat_g=None, carbs_g=None

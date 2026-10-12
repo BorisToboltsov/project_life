@@ -33,6 +33,24 @@ class ProductSource(StrEnum):
     OPEN_FOOD_FACTS = "open_food_facts"
 
 
+class PortionKind(StrEnum):
+    """Чем, кроме единиц продукта, вносят количество: его порцией или упаковкой (ADR 0013)."""
+
+    SERVING = "serving"
+    PACKAGE = "package"
+
+
+# Больше за раз не вносят: от грамма специй до пяти килограммов или литров — дальше опечатка.
+MAX_AMOUNT = Decimal(5000)
+# Количество хранится с точностью до десятой доли единицы продукта.
+_AMOUNT_STEP = Decimal("0.1")
+
+
+def portions_amount(count: Decimal, size: Decimal) -> Decimal:
+    """Сколько единиц продукта в `count` порциях или упаковках размера `size`."""
+    return (count * size).quantize(_AMOUNT_STEP, rounding=ROUND_HALF_UP)
+
+
 # Килокалорий в грамме белков, жиров и углеводов.
 KCAL_PER_PROTEIN_G = 4
 KCAL_PER_FAT_G = 9

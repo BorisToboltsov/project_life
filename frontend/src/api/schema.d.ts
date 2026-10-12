@@ -322,7 +322,8 @@ export interface paths {
          * @description Создаёт запись или заменяет свою же: повтор запроса не плодит дубли (ADR 0002).
          *
          *     Состав продукта снимается в запись при создании и при смене продукта. Пока продукт
-         *     тот же, снимок прежний — даже если продукт в каталоге с тех пор исправили.
+         *     тот же, снимок прежний — даже если продукт в каталоге с тех пор исправили. Так же
+         *     снимается размер порции, если количество внесли порциями или упаковками (ADR 0013).
          */
         put: operations["save_entry_api_diary_entries__entry_id__put"];
         post?: never;
@@ -396,7 +397,7 @@ export interface paths {
         /**
          * Suggest Products
          * @description Продукты, которые пользователь вносит: чаще всего в приём пищи `meal_id`, недавно и
-         *     часто вообще. У каждого — количество, внесённое в прошлый раз.
+         *     часто вообще. У каждого — количество, внесённое в прошлый раз, и то, как его внесли.
          */
         get: operations["suggest_products_api_diary_suggestions_get"];
         put?: never;
@@ -807,7 +808,7 @@ export interface components {
          * @description Коды ошибок API. Текст для пользователя подбирает фронтенд по коду.
          * @enum {string}
          */
-        ErrorCode: "not_authenticated" | "forbidden" | "not_found" | "invalid_credentials" | "too_many_attempts" | "invite_invalid" | "reset_invalid" | "email_taken" | "wrong_password" | "product_not_found" | "meal_not_found" | "metric_not_found" | "barcode_taken";
+        ErrorCode: "not_authenticated" | "forbidden" | "not_found" | "invalid_credentials" | "too_many_attempts" | "invite_invalid" | "reset_invalid" | "email_taken" | "wrong_password" | "product_not_found" | "meal_not_found" | "metric_not_found" | "portion_not_found" | "amount_out_of_range" | "barcode_taken";
         /** ErrorFrameIn */
         ErrorFrameIn: {
             /** Column */
@@ -908,7 +909,7 @@ export interface components {
         /** FoodEntryIn */
         FoodEntryIn: {
             /** Amount */
-            amount: number | string;
+            amount?: number | string | null;
             /**
              * Local Date
              * Format: date
@@ -919,12 +920,13 @@ export interface components {
              * Format: uuid
              */
             meal_id: string;
+            portion?: components["schemas"]["PortionIn"] | null;
             /** Product Id */
             product_id: string | null;
         };
         /**
          * FoodEntryOut
-         * @description Запись дневника; нутриенты — съеденной порции, по снимку продукта.
+         * @description Запись дневника; нутриенты — съеденного, по снимку продукта.
          */
         FoodEntryOut: {
             /** Amount */
@@ -950,6 +952,7 @@ export interface components {
              * Format: uuid
              */
             meal_id: string;
+            portion: components["schemas"]["PortionOut"] | null;
             /** Product Id */
             product_id: string | null;
             /** Product Name */
@@ -1277,6 +1280,29 @@ export interface components {
             expires_at: string;
         };
         /**
+         * PortionIn
+         * @description Количество порциями или упаковками продукта.
+         */
+        PortionIn: {
+            /** Count */
+            count: number | string;
+            kind: components["schemas"]["PortionKind"];
+        };
+        /**
+         * PortionKind
+         * @description Чем, кроме единиц продукта, вносят количество: его порцией или упаковкой (ADR 0013).
+         * @enum {string}
+         */
+        PortionKind: "serving" | "package";
+        /** PortionOut */
+        PortionOut: {
+            /** Count */
+            count: number;
+            kind: components["schemas"]["PortionKind"];
+            /** Size */
+            size: number;
+        };
+        /**
          * ProductDraftOut
          * @description Что известно о продукте, которого нет в каталоге: значения для формы создания.
          *     `null` — источник этого не знает.
@@ -1292,12 +1318,16 @@ export interface components {
             kcal: number | null;
             /** Name */
             name: string | null;
+            /** Package Size */
+            package_size: number | null;
             /** Protein G */
             protein_g: number | null;
             /** Salt G */
             salt_g: number | null;
             /** Saturated Fat G */
             saturated_fat_g: number | null;
+            /** Serving Size */
+            serving_size: number | null;
             /** Sugars G */
             sugars_g: number | null;
             unit: components["schemas"]["ProductUnit"];
@@ -1316,12 +1346,16 @@ export interface components {
             kcal: number | string;
             /** Name */
             name: string;
+            /** Package Size */
+            package_size?: number | string | null;
             /** Protein G */
             protein_g: number | string;
             /** Salt G */
             salt_g?: number | string | null;
             /** Saturated Fat G */
             saturated_fat_g?: number | string | null;
+            /** Serving Size */
+            serving_size?: number | string | null;
             /** Sugars G */
             sugars_g?: number | string | null;
             unit: components["schemas"]["ProductUnit"];
@@ -1347,12 +1381,16 @@ export interface components {
             kcal: number;
             /** Name */
             name: string;
+            /** Package Size */
+            package_size: number | null;
             /** Protein G */
             protein_g: number;
             /** Salt G */
             salt_g: number | null;
             /** Saturated Fat G */
             saturated_fat_g: number | null;
+            /** Serving Size */
+            serving_size: number | null;
             source: components["schemas"]["ProductSource"];
             /** Sugars G */
             sugars_g: number | null;
@@ -1455,12 +1493,17 @@ export interface components {
             kcal: number;
             /** Name */
             name: string;
+            /** Package Size */
+            package_size: number | null;
+            portion: components["schemas"]["PortionOut"] | null;
             /** Protein G */
             protein_g: number;
             /** Salt G */
             salt_g: number | null;
             /** Saturated Fat G */
             saturated_fat_g: number | null;
+            /** Serving Size */
+            serving_size: number | null;
             source: components["schemas"]["ProductSource"];
             /** Sugars G */
             sugars_g: number | null;
@@ -2397,6 +2440,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FoodEntryOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description Unauthorized */

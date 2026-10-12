@@ -132,6 +132,8 @@ def _complete(found: OffProduct, barcode: str) -> ProductIn | None:
                 "saturated_fat_g": found.saturated_fat_g,
                 "fiber_g": found.fiber_g,
                 "salt_g": found.salt_g,
+                "serving_size": found.serving_size,
+                "package_size": found.package_size,
                 "barcode": barcode,
             }
         )

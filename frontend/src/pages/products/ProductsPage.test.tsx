@@ -4,7 +4,16 @@ import { describe, expect, it } from 'vitest'
 
 import { callsTo, json, mockApi, page, sequence } from '@/test/api'
 import { renderApp } from '@/test/app'
-import { anna, cottageCheese, kefir, noLabel, oatmeal, outsideOf } from '@/test/fixtures'
+import {
+  anna,
+  cottageCheese,
+  egg,
+  kefir,
+  noLabel,
+  noPortions,
+  oatmeal,
+  outsideOf,
+} from '@/test/fixtures'
 
 const SEARCH = 'GET /api/products'
 const OUTSIDE = 'GET /api/products/external'
@@ -246,6 +255,7 @@ describe('каталог продуктов', () => {
       fat_g: 5,
       carbs_g: 1.8,
       ...noLabel,
+      ...noPortions,
       barcode: null,
     })
   })
@@ -317,6 +327,7 @@ describe('каталог продуктов', () => {
       fat_g: 1,
       carbs_g: 4,
       ...noLabel,
+      ...noPortions,
       barcode: null,
     })
   })
@@ -356,6 +367,44 @@ describe('каталог продуктов', () => {
       fiber_g: null,
       salt_g: 0.1,
     })
+  })
+
+  it('порция и упаковка вносятся по желанию — в единицах продукта', async () => {
+    const calls = mockApi({ [SEARCH]: json(200, []), 'PUT /api/products/*': json(201, egg) })
+    await renderApp('/products/new', anna)
+
+    const sizes = within(await screen.findByRole('group', { name: 'Порция и упаковка' }))
+    await userEvent.type(screen.getByLabelText('Название'), 'Яйцо куриное')
+    await userEvent.type(screen.getByLabelText('Белки, г'), '12,7')
+    await userEvent.type(screen.getByLabelText('Жиры, г'), '11,5')
+    await userEvent.type(screen.getByLabelText('Углеводы, г'), '0,7')
+    await userEvent.type(sizes.getByLabelText('Порция'), '60')
+    await userEvent.type(sizes.getByLabelText('Упаковка'), '6000')
+    await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
+
+    expect(await sizes.findByText('От 0,1 до 5000')).toBeInTheDocument()
+    expect(callsTo(calls, 'PUT /api/products/*')).toEqual([])
+
+    await userEvent.clear(sizes.getByLabelText('Упаковка'))
+    await userEvent.type(sizes.getByLabelText('Упаковка'), '600')
+    await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
+
+    await waitFor(() => expect(callsTo(calls, 'PUT /api/products/*')).toHaveLength(1))
+    expect(callsTo(calls, 'PUT /api/products/*')[0].body).toMatchObject({
+      serving_size: 60,
+      package_size: 600,
+    })
+  })
+
+  it('размеры порции и упаковки подписаны единицей продукта', async () => {
+    mockApi({ [SEARCH]: json(200, []) })
+    await renderApp('/products/new', anna)
+
+    const sizes = await screen.findByRole('group', { name: 'Порция и упаковка' })
+    expect(within(sizes).getAllByText('г')).toHaveLength(2)
+    await userEvent.selectOptions(screen.getByLabelText('В чём измеряется'), 'Миллилитры')
+
+    expect(within(sizes).getAllByText('мл')).toHaveLength(2)
   })
 
   it('не отправляет продукт с невозможным составом', async () => {
@@ -409,6 +458,7 @@ describe('продукт', () => {
       fat_g: 5,
       carbs_g: 1.8,
       ...noLabel,
+      ...noPortions,
       barcode: null,
     })
   })
@@ -478,6 +528,45 @@ describe('продукт', () => {
     expect(screen.getByText(/Изменить его может автор или администратор/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Сохранить' })).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'К каталогу' })).toHaveAttribute('href', '/products')
+  })
+
+  it('продукт открывается со своими порцией и упаковкой; пустое поле размер убирает', async () => {
+    const save = `PUT /api/products/${egg.id}`
+    const calls = mockApi({
+      [`GET /api/products/${egg.id}`]: json(200, egg),
+      [SEARCH]: json(200, [egg]),
+      [save]: json(200, egg),
+    })
+    await renderApp(`/products/${egg.id}`, anna)
+
+    expect(await screen.findByLabelText('Порция')).toHaveValue('60')
+    expect(screen.getByLabelText('Упаковка')).toHaveValue('600')
+    await userEvent.clear(screen.getByLabelText('Упаковка'))
+    await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
+
+    await waitFor(() => expect(callsTo(calls, save)).toHaveLength(1))
+    expect(callsTo(calls, save)[0].body).toMatchObject({ serving_size: 60, package_size: null })
+  })
+
+  it('чужой продукт показывает свои порцию и упаковку', async () => {
+    const foreign = { ...egg, editable: false }
+    mockApi({ [`GET /api/products/${egg.id}`]: json(200, { ...foreign, package_size: null }) })
+    await renderApp(`/products/${egg.id}`, anna)
+
+    const sizes = await screen.findByRole('list', { name: 'Порция и упаковка' })
+    expect(
+      within(sizes)
+        .getAllByRole('listitem')
+        .map((item) => item.textContent),
+    ).toEqual(['Порция — 60 г'])
+  })
+
+  it('чужой продукт без порции и упаковки о них молчит', async () => {
+    mockApi({ [`GET /api/products/${oatmeal.id}`]: json(200, oatmeal) })
+    await renderApp(`/products/${oatmeal.id}`, anna)
+
+    await screen.findByText('Овсяные хлопья')
+    expect(screen.queryByRole('list', { name: 'Порция и упаковка' })).not.toBeInTheDocument()
   })
 
   it('чужой продукт показывает то, что ещё известно с этикетки', async () => {

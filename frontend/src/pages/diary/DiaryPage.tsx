@@ -26,10 +26,11 @@ import {
 } from '@/components/ui/card'
 import { isRealDate, shiftDays, today } from '@/lib/dates'
 import type { ErrorKey } from '@/lib/errors'
-import { formatGrams, formatKcal } from '@/lib/nutrition'
+import { formatKcal } from '@/lib/nutrition'
 
 import { useMealName } from './mealName'
 import { Measure } from './Measure'
+import { useQuantityText } from './quantityText'
 import { DATE_MIN } from './values'
 import { WaterCard } from './WaterCard'
 
@@ -141,6 +142,7 @@ function Summary({ day }: { day: DiaryDay }) {
 
 function EntryRow({ entry }: { entry: FoodEntry }) {
   const { t, i18n } = useTranslation()
+  const quantityText = useQuantityText()
   const queryClient = useQueryClient()
   const [confirming, setConfirming] = useState(false)
   const [failure, setFailure] = useState<ErrorKey>()
@@ -158,8 +160,7 @@ function EntryRow({ entry }: { entry: FoodEntry }) {
           <p className="font-medium break-words">{entry.product_name}</p>
           <p className="text-sm text-muted-foreground">
             {t('diary.entryLine', {
-              amount: formatGrams(entry.amount, i18n.language),
-              unit: t(`productUnits.${entry.unit}`),
+              quantity: quantityText(entry),
               kcal: formatKcal(entry.kcal, i18n.language),
             })}
           </p>

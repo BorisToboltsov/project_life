@@ -31,8 +31,12 @@ OATMEAL = {
 NO_LABEL = {"sugars_g": None, "saturated_fat_g": None, "fiber_g": None, "salt_g": None}
 # Что ещё печатают на этикетке кроме калорий, белков, жиров и углеводов.
 LABEL = {"sugars_g": 1.8, "saturated_fat_g": 3.2, "fiber_g": 0, "salt_g": 0.1}
-# Чем API дополняет продукт, который человек завёл без штрихкода и без этикетки.
-BY_HAND = {**NO_LABEL, "barcode": None, "source": "user"}
+# У продукта нет ни порции, ни упаковки: его вносят только в его единицах.
+NO_PORTIONS = {"serving_size": None, "package_size": None}
+# Яйцо: штука — порция, десяток — упаковка.
+PORTIONS = {"serving_size": 60, "package_size": 600}
+# Чем API дополняет продукт, который человек завёл без штрихкода, этикетки и порций.
+BY_HAND = {**NO_LABEL, **NO_PORTIONS, "barcode": None, "source": "user"}
 PRESETS = ("breakfast", "lunch", "dinner", "snack")
 
 # Штрихкоды с верной контрольной цифрой.
@@ -41,6 +45,16 @@ EAN_8 = "46012340"
 # Один и тот же код: UPC-A и он же как EAN-13.
 UPC_A = "036000291452"
 UPC_A_AS_EAN_13 = "0036000291452"
+# Яйцо, как его заводят руками: штука и десяток.
+EGG = {
+    "name": "Яйцо куриное",
+    "unit": "g",
+    "kcal": 157,
+    "protein_g": 12.7,
+    "fat_g": 11.5,
+    "carbs_g": 0.7,
+    **PORTIONS,
+}
 # Продукт, как его отдаёт Open Food Facts: состав на 100 г полный.
 OFF_COTTAGE_CHEESE: dict[str, Any] = {
     "product_name": "Творог 5 %",
@@ -131,17 +145,29 @@ async def add_meal(client: AsyncClient, account: Account, name: str = "Втор�
     return response.json()["id"]
 
 
+def servings(count: float) -> dict[str, Any]:
+    """Количество порциями продукта — вместо количества в его единицах."""
+    return {"kind": "serving", "count": count}
+
+
+def packages(count: float) -> dict[str, Any]:
+    """То же упаковками."""
+    return {"kind": "package", "count": count}
+
+
 async def put_entry(
     client: AsyncClient,
     account: Account,
     product_id: str | None,
-    amount: float = 150,
+    amount: float | dict[str, Any] = 150,
     *,
     meal: str = "breakfast",
     day: Any = TODAY,
     entry_id: str | None = None,
 ) -> Response:
-    """Вносит запись; `meal` — код предустановленного приёма пищи или ключ любого."""
+    """Вносит запись; `meal` — код предустановленного приёма пищи или ключ любого,
+    `amount` — количество в единицах продукта либо порции (`servings`, `packages`)."""
+    how_much = {"portion": amount} if isinstance(amount, dict) else {"amount": amount}
     return await client.put(
         f"/api/diary/entries/{entry_id or uuid.uuid7()}",
         headers=account.headers,
@@ -149,13 +175,17 @@ async def put_entry(
             "local_date": str(day),
             "meal_id": await meal_id_of(client, account, meal),
             "product_id": product_id,
-            "amount": amount,
+            **how_much,
         },
     )
 
 
 async def add_entry(
-    client: AsyncClient, account: Account, product_id: str, amount: float = 150, **where: Any
+    client: AsyncClient,
+    account: Account,
+    product_id: str,
+    amount: float | dict[str, Any] = 150,
+    **where: Any,
 ) -> str:
     response = await put_entry(client, account, product_id, amount, **where)
     assert response.status_code == 201, response.text

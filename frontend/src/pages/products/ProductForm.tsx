@@ -27,7 +27,8 @@ const KCAL_DIGITS = 1
  * Форма продукта каталога: название, единица, состав на 100 таких единиц и штрихкод. Без
  * `product` создаёт новый; `draft` — что о новом уже известно по штрихкоду. Калории
  * считаются по белкам, жирам и углеводам, пока их не ввели сами: на упаковке число бывает
- * другим. Остальное с этикетки — сахара, насыщенные жиры, клетчатка, соль — необязательно.
+ * другим. Остальное с этикетки — сахара, насыщенные жиры, клетчатка, соль — необязательно,
+ * как и порция с упаковкой.
  * `onSaved` получает ключ сохранённого продукта, `cancel` — ссылка «Отмена».
  */
 export function ProductForm({
@@ -74,6 +75,8 @@ export function ProductForm({
       sugars_g: optionalNumberOf(values.sugars, 2),
       fiber_g: optionalNumberOf(values.fiber, 2),
       salt_g: optionalNumberOf(values.salt, 2),
+      serving_size: optionalNumberOf(values.serving, 1),
+      package_size: optionalNumberOf(values.package, 1),
       barcode: normalizeBarcode(values.barcode),
     })
     if (result.failure) {
@@ -165,6 +168,26 @@ export function ProductForm({
             error={errors.salt?.message}
             {...number}
             {...form.register('salt')}
+          />
+        </div>
+      </fieldset>
+      <fieldset className="grid gap-4">
+        <legend className="text-sm font-medium">{t('products.portionsTitle')}</legend>
+        <p className="text-sm text-muted-foreground">{t('products.portionsHint')}</p>
+        <div className="grid grid-cols-2 gap-4">
+          <TextField
+            label={t('products.serving')}
+            suffix={t(`productUnits.${unit}`)}
+            error={errors.serving?.message}
+            {...number}
+            {...form.register('serving')}
+          />
+          <TextField
+            label={t('products.package')}
+            suffix={t(`productUnits.${unit}`)}
+            error={errors.package?.message}
+            {...number}
+            {...form.register('package')}
           />
         </div>
       </fieldset>

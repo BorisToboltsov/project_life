@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 
 import { callsTo, json, mockApi } from '@/test/api'
-import { renderApp } from '@/test/app'
+import { renderApp, textOf } from '@/test/app'
 import {
   anna,
   cottageCheese,
@@ -49,7 +49,7 @@ describe('копирование', () => {
     const rows = await within(
       screen.getByRole('list', { name: 'Будут скопированы' }),
     ).findAllByRole('listitem')
-    expect(rows.map((row) => row.textContent)).toEqual([
+    expect(rows.map(textOf)).toEqual([
       'Овсяные хлопьяЗавтрак · 60 г · 211 ккал',
       'Творог 5 %Завтрак · 150 г · 182 ккал',
     ])

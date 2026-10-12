@@ -8,11 +8,14 @@ import {
   anna,
   cottageCheese,
   diaryDay,
+  egg,
   kefir,
   meals,
   noLabel,
+  noPortions,
   oatmeal,
   outsideOf,
+  suggestionOf,
 } from '@/test/fixtures'
 
 const DATE = '2026-10-11'
@@ -58,6 +61,8 @@ describe('добавление в приём пищи', () => {
     await userEvent.click(within(frequent).getByRole('button', { name: /Творог/ }))
     expect(screen.getAllByLabelText('Сколько, г')).toHaveLength(1)
     expect(screen.getByLabelText('Сколько, г')).toHaveValue('180')
+    // У творога нет ни порции, ни упаковки: выбирать меру не из чего.
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Добавить' }))
 
     expect(await screen.findByRole('status')).toHaveTextContent('Добавлено: Творог 5 %, 180 г')
@@ -368,6 +373,139 @@ describe('добавление в приём пищи', () => {
   })
 })
 
+describe('порции и упаковки', () => {
+  const TWO_EGGS = suggestionOf(egg, 120, { kind: 'serving', size: 60, count: 2 })
+  const saved = (portion: object) => ({
+    local_date: DATE,
+    meal_id: meals.breakfast.id,
+    product_id: egg.id,
+    ...portion,
+  })
+
+  async function openEgg(suggested: Record<keyof typeof nothing, unknown[]> = nothing) {
+    const calls = mockApi({
+      ...DAY,
+      [SUGGESTIONS]: json(200, suggested),
+      [SEARCH]: json(200, [egg]),
+      [SAVE]: json(201, {}),
+    })
+    await renderApp(PAGE, anna)
+    if (suggested === nothing) {
+      await userEvent.type(await screen.findByLabelText('Поиск продукта'), 'яйц')
+    }
+    // Знакомый продукт стоит в двух списках сразу — берём верхний.
+    await userEvent.click((await screen.findAllByRole('button', { name: /Яйцо куриное/ }))[0])
+    return calls
+  }
+
+  it('продукт с порцией открывается одной порцией и вносится порциями', async () => {
+    const calls = await openEgg()
+
+    expect(screen.getByRole('radio', { name: 'порция · 60 г' })).toBeChecked()
+    expect(screen.getByRole('radio', { name: 'упаковка · 600 г' })).not.toBeChecked()
+    expect(screen.getByRole('radio', { name: 'г' })).not.toBeChecked()
+    const count = screen.getByLabelText('Сколько порций')
+    expect(count).toHaveValue('1')
+    expect(screen.getByText('= 60 г · 94 ккал')).toBeInTheDocument()
+    await userEvent.clear(count)
+    await userEvent.type(count, '2')
+    expect(screen.getByText('= 120 г · 188 ккал')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить' }))
+
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Добавлено: Яйцо куриное, 2 порции · 120 г',
+    )
+    // Граммы считает сервер: уходит только вид порции и их число.
+    expect(callsTo(calls, SAVE)[0].body).toEqual(saved({ portion: { kind: 'serving', count: 2 } }))
+  })
+
+  it('знакомый продукт открывается так, как его вносили в прошлый раз', async () => {
+    const half = suggestionOf(egg, 300, { kind: 'package', size: 600, count: 0.5 })
+    const calls = await openEgg({ in_meal: [half], frequent: [], recent: [half] })
+
+    expect(screen.getByRole('radio', { name: 'упаковка · 600 г' })).toBeChecked()
+    expect(screen.getByLabelText('Сколько упаковок')).toHaveValue('0.5')
+    expect(screen.getByText('= 300 г · 471 ккал')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить' }))
+
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Добавлено: Яйцо куриное, 0,5 упаковки · 300 г',
+    )
+    expect(callsTo(calls, SAVE)[0].body).toEqual(
+      saved({ portion: { kind: 'package', count: 0.5 } }),
+    )
+  })
+
+  it('смена меры пересчитывает количество, а граммы уходят граммами', async () => {
+    const calls = await openEgg({ in_meal: [TWO_EGGS], frequent: [], recent: [TWO_EGGS] })
+    expect(screen.getByLabelText('Сколько порций')).toHaveValue('2')
+
+    await userEvent.click(screen.getByRole('radio', { name: 'упаковка · 600 г' }))
+    expect(screen.getByLabelText('Сколько упаковок')).toHaveValue('0.2')
+    await userEvent.click(screen.getByRole('radio', { name: 'г' }))
+    expect(screen.getByLabelText('Сколько, г')).toHaveValue('120')
+    // В единицах продукта пересчитывать нечего.
+    expect(screen.queryByText(/^= /)).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить' }))
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Добавлено: Яйцо куриное, 120 г')
+    expect(callsTo(calls, SAVE)[0].body).toEqual(saved({ amount: 120 }))
+  })
+
+  it('набранное число смена меры не подменяет', async () => {
+    await openEgg()
+    await userEvent.click(screen.getByRole('radio', { name: 'г' }))
+    const amount = screen.getByLabelText('Сколько, г')
+    expect(amount).toHaveValue('60')
+
+    // Человек набрал «2», думая о яйцах, и только потом выбрал меру: два грамма в порциях
+    // ровно не выражаются — число остаётся его.
+    await userEvent.clear(amount)
+    await userEvent.type(amount, '2')
+    await userEvent.click(screen.getByRole('radio', { name: 'порция · 60 г' }))
+
+    expect(screen.getByLabelText('Сколько порций')).toHaveValue('2')
+    expect(screen.getByText('= 120 г · 188 ккал')).toBeInTheDocument()
+  })
+
+  it('не принимает число порций вне диапазона и количество больше возможного', async () => {
+    const calls = await openEgg()
+    const count = screen.getByLabelText('Сколько порций')
+
+    await userEvent.clear(count)
+    await userEvent.type(count, '0')
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить' }))
+    expect(await screen.findByText('От 0,01 до 100')).toBeInTheDocument()
+
+    await userEvent.clear(count)
+    await userEvent.type(count, '84')
+    expect(
+      await screen.findByText('Должно получиться от 0,1 до 5000 в единицах продукта'),
+    ).toBeInTheDocument()
+    // Со сменой меры поле проверяется заново: 84 порции — это 5040 г, и это тоже много.
+    await userEvent.click(screen.getByRole('radio', { name: 'г' }))
+    expect(screen.getByLabelText('Сколько, г')).toHaveValue('5040')
+    expect(await screen.findByText('От 0,1 до 5000')).toBeInTheDocument()
+    expect(callsTo(calls, SAVE)).toHaveLength(0)
+  })
+
+  it('показывает отказ, когда порции у продукта уже нет', async () => {
+    mockApi({
+      ...DAY,
+      [SUGGESTIONS]: json(200, { in_meal: [TWO_EGGS], frequent: [], recent: [TWO_EGGS] }),
+      [SAVE]: json(404, { detail: 'portion_not_found' }),
+    })
+    await renderApp(PAGE, anna)
+
+    await userEvent.click((await screen.findAllByRole('button', { name: /Яйцо куриное/ }))[0])
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'У этого продукта больше нет такой порции или упаковки.',
+    )
+  })
+})
+
 describe('новый продукт по пути в приём пищи', () => {
   it('создаёт продукт и возвращает к вводу граммов для него', async () => {
     const created = { ...oatmeal, editable: true }
@@ -406,6 +544,7 @@ describe('новый продукт по пути в приём пищи', () =>
       fat_g: 6.2,
       carbs_g: 61.8,
       ...noLabel,
+      ...noPortions,
       barcode: null,
     })
     expect(router.state.location.search).toEqual({ product: id })

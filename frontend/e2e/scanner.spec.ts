@@ -42,19 +42,24 @@ test('сканер: штрихкод с камеры → продукт из Ope
   const found = page.getByRole('list', { name: 'По штрихкоду' })
   await expect(found.getByRole('button', { name: /Йогурт натуральный, Стенд/ })).toBeVisible()
   await expect(found).toContainText('68 ккал · Б 5 · Ж 3,2 · У 4,7 на 100 г')
-  await found.getByLabel('Сколько, г').fill('350')
+  // Съедена вся упаковка: её размер пришёл из Open Food Facts вместе с продуктом.
+  await found.getByText('упаковка · 350 г').click()
+  await expect(found.getByLabel('Сколько упаковок')).toHaveValue('1')
   await found.getByRole('button', { name: 'Добавить', exact: true }).click()
-  await expect(page.getByRole('status')).toHaveText('Добавлено: Йогурт натуральный, Стенд, 350 г')
+  await expect(page.getByRole('status')).toHaveText(
+    'Добавлено: Йогурт натуральный, Стенд, 1 упаковка · 350 г',
+  )
   await expect(found).toHaveCount(0)
   await page.getByRole('link', { name: 'Готово' }).click()
   await expect(page.getByRole('list', { name: 'Завтрак' }).getByRole('listitem')).toContainText(
-    '350 г · 238 ккал',
+    '1 упаковка · 350 г · 238 ккал',
   )
 
-  // Тот же продукт во второй раз: количество подставлено из прошлого.
+  // Тот же продукт во второй раз: открывается так, как его внесли в прошлый.
   await page.getByRole('link', { name: 'Добавить: Завтрак' }).click()
   await page.getByRole('link', { name: 'Сканировать штрихкод' }).click()
-  await expect(found.getByLabel('Сколько, г')).toHaveValue('350')
+  await expect(found.getByRole('radio', { name: 'упаковка · 350 г' })).toBeChecked()
+  await expect(found.getByLabel('Сколько упаковок')).toHaveValue('1')
 
   expect(problems).toEqual([])
 })

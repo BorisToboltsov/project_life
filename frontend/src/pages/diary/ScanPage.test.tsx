@@ -6,7 +6,7 @@ import type { Schemas } from '@/api/client'
 import { callsTo, json, mockApi, sequence } from '@/test/api'
 import { renderApp } from '@/test/app'
 import { stubCamera } from '@/test/camera'
-import { anna, cottageCheese, diaryDay, meals, noLabel } from '@/test/fixtures'
+import { anna, cottageCheese, diaryDay, meals, noLabel, noPortions } from '@/test/fixtures'
 
 const DATE = '2026-10-11'
 const MEAL = `/diary/${DATE}/add/${meals.breakfast.id}`
@@ -149,6 +149,7 @@ describe('сканер по пути в приём пищи', () => {
       fat_g: 5,
       carbs_g: 1.8,
       ...noLabel,
+      ...noPortions,
       barcode: BARCODE,
     })
     expect(router.state.location.pathname).toBe(MEAL)
@@ -170,6 +171,7 @@ describe('сканер по пути в приём пищи', () => {
             fat_g: 1,
             carbs_g: null,
             ...noLabel,
+            ...noPortions,
             sugars_g: 3.9,
           },
         }),

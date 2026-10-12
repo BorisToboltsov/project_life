@@ -1,9 +1,10 @@
 """Гейт дневника питания (инвариант I10): прошлые дни не зависят от каталога и от списка
 приёмов пищи.
 
-Запись дневника хранит снимок продукта — название, единицу и состав на 100 единиц. Что бы
-ни случилось с продуктом позже — правка, удаление, — уже внесённый день показывает то же,
-что показывал. Приём пищи, убранный из списка, остаётся в днях, где в нём есть записи.
+Запись дневника хранит снимок продукта — название, единицу и состав на 100 единиц, а
+внесённая порциями или упаковками — ещё и их размер. Что бы ни случилось с продуктом
+позже — правка, удаление, — уже внесённый день показывает то же, что показывал. Приём
+пищи, убранный из списка, остаётся в днях, где в нём есть записи.
 """
 
 from typing import Any
@@ -17,6 +18,7 @@ from app.models import FoodEntry
 from tests.conftest import MakeUser
 from tests.nutrition import (
     COTTAGE_CHEESE,
+    EGG,
     LABEL,
     OATMEAL,
     TODAY,
@@ -26,6 +28,7 @@ from tests.nutrition import (
     put_entry,
     put_product,
     read_day,
+    servings,
 )
 
 pytestmark = pytest.mark.anyio
@@ -145,6 +148,77 @@ async def test_snapshot_keeps_the_whole_label(
     assert [str(entry.id) for entry in entries] == [entry_id, copy_id]
     for entry in entries:
         assert {name: float(getattr(entry, name)) for name in LABEL} == LABEL
+
+
+async def two_eggs_yesterday(client: AsyncClient, make_user: MakeUser) -> tuple[Any, str, str]:
+    """Пользователь, продукт с порцией в 60 г и запись «две порции» во вчерашнем дне."""
+    user = await make_user()
+    product_id = await add_product(client, user, **EGG)
+    entry_id = await add_entry(client, user, product_id, servings(2), day=YESTERDAY)
+    return user, product_id, entry_id
+
+
+@pytest.mark.parametrize("sizes", [{"serving_size": 50}, {"serving_size": None}])
+async def test_changing_a_portion_does_not_change_past_days(
+    client: AsyncClient, make_user: MakeUser, sizes: dict[str, float | None]
+) -> None:
+    user, product_id, _ = await two_eggs_yesterday(client, make_user)
+    before = await read_day(client, user, YESTERDAY)
+
+    edited = await put_product(client, user, {**EGG, **sizes}, product_id)
+
+    assert edited.status_code == 200
+    assert await read_day(client, user, YESTERDAY) == before
+    [entry] = before["meals"][0]["entries"]
+    assert (entry["amount"], entry["portion"]["size"]) == (120, 60)
+
+
+@pytest.mark.parametrize("sizes", [{"serving_size": 50}, {"serving_size": None}])
+async def test_editing_the_count_keeps_the_size_of_the_portion(
+    client: AsyncClient, make_user: MakeUser, sizes: dict[str, float | None]
+) -> None:
+    user, product_id, entry_id = await two_eggs_yesterday(client, make_user)
+    await put_product(client, user, {**EGG, **sizes}, product_id)
+
+    # Тот же продукт и `null` вместо него оставляют размер порции прежним.
+    same = await put_entry(client, user, product_id, servings(3), day=YESTERDAY, entry_id=entry_id)
+    kept = await put_entry(client, user, None, servings(1), day=YESTERDAY, entry_id=entry_id)
+
+    assert (same.json()["amount"], same.json()["portion"]["size"]) == (180, 60)
+    assert (kept.json()["amount"], kept.json()["portion"]["size"]) == (60, 60)
+
+
+async def test_portions_of_a_deleted_product_can_still_be_counted(
+    client: AsyncClient, make_user: MakeUser
+) -> None:
+    user, product_id, entry_id = await two_eggs_yesterday(client, make_user)
+    await client.delete(f"/api/products/{product_id}", headers=user.headers)
+
+    response = await put_entry(client, user, None, servings(3), day=YESTERDAY, entry_id=entry_id)
+
+    assert response.status_code == 200
+    assert response.json()["amount"] == 180
+    assert response.json()["portion"] == {"kind": "serving", "size": 60, "count": 3}
+
+
+async def test_copy_carries_the_portion_of_the_entry_not_of_the_catalog(
+    client: AsyncClient, make_user: MakeUser
+) -> None:
+    user, product_id, entry_id = await two_eggs_yesterday(client, make_user)
+    await put_product(client, user, {**EGG, "serving_size": 50}, product_id)
+
+    copied = await client.post(
+        "/api/diary/copy",
+        headers=user.headers,
+        json={
+            "to_date": str(TODAY),
+            "items": [{"source_id": entry_id, "id": "0199b7a0-0000-7000-8000-00000000c0de"}],
+        },
+    )
+
+    assert copied.status_code == 204
+    [copy] = (await read_day(client, user))["meals"][0]["entries"]
+    assert (copy["amount"], copy["portion"]) == (120, {"kind": "serving", "size": 60, "count": 2})
 
 
 async def test_removing_a_meal_does_not_change_past_days(

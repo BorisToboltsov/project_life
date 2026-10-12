@@ -16,6 +16,14 @@ import.meta.glob(['../pages/**/*.tsx', '!../pages/**/*.test.tsx'], { eager: true
 
 const cleanups: (() => void)[] = []
 
+/**
+ * Текст элемента так, как его читает человек: число и единица склеены неразрывным пробелом,
+ * чтобы их не разрывал перенос строки, — здесь он обычный.
+ */
+export function textOf(element: Element): string {
+  return (element.textContent ?? '').replaceAll('\u00a0', ' ')
+}
+
 /** Состояние сессии живёт в модуле — между тестами его нужно вернуть к «не вошёл». */
 export function resetApp(): void {
   for (const cleanup of cleanups.splice(0)) cleanup()

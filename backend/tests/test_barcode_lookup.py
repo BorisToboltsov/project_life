@@ -19,6 +19,7 @@ from tests.nutrition import (
     EAN_13,
     LABEL,
     NO_LABEL,
+    NO_PORTIONS,
     OFF_COTTAGE_CHEESE,
     OFF_LABEL,
     UPC_A,
@@ -52,6 +53,7 @@ async def test_product_of_the_catalog_is_found_without_asking_outside(
         "product": {
             **COTTAGE_CHEESE,
             **NO_LABEL,
+            **NO_PORTIONS,
             "id": product_id,
             "barcode": EAN_13,
             "source": "user",
@@ -114,6 +116,7 @@ async def test_complete_product_goes_straight_into_the_catalog(
     assert found == {
         **COTTAGE_CHEESE,
         **NO_LABEL,
+        **NO_PORTIONS,
         "name": "Творог 5 %, Простоквашино",
         "id": found["id"],
         "barcode": EAN_13,
@@ -128,6 +131,38 @@ async def test_complete_product_goes_straight_into_the_catalog(
     again = await lookup(client, reader, EAN_13)
     assert again.json()["product"] == {**found, "editable": False}
     assert len(off.requests) == 1
+
+
+# Что источник знает о размерах: упаковка в 200 г и порция в 100 г.
+OFF_SIZES = {
+    "product_quantity": 200,
+    "product_quantity_unit": "g",
+    "serving_quantity": 100,
+    "serving_quantity_unit": "g",
+}
+
+
+async def test_serving_and_package_come_with_the_product(
+    client: AsyncClient, make_user: MakeUser, off: OffStub
+) -> None:
+    off.products[EAN_13] = {**OFF_COTTAGE_CHEESE, **OFF_SIZES}
+
+    response = await lookup(client, await make_user(), EAN_13)
+
+    found = response.json()["product"]
+    assert (found["serving_size"], found["package_size"]) == (100, 200)
+
+
+async def test_draft_keeps_the_serving_and_the_package(
+    client: AsyncClient, make_user: MakeUser, off: OffStub
+) -> None:
+    off.products[EAN_13] = {"product_name": "Творог", **OFF_SIZES}
+
+    response = await lookup(client, await make_user(), EAN_13)
+
+    draft = response.json()["draft"]
+    assert response.json()["status"] == "draft"
+    assert (draft["serving_size"], draft["package_size"]) == (100, 200)
 
 
 async def test_found_product_is_ready_for_the_diary(
@@ -258,7 +293,7 @@ async def test_incomplete_product_comes_back_as_a_draft(
         "status": "draft",
         "barcode": EAN_13,
         "product": None,
-        "draft": {"unit": "g", **NO_LABEL, **draft},
+        "draft": {"unit": "g", **NO_LABEL, **NO_PORTIONS, **draft},
     }
     # В каталог неполный продукт не попал, а в «не найдено» не записан.
     assert list(await db.scalars(select(Product))) == []

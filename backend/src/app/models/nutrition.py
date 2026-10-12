@@ -7,11 +7,15 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
 from app.models.columns import choice, one_of
-from app.nutrition import MealPreset, Nutrients, ProductSource, ProductUnit
+from app.nutrition import MealPreset, Nutrients, PortionKind, ProductSource, ProductUnit
 
 # Состав на 100 г или 100 мл: энергия до 900,0 ккал, макронутриент до 100,00 г.
 KCAL = Numeric(6, 1)
 MACRO = Numeric(5, 2)
+# Количество продукта, размер его порции и упаковки — в единицах продукта, до 5000,0.
+AMOUNT = Numeric(6, 1)
+# Сколько порций или упаковок внесли: до 100,00.
+PORTION_COUNT = Numeric(5, 2)
 PRODUCT_NAME = String(120)
 MEAL_NAME = String(40)
 # EAN-8 или EAN-13 — в том виде, к которому штрихкод приводит `app.barcodes`.
@@ -50,6 +54,10 @@ class Product(Base):
     saturated_fat_g: Mapped[Decimal | None] = mapped_column(MACRO)
     fiber_g: Mapped[Decimal | None] = mapped_column(MACRO)
     salt_g: Mapped[Decimal | None] = mapped_column(MACRO)
+    # Сколько единиц продукта в его порции и в упаковке; пусто — продукт вносят только в
+    # единицах (ADR 0013).
+    serving_size: Mapped[Decimal | None] = mapped_column(AMOUNT)
+    package_size: Mapped[Decimal | None] = mapped_column(AMOUNT)
     # Штрихкод с упаковки; пусто — продукт находится только по названию.
     barcode: Mapped[str | None] = mapped_column(BARCODE)
     # Откуда продукт: от этого зависит, что приложение показывает о его происхождении.
@@ -58,6 +66,10 @@ class Product(Base):
     created_by: Mapped[UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
+
+    def size_of(self, kind: PortionKind) -> Decimal | None:
+        """Размер порции или упаковки в единицах продукта; `None` — у продукта её нет."""
+        return self.serving_size if kind == PortionKind.SERVING else self.package_size
 
 
 class BarcodeMiss(Base):
@@ -119,6 +131,11 @@ class FoodEntry(Base):
     __tablename__ = "food_entries"
     __table_args__ = (
         one_of("unit", ProductUnit),
+        one_of("portion_kind", PortionKind),
+        # Порция в записи либо есть целиком — вид, размер и число, — либо её нет.
+        CheckConstraint(
+            "num_nonnulls(portion_kind, portion_size, portion_count) IN (0, 3)", name="portion"
+        ),
         # День дневника одного пользователя.
         Index("ix_food_entries_user_date", "user_id", "local_date"),
     )
@@ -130,7 +147,13 @@ class FoodEntry(Base):
     local_date: Mapped[date]
     meal_id: Mapped[UUID] = mapped_column(ForeignKey("meals.id", ondelete="CASCADE"), index=True)
     # Сколько съедено — в единицах снимка: граммах или миллилитрах.
-    amount: Mapped[Decimal] = mapped_column(Numeric(6, 1))
+    amount: Mapped[Decimal] = mapped_column(AMOUNT)
+    # Как это количество внесли, если не в единицах продукта: порциями или упаковками, сколько
+    # их и какого размера. Размер — снимок, как и состав ниже: смена порции у продукта не
+    # меняет прошлые дни (инвариант I10).
+    portion_kind: Mapped[PortionKind | None] = mapped_column(choice(PortionKind))
+    portion_size: Mapped[Decimal | None] = mapped_column(AMOUNT)
+    portion_count: Mapped[Decimal | None] = mapped_column(PORTION_COUNT)
     # Из какого продукта каталога запись; пусто, если продукт с тех пор удалили.
     product_id: Mapped[UUID | None] = mapped_column(
         ForeignKey("products.id", ondelete="SET NULL"), index=True
