@@ -14,7 +14,7 @@ export type Pair = readonly [number, number]
  */
 export type Layer = 0 | 1 | 2 | 3
 
-export type GearKind = 'plate' | 'hub' | 'bar' | 'steel' | 'pad'
+export type GearKind = 'plate' | 'hub' | 'bar' | 'steel' | 'pad' | 'cable'
 
 export interface Shape {
   layer: Layer
@@ -27,6 +27,10 @@ export interface Shape {
   fade?: boolean
   /** Снаряд, а не тело: рисуется как есть, своим стилем. */
   gear?: GearKind
+  /** Дальняя нога: рисуется за телом своим силуэтом. */
+  far?: boolean
+  /** Видимая длина линии по шагам пути — так трос дотягивается ровно до кисти. */
+  dashPath?: readonly number[]
 }
 
 export interface Joint {
@@ -52,6 +56,8 @@ export interface Joint {
 
 export interface Figure {
   root: Joint
+  /** То, что тянется к фигуре из неподвижной точки: трос тренажёра. */
+  tethers: Joint[]
   /** Неподвижная обстановка: пол, скамья, стойка. */
   world: Shape[]
   /** Длина плеча — по ней линии руки проявляются от сустава к локтю. */
@@ -78,6 +84,8 @@ export interface Pose {
   f: number
   /** Стопа: 0 — подошва на полу, носок вправо. Нужна, когда человек стоит не на стопах. */
   g?: number
+  /** Сгиб в пояснице: на сколько грудь повёрнута относительно таза. */
+  b?: number
 }
 
 const SHIN = 25
@@ -114,6 +122,11 @@ const BODY = {
     'M3.5 0C3.9-2 5.8-6 6.5-11C7-15 6.6-21 5.6-26A5.9 5.9 0 0 0-6.2-26C-6.6-21.5-6.2-15-5.4-10C-5-6.5-4-3-3.5 0A3.5 3.5 0 0 0 3.5 0Z',
   torso:
     'M5.8 0C5.4-3 5.2-6 5.2-9C5.2-13 6.2-17 7.2-20C8.2-22.5 8.8-24.5 8.6-26.5C8.3-29.5 6.8-31.6 3.8-32.6L-3.8-33.4C-6.6-32.4-8.2-29.6-8.2-25.5C-8.2-19.5-5.6-14-5.4-9C-5.3-6-6-3-6.3 0A6.05 6.05 0 0 0 5.8 0Z',
+  // Корпус из двух частей — для упражнений со сгибом в пояснице.
+  pelvis:
+    'M5.8 0C5.4-3 5.2-6 5.2-9C5.2-11 5.6-13.5 6.2-16L-5.9-16C-5.5-13.5-5.4-11-5.4-9C-5.3-6-6-3-6.3 0A6.05 6.05 0 0 0 5.8 0Z',
+  chest:
+    'M5.4-10C5.6-13.5 6.4-17.5 7.2-20C8.2-22.5 8.8-24.5 8.6-26.5C8.3-29.5 6.8-31.6 3.8-32.6L-3.8-33.4C-6.6-32.4-8.2-29.6-8.2-25.5C-8.2-19.5-5.8-14.5-5.4-10Z',
   neck: 'M-5.4 4C-4.8 0-3.9-3-3.6-8L3-7.6C3.1-4 3.5-1 4.6 3Z',
   head: 'M-4.8-5.6C-4.8-9.8-1.9-12.1 1.4-12.1C4.6-12.1 6.9-9.8 6.9-6.6C6.9-5.2 7.5-4.2 7.7-3.3C7.9-2.4 6.9-2.2 6.8-1.4C6.6 0 5.5 1.3 3.2 1.5C.4 1.7-1.4.9-2.8-.5C-4.2-1.9-4.8-3.8-4.8-5.6Z',
 } as const
@@ -122,6 +135,9 @@ const BODY = {
 const SHOULDER: Point = [-0.5, -29]
 const NECK: Point = [-0.6, -30.5]
 const UPPER_BACK: Point = [-7, -30.5]
+/** Сгиб в пояснице — от таза; и где таз в координатах груди. */
+const WAIST: Point = [0, -13]
+const UNDER_WAIST: Point = [0, 13]
 
 const sub = (a: Pair, b: Pair): Pair => [a[0] - b[0], a[1] - b[1]]
 const mid = (a: Pair, b: Pair): Pair => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]
@@ -132,12 +148,21 @@ function moved(shapes: Shape[], by: Point): Shape[] {
   return shapes.map((shape) => ({ ...shape, shift: plus(shape.shift ?? [0, 0], by) }))
 }
 
+/** Поза дальней ноги, когда ноги работают по очереди. */
+export interface LegPose {
+  s: number
+  t: number
+  g?: number
+}
+
 export interface SideFigure {
   /** Что неподвижно: стопы на полу, таз на скамье или сиденье, кисти на перекладине. */
   root: 'foot' | 'hip' | 'hand'
   /** Где стоит неподвижная точка; две точки — она переезжает между позами. */
   at: Point | readonly [Point, Point]
   poses: readonly [Pose, Pose]
+  /** Дальняя нога, если она движется не так, как ближняя: ходьба, педали, выпад. */
+  farLeg?: readonly [LegPose, LegPose]
   /** Длины плеча и предплечья, если рука видна в ракурсе короче настоящей. */
   arm?: Pair
   /** Кисть сжата в кулак — держит снаряд. */
@@ -146,6 +171,13 @@ export interface SideFigure {
   held?: Shape[]
   /** Снаряд на плечах: координаты от места грифа на спине. */
   back?: Shape[]
+  /** Валик тренажёра на голени и платформа под стопой: координаты от лодыжки. */
+  onShin?: Shape[]
+  onFoot?: Shape[]
+  /** То, что едет вместе с тазом: сиденье гребного тренажёра. */
+  seat?: Shape[]
+  /** Трос: тянется от этой точки к кисти и следует за ней. */
+  cable?: Point
   world?: Shape[]
   viewBox?: string
 }
@@ -154,6 +186,43 @@ export interface SideFigure {
 export const FLOOR_Y = 110.5
 export const FLOOR: Shape = { layer: 0, gear: 'steel', d: `M14 ${FLOOR_Y}H106` }
 
+/** Шагов на пути от исходной позы к конечной, когда движение идёт по шагам. */
+const STEPS = 10
+/** Плавный разгон и торможение: доля времени → доля пути. */
+const ease = (x: number) => (x < 0.5 ? 4 * x ** 3 : 1 - (-2 * x + 2) ** 3 / 2)
+const stepped = ([from, to]: Pair): number[] =>
+  Array.from({ length: STEPS + 1 }, (_, step) => {
+    const value = from + (to - from) * ease(step / STEPS)
+    return Math.round(value * 100) / 100
+  })
+
+const radians = (degrees: number) => (degrees * Math.PI) / 180
+/** Куда смотрит часть с таким углом: по часовой от «вверх». */
+const toward = (degrees: number, length: number): Point => [
+  length * Math.sin(radians(degrees)),
+  -length * Math.cos(radians(degrees)),
+]
+const turned = ([x, y]: Point, degrees: number): Point => {
+  const [sin, cos] = [Math.sin(radians(degrees)), Math.cos(radians(degrees))]
+  return [x * cos - y * sin, x * sin + y * cos]
+}
+
+/** Переводит сустав и всё, что на нём висит, на движение по шагам: без сдвигов по времени. */
+function inSteps(joint: Joint): Joint {
+  const { delay: _, ...rest } = joint
+  return {
+    ...rest,
+    ...(joint.turn[0] !== joint.turn[1] && { turnPath: stepped(joint.turn) }),
+    ...(joint.move && {
+      movePath: stepped([joint.move[0][0], joint.move[1][0]]).map((x, step): Point => [
+        x,
+        stepped([joint.move![0][1], joint.move![1][1]])[step],
+      ]),
+    }),
+    kids: joint.kids.map(inSteps),
+  }
+}
+
 /** Собирает фигуру на виде сбоку из двух поз. */
 export function sideFigure(spec: SideFigure): Figure {
   const [from, to] = spec.poses
@@ -161,10 +230,14 @@ export function sideFigure(spec: SideFigure): Figure {
   const shin = pair('s')
   const thigh = pair('t')
   const torso = pair('u')
+  const bend = pair('b')
   const head = pair('h')
   const arm = pair('a')
   const forearm = pair('f')
   const foot = pair('g')
+  const bends = bend[0] !== 0 || bend[1] !== 0
+  // Грудь повёрнута относительно таза на угол сгиба — от неё считаются шея и рука.
+  const chest: Pair = [torso[0] + bend[0], torso[1] + bend[1]]
   const [upper, lower] = spec.arm ?? ARM
   const reach = lower + PALM
   const upperShape = upperArm(upper)
@@ -187,7 +260,7 @@ export function sideFigure(spec: SideFigure): Figure {
   ]
   const glute: Shape = { layer: 1, circle: [-1.2, 1.5, 6.4] }
 
-  /** Шея и голова; `hip` — где таз в координатах корпуса. */
+  /** Шея и голова; `hip` — где таз в координатах груди. */
   const headJoint = (hip: Point): Joint => ({
     at: plus(hip, NECK),
     turn: [2 + head[0] / 2, 2 + head[1] / 2],
@@ -205,10 +278,10 @@ export function sideFigure(spec: SideFigure): Figure {
   })
   const onBack = (hip: Point): Shape[] => moved(spec.back ?? [], plus(hip, UPPER_BACK))
 
-  /** Рука, которая растёт из корпуса; угол корпуса — у родителя. */
-  const armJoint = (): Joint => ({
-    at: SHOULDER,
-    turn: sub(arm, torso),
+  /** Рука, которая растёт из груди; угол груди — у родителя. */
+  const armJoint = (hip: Point): Joint => ({
+    at: plus(hip, SHOULDER),
+    turn: sub(arm, chest),
     delay: -90,
     shapes: upperArmShapes(),
     kids: [
@@ -223,43 +296,92 @@ export function sideFigure(spec: SideFigure): Figure {
   })
 
   /** Нога, которая растёт из таза: бедро, голень и стопа — вниз по цепочке. */
-  const legJoints = (hip: Point, parent: Pair): Joint[] => [
-    { at: hip, turn: sub(mid(thigh, torso), parent), shapes: [glute], kids: [] },
-    {
-      at: hip,
-      turn: sub(thigh, parent),
-      delay: -40,
-      shapes: [body(BODY.thigh, [0, THIGH])],
-      kids: [
-        {
-          at: [0, THIGH],
-          turn: sub(shin, thigh),
-          delay: 90,
-          shapes: [body(BODY.shin, [0, SHIN])],
-          kids: [{ at: [0, SHIN], turn: sub(foot, shin), shapes: [body(BODY.foot)], kids: [] }],
-        },
-      ],
-    },
-  ]
+  const legJoints = (
+    hip: Point,
+    parent: Pair,
+    leg: { s: Pair; t: Pair; g: Pair },
+    far: boolean,
+  ): Joint[] => {
+    const part = (d: string, shift?: Point): Shape => ({ ...body(d, shift), ...(far && { far }) })
+    return [
+      {
+        at: hip,
+        turn: sub(leg.t, parent),
+        delay: -40,
+        shapes: [part(BODY.thigh, [0, THIGH])],
+        kids: [
+          {
+            at: [0, THIGH],
+            turn: sub(leg.s, leg.t),
+            delay: 90,
+            shapes: [
+              part(BODY.shin, [0, SHIN]),
+              ...(far ? [] : moved(spec.onShin ?? [], [0, SHIN])),
+            ],
+            kids: [
+              {
+                at: [0, SHIN],
+                turn: sub(leg.g, leg.s),
+                shapes: [part(BODY.foot), ...(far ? [] : (spec.onFoot ?? []))],
+                kids: [],
+              },
+            ],
+          },
+        ],
+      },
+    ]
+  }
+  const near = { s: shin, t: thigh, g: foot }
+  const farLeg = spec.farLeg && {
+    s: [spec.farLeg[0].s, spec.farLeg[1].s] as Pair,
+    t: [spec.farLeg[0].t, spec.farLeg[1].t] as Pair,
+    g: [spec.farLeg[0].g ?? 0, spec.farLeg[1].g ?? 0] as Pair,
+  }
+  const gluteJoint = (hip: Point, parent: Pair): Joint => ({
+    at: hip,
+    turn: sub(mid(thigh, torso), parent),
+    shapes: [glute],
+    kids: [],
+  })
 
+  /** Корпус: целый или из двух частей со сгибом в пояснице; угол родителя — `parent`. */
   const torsoJoint = (parent: Pair): Joint => ({
     at: [0, 0],
     turn: sub(torso, parent),
     delay: -50,
-    shapes: [body(BODY.torso), ...onBack([0, 0])],
-    kids: [headJoint([0, 0]), armJoint()],
+    ...(bends
+      ? {
+          shapes: [body(BODY.pelvis)],
+          kids: [
+            {
+              at: WAIST,
+              turn: bend,
+              delay: -20,
+              shapes: [
+                body(BODY.chest, UNDER_WAIST),
+                { layer: 1, circle: [0, 0, 5.3] },
+                ...onBack(UNDER_WAIST),
+              ],
+              kids: [headJoint(UNDER_WAIST), armJoint(UNDER_WAIST)],
+            },
+          ],
+        }
+      : {
+          shapes: [body(BODY.torso), ...onBack([0, 0])],
+          kids: [headJoint([0, 0]), armJoint([0, 0])],
+        }),
   })
 
   let kids: Joint[]
   let shapes: Shape[] = []
   if (spec.root === 'foot') {
-    shapes = [body(BODY.foot)]
+    shapes = [body(BODY.foot), ...(spec.onFoot ?? [])]
     kids = [
       {
         at: [0, 0],
         turn: shin,
         delay: 90,
-        shapes: [body(BODY.shin)],
+        shapes: [body(BODY.shin), ...(spec.onShin ?? [])],
         kids: [
           {
             at: [0, -SHIN],
@@ -267,12 +389,8 @@ export function sideFigure(spec: SideFigure): Figure {
             delay: -40,
             shapes: [body(BODY.thigh)],
             kids: [
-              {
-                at: [0, -THIGH],
-                turn: sub(mid(thigh, torso), thigh),
-                shapes: [glute],
-                kids: [],
-              },
+              ...(farLeg ? legJoints([0, -THIGH], thigh, farLeg, true) : []),
+              gluteJoint([0, -THIGH], thigh),
               { ...torsoJoint(thigh), at: [0, -THIGH] },
             ],
           },
@@ -280,7 +398,13 @@ export function sideFigure(spec: SideFigure): Figure {
       },
     ]
   } else if (spec.root === 'hip') {
-    kids = [...legJoints([0, 0], STILL), torsoJoint(STILL)]
+    shapes = spec.seat ?? []
+    kids = [
+      ...(farLeg ? legJoints([0, 0], STILL, farLeg, true) : []),
+      ...legJoints([0, 0], STILL, near, false),
+      gluteJoint([0, 0], STILL),
+      torsoJoint(STILL),
+    ]
   } else {
     // Вис: цепочка идёт от кисти вниз — предплечье, плечо, корпус, ноги.
     const hip: Point = [-SHOULDER[0], -SHOULDER[1]]
@@ -303,7 +427,12 @@ export function sideFigure(spec: SideFigure): Figure {
                 turn: sub(torso, arm),
                 delay: -50,
                 shapes: [body(BODY.torso, hip), ...onBack(hip)],
-                kids: [headJoint(hip), ...legJoints(hip, torso)],
+                kids: [
+                  headJoint(hip),
+                  ...(farLeg ? legJoints(hip, torso, farLeg, true) : []),
+                  ...legJoints(hip, torso, near, false),
+                  gluteJoint(hip, torso),
+                ],
               },
             ],
           },
@@ -316,11 +445,58 @@ export function sideFigure(spec: SideFigure): Figure {
   const [start, end] = moving
     ? (spec.at as readonly [Point, Point])
     : [spec.at as Point, spec.at as Point]
-  return {
-    root: { at: start, turn: STILL, ...(moving && { move: [start, end] }), shapes, kids },
+  const root: Joint = {
+    at: start,
+    turn: STILL,
+    ...(moving && { move: [start, end] }),
+    shapes,
+    kids,
+  }
+  const figure = {
     world: spec.world ?? [FLOOR],
     upperArm: upper,
     viewBox: spec.viewBox ?? '3 1 114 114',
+  }
+  if (!spec.cable) return { root, tethers: [], ...figure }
+
+  // Трос следует за кистью, только когда всё идёт по одним и тем же шагам пути.
+  const anchor = spec.cable
+  const angles = {
+    s: stepped(shin),
+    t: stepped(thigh),
+    u: stepped(chest),
+    a: stepped(arm),
+    f: stepped(forearm),
+    x: stepped([start[0], end[0]]),
+    y: stepped([start[1], end[1]]),
+  }
+  const toHand = angles.u.map((u, step): Point => {
+    const base: Point = [angles.x[step], angles.y[step]]
+    const hip =
+      spec.root === 'foot'
+        ? plus(plus(base, toward(angles.s[step], SHIN)), toward(angles.t[step], THIGH))
+        : base
+    const hand = [
+      turned(SHOULDER, u),
+      toward(angles.a[step], upper),
+      toward(angles.f[step], reach),
+    ].reduce(plus, hip)
+    return [hand[0] - anchor[0], hand[1] - anchor[1]]
+  })
+  const aim = toHand.map(([x, y]) => Math.round((Math.atan2(x, -y) * 1800) / Math.PI) / 10)
+  const length = toHand.map(([x, y]) => Math.round(Math.hypot(x, y) * 10) / 10)
+  return {
+    root: inSteps(root),
+    tethers: [
+      {
+        at: anchor,
+        turn: [aim[0], aim[STEPS]],
+        turnPath: aim,
+        shapes: [{ layer: 0, gear: 'cable', d: 'M0 0V-400', dashPath: length }],
+        kids: [],
+      },
+    ],
+    ...figure,
   }
 }
 
@@ -422,6 +598,7 @@ export function frontFigure(spec: FrontFigure): Figure {
         armJoint(true),
       ],
     },
+    tethers: [],
     // На виде спереди человек выше, чем сбоку: пол и кадр стоят под его стопами.
     world: spec.world ?? [{ ...FLOOR, d: 'M14 119.4H106' }],
     upperArm: upper,
@@ -430,10 +607,6 @@ export function frontFigure(spec: FrontFigure): Figure {
 }
 
 const REST: FrontPose = { a: 172, f: 176 }
-/** Шагов на пути от виса к верхней точке. */
-const STEPS = 10
-/** Плавный разгон и торможение: доля времени → доля пути. */
-const ease = (x: number) => (x < 0.5 ? 4 * x ** 3 : 1 - (-2 * x + 2) ** 3 / 2)
 
 /** Путь подъёма в висе: на каждом шаге — насколько поднято тело и поза рук под перекладину. */
 function hangPath({ out, far, near }: FrontHang): { lift: number; pose: FrontPose }[] {
@@ -453,8 +626,9 @@ export function frontReach(out: number, below: number): FrontPose {
   const span = Math.min(Math.hypot(out, below), upper + lower - 0.01)
   const toHand = Math.atan2(out, below)
   const bend = Math.acos((upper ** 2 + span ** 2 - lower ** 2) / (2 * upper * span))
-  const a = toHand + bend
+  // Локоть уходит наружу: при кисти над плечом — по часовой, под плечом — против.
+  const a = toHand + (below >= 0 ? bend : -bend)
   const f = Math.atan2(out - upper * Math.sin(a), below - upper * Math.cos(a))
-  const degrees = (radians: number) => Math.round((radians * 1800) / Math.PI) / 10
+  const degrees = (angle: number) => Math.round((angle * 1800) / Math.PI) / 10
   return { a: degrees(a), f: degrees(f) }
 }

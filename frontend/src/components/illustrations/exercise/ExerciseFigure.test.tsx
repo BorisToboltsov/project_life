@@ -1,6 +1,8 @@
 import { render } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
+import { ru } from '@/i18n/ru'
+
 import { DRAWINGS } from './drawings'
 import { ExerciseFigure } from './ExerciseFigure'
 import { MuscleMap } from './MuscleMap'
@@ -14,11 +16,13 @@ describe('рисунок упражнения', () => {
     const svg = container.querySelector('svg.illus.ex')
     expect(svg).toHaveAttribute('aria-hidden', 'true')
     // Контур и заливка рисуют одни и те же части: иначе внутри силуэта остались бы линии.
-    const [outline, fill] = [...container.querySelectorAll('.ex-outline, .ex-fill')]
-    expect(outline.querySelectorAll('path, circle, ellipse').length).toBeGreaterThan(5)
-    expect(fill.querySelectorAll('path, circle, ellipse')).toHaveLength(
-      outline.querySelectorAll('path, circle, ellipse').length,
-    )
+    const parts = (pass: string) =>
+      [...container.querySelectorAll(pass)].reduce(
+        (total, group) => total + group.querySelectorAll('path, circle, ellipse').length,
+        0,
+      )
+    expect(parts('.ex-outline')).toBeGreaterThan(5)
+    expect(parts('.ex-fill')).toBe(parts('.ex-outline'))
   })
 
   it('движение — это углы двух поз в переменных сустава', () => {
@@ -103,15 +107,45 @@ describe('рисунок упражнения', () => {
     expect(container.querySelectorAll('.ex-plate')).toHaveLength(2)
   })
 
-  it.each([null, 'table_tennis'] as const)(
-    '%s: у своего упражнения и у штатного без рисунка — общий, гантель',
-    (preset) => {
-      const { container } = render(<ExerciseFigure preset={preset} />)
+  it('у своего упражнения — общий рисунок, гантель', () => {
+    const { container } = render(<ExerciseFigure preset={null} />)
 
-      expect(container.querySelector('.ex-handle')).not.toBeNull()
-      expect(container.querySelector('.ex-outline')).toBeNull()
-    },
-  )
+    expect(container.querySelector('.ex-handle')).not.toBeNull()
+    expect(container.querySelector('.ex-outline')).toBeNull()
+  })
+
+  it('рисунок есть у каждого штатного упражнения из словаря', () => {
+    expect(drawn.toSorted()).toEqual(Object.keys(ru.exerciseNames).toSorted())
+    expect(drawn).toHaveLength(40)
+  })
+
+  it('дальняя нога рисуется своим силуэтом за телом', () => {
+    const { container } = render(<ExerciseFigure preset="treadmill_walk" />)
+
+    // Два силуэта: дальняя нога и тело; у руки поверх корпуса — третий.
+    expect(container.querySelectorAll('.ex-outline')).toHaveLength(3)
+    expect(container.querySelectorAll('.ex-fill')).toHaveLength(3)
+  })
+
+  it('трос тянется от блока к кисти и идёт по тем же шагам, что и рука', () => {
+    const { container } = render(<ExerciseFigure preset="rope_pushdown" />)
+
+    const cable = container.querySelector<SVGPathElement>('.ex-cable')!
+    const css = container.querySelector('style')!.textContent
+    expect(cable.style.strokeDasharray).toMatch(/^[\d.]+ 400$/)
+    expect(css).toContain(`@keyframes ${cable.style.animationName}{`)
+    expect(css).toContain('stroke-dasharray:')
+    // Суставы такого рисунка идут по шагам: общих ключевых кадров со сдвигами у него нет.
+    expect(container.querySelectorAll('.ex-j')).toHaveLength(0)
+    expect(container.querySelectorAll('.ex-t').length).toBeGreaterThan(2)
+  })
+
+  it('неподвижному кадру с тросом хватает его длины в конечной позе', () => {
+    const { container } = render(<ExerciseFigure preset="lat_pulldown" still />)
+
+    expect(container.querySelector('style')).toBeNull()
+    expect(container.querySelector<SVGPathElement>('.ex-cable')!.style.strokeDasharray).not.toBe('')
+  })
 })
 
 describe('карта мышц', () => {

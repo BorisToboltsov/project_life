@@ -335,14 +335,24 @@ circle.ex-steel {
   animation: ex-move 5s infinite both;
 }
 
-/* Сустав, который идёт по шагам пути: ключевые кадры у него свои, рядом с рисунком. */
-.ex-t {
+/* Трос тренажёра: тонкая линия от блока к кисти. */
+.ex-cable {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: calc(1.6px * var(--ex-k, 1));
+  stroke-linecap: round;
+}
+
+/* Сустав или трос, который идёт по шагам пути: ключевые кадры у него свои, рядом с рисунком. */
+.ex-t,
+.ex-cable {
   animation: 5s linear infinite both;
 }
 
 .ex-still .ex-j,
 .ex-still .ex-m,
-.ex-still .ex-t {
+.ex-still .ex-t,
+.ex-still .ex-cable {
   animation: none;
 }
 

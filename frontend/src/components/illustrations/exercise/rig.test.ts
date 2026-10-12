@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { frontFigure, frontReach, type Joint } from './rig'
+import { frontFigure, frontReach, type Joint, type Pose, type Shape, sideFigure } from './rig'
 
 const radians = (degrees: number) => (degrees * Math.PI) / 180
 const UPPER = 20.5
@@ -80,5 +80,147 @@ describe('вис на перекладине', () => {
 
     expect(still.root.movePath).toBeUndefined()
     expect(still.root.kids.every((joint: Joint) => joint.turn[0] === joint.turn[1])).toBe(true)
+  })
+})
+
+const STAND: Pose = { s: 3, t: -1, u: 1, h: 0, a: 178, f: 176 }
+const every = (joint: Joint): Joint[] => [joint, ...joint.kids.flatMap(every)]
+const shapesOf = (joint: Joint): Shape[] => every(joint).flatMap((part) => part.shapes)
+
+describe('фигура сбоку', () => {
+  it('без сгиба корпус — одна часть, со сгибом — таз и грудь на своём суставе', () => {
+    const rigid = sideFigure({ root: 'foot', at: [50, 105.5], poses: [STAND, STAND] })
+    const bent = sideFigure({
+      root: 'hip',
+      at: [60, 100],
+      poses: [
+        { ...STAND, b: 0 },
+        { ...STAND, b: 28 },
+      ],
+    })
+
+    expect(every(rigid.root).some((joint) => joint.turn[1] === 28)).toBe(false)
+    const waist = every(bent.root).find((joint) => joint.turn[0] === 0 && joint.turn[1] === 28)!
+    // Шея и рука растут из груди — сгибаются вместе с ней.
+    expect(waist.kids).toHaveLength(2)
+    expect(shapesOf(bent.root).length).toBeGreaterThan(shapesOf(rigid.root).length)
+  })
+
+  it('дальняя нога есть, только когда она задана, и помечена для отдельного силуэта', () => {
+    const one = sideFigure({ root: 'hip', at: [50, 50], poses: [STAND, STAND] })
+    const two = sideFigure({
+      root: 'hip',
+      at: [50, 50],
+      poses: [STAND, STAND],
+      farLeg: [
+        { s: 38, t: 18 },
+        { s: -18, t: -22 },
+      ],
+    })
+
+    expect(shapesOf(one.root).filter((shape) => shape.far)).toHaveLength(0)
+    // Бедро, голень и стопа.
+    expect(shapesOf(two.root).filter((shape) => shape.far)).toHaveLength(3)
+  })
+
+  it('валик на голени и платформа под стопой у дальней ноги не повторяются', () => {
+    const gear: Shape[] = [{ layer: 3, gear: 'plate', circle: [0, 0, 3] }]
+    const figure = sideFigure({
+      root: 'hip',
+      at: [50, 50],
+      poses: [STAND, STAND],
+      farLeg: [
+        { s: 0, t: 0 },
+        { s: 0, t: 0 },
+      ],
+      onShin: gear,
+      onFoot: gear,
+    })
+
+    expect(shapesOf(figure.root).filter((shape) => shape.gear)).toHaveLength(2)
+  })
+
+  it('фигура, у которой таз переезжает, несёт сиденье с собой', () => {
+    const seat: Shape[] = [{ layer: 0, gear: 'pad', d: 'M-8 7h15v3h-15z' }]
+    const figure = sideFigure({
+      root: 'hip',
+      at: [
+        [56, 92],
+        [38, 92],
+      ],
+      poses: [STAND, STAND],
+      seat,
+    })
+
+    expect(figure.root.move).toEqual([
+      [56, 92],
+      [38, 92],
+    ])
+    expect(figure.root.shapes).toEqual(seat)
+  })
+})
+
+describe('трос', () => {
+  const anchor = [70, 7] as const
+  const figure = sideFigure({
+    root: 'foot',
+    at: [48, 105.5],
+    poses: [
+      { s: 4, t: -3, u: 8, h: -4, a: 176, f: 40 },
+      { s: 4, t: -3, u: 8, h: -4, a: 176, f: 172 },
+    ],
+    grip: true,
+    cable: anchor,
+  })
+  const [tether] = figure.tethers
+  const lengths = tether.shapes[0].dashPath!
+
+  it('без троса фигура движется по общим ключевым кадрам', () => {
+    const plain = sideFigure({ root: 'foot', at: [48, 105.5], poses: [STAND, STAND] })
+
+    expect(plain.tethers).toEqual([])
+    expect(every(plain.root).some((joint) => joint.turnPath)).toBe(false)
+  })
+
+  it('с тросом все суставы идут по одним шагам и без сдвигов по времени', () => {
+    const joints = every(figure.root)
+
+    expect(joints.every((joint) => joint.delay === undefined)).toBe(true)
+    const moving = joints.filter((joint) => joint.turn[0] !== joint.turn[1])
+    expect(moving.length).toBeGreaterThan(0)
+    expect(moving.every((joint) => joint.turnPath?.length === lengths.length)).toBe(true)
+  })
+
+  it('на каждом шаге трос кончается там, где кисть', () => {
+    const reach = 15.4 + 2
+    const turn = (degrees: number) => (degrees * Math.PI) / 180
+    const toward = (degrees: number, length: number) => [
+      length * Math.sin(turn(degrees)),
+      -length * Math.cos(turn(degrees)),
+    ]
+    // Локоть неподвижен: ноги, корпус и плечо в обеих позах одни и те же.
+    const parts = [toward(4, 25), toward(-3, 26), toward(176, 19.6)]
+    const shoulder = [
+      -0.5 * Math.cos(turn(8)) + 29 * Math.sin(turn(8)),
+      -0.5 * Math.sin(turn(8)) - 29 * Math.cos(turn(8)),
+    ]
+    const elbow = [...parts, shoulder].reduce(([x, y], [dx, dy]) => [x + dx, y + dy], [48, 105.5])
+    const forearm = every(figure.root).find((joint) => joint.turnPath && joint.kids.length === 0)!
+
+    lengths.forEach((length, step) => {
+      // Угол предплечья: сумма поворотов по цепочке равна его углу в позе на этом шаге.
+      const angle = 176 + forearm.turnPath![step]
+      const [hx, hy] = toward(angle, reach)
+      const palm = [elbow[0] + hx, elbow[1] + hy]
+      const end = toward(tether.turnPath![step], length)
+
+      expect(anchor[0] + end[0], `шаг ${step}`).toBeCloseTo(palm[0], 0)
+      expect(anchor[1] + end[1], `шаг ${step}`).toBeCloseTo(palm[1], 0)
+    })
+  })
+
+  it('длина троса меняется вместе с движением', () => {
+    expect(lengths[0]).not.toBe(lengths.at(-1))
+    expect(new Set(lengths).size).toBeGreaterThan(5)
   })
 })
