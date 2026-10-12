@@ -19,9 +19,11 @@ from pydantic import (
 )
 
 from app import barcodes
+from app.exercises import CardioField, ExerciseKind, ExercisePreset, ExerciseType, Muscle
 from app.metrics import MetricPreset, Quantity, Unit, to_canonical
 from app.models import (
     ErrorSource,
+    Exercise,
     FoodEntry,
     Language,
     Meal,
@@ -299,6 +301,84 @@ class MetricSummary(BaseModel):
     metric_id: UUID
     latest: MeasurementOut | None
     previous: MeasurementOut | None
+
+
+ExerciseName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=60)]
+
+
+def _distinct(muscles: list[Muscle]) -> list[Muscle]:
+    """Каждая мышца — один раз, в том порядке, в каком её назвали."""
+    return list(dict.fromkeys(muscles))
+
+
+class ExerciseIn(Strict):
+    """Своё упражнение. Что записывает подход, задают один раз, при создании."""
+
+    name: ExerciseName
+    kind: ExerciseKind
+    muscles: Annotated[list[Muscle], Field(max_length=len(Muscle)), AfterValidator(_distinct)] = []
+
+
+class ExercisePresetIn(Strict):
+    preset: ExercisePreset
+
+
+class ExerciseOut(BaseModel):
+    """Упражнение из списка пользователя."""
+
+    id: UUID
+    # Код штатного упражнения: название подбирает интерфейс. У своего — `null`.
+    preset: ExercisePreset | None
+    # Название, которое дал пользователь; у штатного — `null`.
+    name: str | None
+    kind: ExerciseKind
+    # Мышцы, которые делают основную работу, и те, что помогают.
+    muscles: list[Muscle]
+    secondary: list[Muscle]
+    # Что, кроме времени, записывает подход кардио; у остальных видов — пусто.
+    cardio_fields: list[CardioField]
+    # Убрано из списка: записанное по нему остаётся, но новых подходов не вносят.
+    archived: bool
+
+    @classmethod
+    def of(cls, exercise: Exercise) -> Self:
+        return cls(
+            id=exercise.id,
+            preset=exercise.preset,
+            name=exercise.name,
+            kind=exercise.kind,
+            muscles=list(exercise.muscles),
+            secondary=list(exercise.secondary),
+            cardio_fields=list(exercise.cardio_fields),
+            archived=exercise.archived_at is not None,
+        )
+
+
+class PresetExerciseOut(BaseModel):
+    """Штатное упражнение справочника."""
+
+    preset: ExercisePreset
+    kind: ExerciseKind
+    muscles: list[Muscle]
+    secondary: list[Muscle]
+    cardio_fields: list[CardioField]
+
+    @classmethod
+    def of(cls, exercise: ExerciseType) -> Self:
+        return cls(
+            preset=exercise.code,
+            kind=exercise.kind,
+            muscles=list(exercise.muscles),
+            secondary=list(exercise.secondary),
+            cardio_fields=list(exercise.cardio_fields),
+        )
+
+
+class ExerciseListOut(BaseModel):
+    # Весь список пользователя по порядку, вместе с убранными упражнениями.
+    exercises: list[ExerciseOut]
+    # Справочник целиком: экран показывает из него то, чего в списке нет.
+    catalog: list[PresetExerciseOut]
 
 
 # Отчёт об ошибке с клиента (инвариант I9). У каждого поля жёсткая форма: свободный текст —

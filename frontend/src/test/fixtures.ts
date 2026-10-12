@@ -322,3 +322,66 @@ export function diaryDay(
     goal,
   }
 }
+
+function catalogExercise(
+  preset: Schemas['ExercisePreset'],
+  kind: Schemas['ExerciseKind'],
+  muscles: Schemas['Muscle'][],
+  secondary: Schemas['Muscle'][] = [],
+  cardio_fields: Schemas['CardioField'][] = [],
+): Schemas['PresetExerciseOut'] {
+  return { preset, kind, muscles, secondary, cardio_fields }
+}
+
+/** Часть справочника упражнений: по одному на каждый вид и на каждую особенность. */
+export const exerciseCatalog = [
+  catalogExercise(
+    'treadmill_walk',
+    'cardio',
+    ['quads', 'glutes'],
+    ['calves'],
+    ['distance', 'incline'],
+  ),
+  catalogExercise(
+    'deadlift',
+    'weight_reps',
+    ['hamstrings', 'glutes', 'lower_back'],
+    ['quads', 'traps'],
+  ),
+  catalogExercise('plank', 'time', ['abs'], ['lower_back', 'delts']),
+  catalogExercise('table_tennis', 'time', []),
+  catalogExercise('barbell_squat', 'weight_reps', ['quads', 'glutes'], ['hamstrings', 'abs']),
+  catalogExercise('bench_press', 'weight_reps', ['chest'], ['triceps', 'delts']),
+  catalogExercise('pull_up', 'reps', ['lats'], ['biceps', 'forearms']),
+]
+
+/** Штатное упражнение в списке пользователя — таким его отдаёт сервер после добавления. */
+export function listedExercise(
+  preset: Schemas['ExercisePreset'],
+  number: number,
+): Schemas['ExerciseOut'] {
+  const described = exerciseCatalog.find((exercise) => exercise.preset === preset)!
+  return {
+    ...described,
+    id: `0199b7a0-0000-7000-8000-0000000000e${number}`,
+    name: null,
+    archived: false,
+  }
+}
+
+/** Своё упражнение: его назвал пользователь, мышцы он выбрал сам. */
+export const dumbbellRow: Schemas['ExerciseOut'] = {
+  id: '0199b7a0-0000-7000-8000-0000000000e9',
+  preset: null,
+  name: 'Тяга гантели к поясу',
+  kind: 'weight_reps',
+  muscles: ['lats', 'biceps'],
+  secondary: [],
+  cardio_fields: [],
+  archived: false,
+}
+
+/** Ответ списка упражнений: строки пользователя и справочник целиком. */
+export function exerciseList(list: Schemas['ExerciseOut'][] = []): Schemas['ExerciseListOut'] {
+  return { exercises: list, catalog: exerciseCatalog }
+}

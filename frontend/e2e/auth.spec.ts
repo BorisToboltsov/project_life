@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-import { adminInviteLink, login, logout, PASSWORD, register } from './steps.ts'
+import { adminInviteLink, login, logout, openUnderMore, PASSWORD, register } from './steps.ts'
 
 test('администратор приглашает пользователя, тот регистрируется и ведёт профиль', async ({
   page,
@@ -11,7 +11,7 @@ test('администратор приглашает пользователя, 
 
   // Администратор регистрируется по ссылке из командной строки и создаёт приглашение.
   await register(page, adminInviteLink(), 'Борис', adminEmail)
-  await page.getByRole('link', { name: 'Управление' }).click()
+  await openUnderMore(page, 'Управление')
   await page.getByLabel('Для кого (необязательно)').fill(`для ${suffix}`)
   await page.getByRole('button', { name: 'Создать приглашение' }).click()
   const inviteLink = await page.getByLabel('Ссылка-приглашение').inputValue()
@@ -21,7 +21,7 @@ test('администратор приглашает пользователя, 
   // Приглашённый регистрируется и заполняет профиль.
   await register(page, inviteLink, 'Анна', memberEmail)
   await expect(page.getByRole('link', { name: 'Управление' })).toHaveCount(0)
-  await page.getByRole('link', { name: 'Профиль' }).click()
+  await openUnderMore(page, 'Профиль')
   await page.getByLabel('Рост, см').fill('168.5')
   await page.getByLabel('Пол').selectOption('female')
   // Дата набирается одними цифрами и показывается как день/месяц/год.
@@ -65,7 +65,7 @@ test('администратор выдаёт ссылку для сброса �
   const newPassword = 'a brand new passphrase'
 
   await register(page, adminInviteLink(), 'Вера', email)
-  await page.getByRole('link', { name: 'Управление' }).click()
+  await openUnderMore(page, 'Управление')
   const row = page.getByRole('listitem').filter({ hasText: email })
   await row.getByRole('button', { name: 'Ссылка для сброса пароля' }).click()
   const resetLink = await page.getByLabel('Ссылка для сброса пароля: Вера').inputValue()

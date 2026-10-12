@@ -85,6 +85,8 @@
 - `app.metrics` — справочник штатных показателей (четыре начальных и семь рекомендуемых):
   величина, каноническая единица, допустимый диапазон; общий диапазон своего показателя;
   здесь же пересчёт единиц.
+- `app.exercises` — справочник штатных упражнений: что записывает подход, какие мышцы
+  работают и помогают, какие поля есть у кардио.
 - `app.nutrition` — предустановленные приёмы пищи, единицы продукта, источники продукта,
   меры количества (порция и упаковка), энергия белков, жиров и углеводов, пересчёт порций
   в единицы продукта и состава на 100 единиц — в съеденное.
@@ -102,7 +104,7 @@
 | Группа | Маршруты |
 |--------|----------|
 | Открытые | `GET /api/health`; `POST /api/auth/…`: `login`, `register`, `refresh`, `logout`, `invite/check`, `password-reset`, `password-reset/check` |
-| Для вошедших | `GET` и `PATCH /api/me`; `POST /api/auth/password`, `POST /api/auth/logout-all`; `GET /api/metrics`, `POST /api/metrics/presets`, `PUT` и `DELETE /api/metrics/{id}`; `GET /api/measurements`, `GET /api/measurements/summary`, `PUT` и `DELETE /api/measurements/{id}`; `GET /api/products`, `GET /api/products/external`, `POST /api/products/lookup`, `GET`, `PUT` и `DELETE /api/products/{id}`; `GET /api/diary`, `GET /api/diary/suggestions`, `PUT` и `DELETE /api/diary/entries/{id}`, `PUT` и `DELETE /api/diary/meals/{id}`, `PUT` и `DELETE /api/diary/water/{id}`, `POST /api/diary/copy`, `GET` и `PUT /api/diary/goal`; `POST /api/errors` |
+| Для вошедших | `GET` и `PATCH /api/me`; `POST /api/auth/password`, `POST /api/auth/logout-all`; `GET /api/metrics`, `POST /api/metrics/presets`, `PUT` и `DELETE /api/metrics/{id}`; `GET /api/measurements`, `GET /api/measurements/summary`, `PUT` и `DELETE /api/measurements/{id}`; `GET /api/exercises`, `POST /api/exercises/presets`, `PUT` и `DELETE /api/exercises/{id}`; `GET /api/products`, `GET /api/products/external`, `POST /api/products/lookup`, `GET`, `PUT` и `DELETE /api/products/{id}`; `GET /api/diary`, `GET /api/diary/suggestions`, `PUT` и `DELETE /api/diary/entries/{id}`, `PUT` и `DELETE /api/diary/meals/{id}`, `PUT` и `DELETE /api/diary/water/{id}`, `POST /api/diary/copy`, `GET` и `PUT /api/diary/goal`; `POST /api/errors` |
 | Для администратора | `/api/admin/users`, `/api/admin/users/{id}/password-reset`, `/api/admin/invites`, `/api/admin/invites/{id}`, `/api/admin/errors`, `/api/admin/errors/{id}` |
 
 ### Таблицы
@@ -116,6 +118,7 @@
 | `login_failures` | неудачные попытки входа для ограничения частоты |
 | `metrics` | виды замеров пользователя: код штатного или своё название, величина (длина, масса, процент), место в списке, отметка «убран из списка» |
 | `measurements` | измерения: вид замера, значение в канонической единице, исходное значение и единица, момент и местная дата, источник |
+| `exercises` | упражнения пользователя: код штатного или своё название, вид подхода, мышцы своего упражнения, место в списке, отметка «убрано из списка» |
 | `products` | общий каталог продуктов: название, единица (г или мл), состав на 100 единиц — калории, белки, жиры, углеводы и необязательные сахара, насыщенные жиры, клетчатка, соль, — необязательные размеры порции и упаковки в единицах продукта, штрихкод (один на продукт), источник, автор |
 | `barcode_misses` | штрихкоды, которых не оказалось в Open Food Facts, и когда их спрашивали |
 | `meals` | приёмы пищи пользователя: код предустановленного или своё название, место в дне, отметка «убран из списка» |
@@ -138,6 +141,19 @@
 каноническую единицу и хранит оба значения ([ADR 0004](adr/0004-units.md)). Ключ записи
 выбирает клиент ([ADR 0002](adr/0002-record-ids.md)), местную дату — тоже
 ([ADR 0003](adr/0003-time.md)).
+
+### Упражнения
+
+Решения — в [ADR 0014](adr/0014-exercises.md). Упражнение — запись в списке пользователя
+в таблице `exercises`, как вид замера. Штатное хранит код из справочника `app.exercises`,
+своё — название и мышцы; вид подхода есть у обоих и после создания не меняется. Список
+начинается пустым: штатное добавляется по коду, своё — с ключом от клиента. Упражнение
+убирают из списка, а не удаляют (инвариант I14).
+
+`GET /api/exercises` отдаёт список пользователя вместе с убранными и справочник целиком:
+вид подхода, основные и помогающие мышцы, поля кардио. Название, шаги техники и рисунок
+штатного упражнения живут на фронтенде и обязаны быть у каждого (инвариант I15).
+Подходов и тренировок в этой версии ещё нет.
 
 ### Питание
 
@@ -232,10 +248,14 @@
   порций в единицы продукта.
 - `src/components/ui/` — компоненты shadcn/ui, добавляются из реестра как есть.
 - `src/components/form/` — поля форм с подписью, подсказкой и ошибкой, поле даты, проверка
-  числовых полей, калории, которые следуют за БЖУ (`useAutoKcal`), метка выбора одного из
-  нескольких (`ChoiceChip`).
+  числовых полей, калории, которые следуют за БЖУ (`useAutoKcal`), метки выбора одного из
+  нескольких (`ChoiceChip`) и нескольких из многих (`CheckChip`).
 - `src/components/illustrations/` — анимированные SVG-подсказки «как измерять» и стакан
   воды, который заполняется до цели (`WaterGlass`).
+- `src/components/illustrations/exercise/` — рисунки техники упражнений
+  ([ADR 0015](adr/0015-exercise-drawings.md)): части тела и сборка фигуры из двух поз
+  (`rig.ts`), снаряды и тренажёры (`gear.ts`), позы всех штатных упражнений
+  (`drawings.ts`), отрисовка (`ExerciseFigure.tsx`) и карта мышц (`MuscleMap.tsx`).
 - `src/components/chart/` — линейный график на ECharts; подгружается отдельным куском
   сборки при первом показе.
 - `src/components/scanner/` — сканер штрихкода: камера и цикл распознавания
@@ -245,10 +265,14 @@
   добавление еды, сканер, правка записи, копирование, новый приём пищи, цель, карточка
   воды),
   `products/` (каталог и форма продукта), `measurements/` (ввод, история с графиком,
-  правка, добавление вида замера), `profile/`, `admin/`.
+  правка, добавление вида замера), `exercises/` (список, карточка и форма своего
+  упражнения), `more/` (разделы, которым не хватило места в нижней панели), `profile/`,
+  `admin/`.
 
 Маршруты делятся на гостевые (`/login`, `/invite`, `/reset`) и приложение (`/`,
-`/diary/…`, `/products/…`, `/measurements/…`, `/profile`, `/admin`). Проверка на маршруте — удобство, а не защита: данные закрывает
+`/diary/…`, `/products/…`, `/measurements/…`, `/workouts/…`, `/more`, `/profile`,
+`/admin`). Раздел «Тренировки» пока открывает список упражнений: адрес карточки несёт код
+штатного упражнения или ключ своего. Проверка на маршруте — удобство, а не защита: данные закрывает
 бэкенд.
 
 Экраны подключаются в `router.tsx` лениво (I12): первая загрузка несёт рамку приложения,

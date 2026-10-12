@@ -261,3 +261,154 @@
     transition: none !important;
   }
 }
+
+/* Рисунки упражнений. Тело — один слитный силуэт: каждая часть рисуется дважды, сначала
+   толстым контуром, потом заливкой поверх, поэтому линии суставов внутри пропадают и остаётся
+   общий контур в 2,5 единицы. Рука поверх корпуса — тонкие внутренние линии. Цветом бренда —
+   только снаряд. Без анимации виден кадр в конечной позе. */
+.ex {
+  overflow: hidden;
+}
+
+.ex-outline * {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: calc(5px * var(--ex-k, 1));
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.ex-outline.ex-inner * {
+  stroke-width: calc(3.4px * var(--ex-k, 1));
+}
+
+.ex-fill * {
+  fill: var(--illus-fill);
+  stroke: none;
+}
+
+.ex-steel,
+.ex-pad {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: calc(2.5px * var(--ex-k, 1));
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.ex-pad,
+circle.ex-steel {
+  fill: var(--illus-paper);
+}
+
+.ex-plate {
+  fill: var(--illus-paper);
+  stroke: var(--illus-accent);
+  stroke-width: calc(3px * var(--ex-k, 1));
+}
+
+.ex-hub {
+  fill: var(--illus-accent);
+}
+
+.ex-bar,
+.ex-handle {
+  fill: none;
+  stroke: var(--illus-accent);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.ex-handle {
+  stroke-width: 7;
+}
+
+/* Поза — два угла сустава в переменных; движение одно на все упражнения: вниз, короткая
+   пауза, вверх чуть дольше, отдых. */
+.ex-j {
+  transform: rotate(var(--b));
+  animation: ex-pose 5s infinite both;
+}
+
+.ex-m {
+  transform: translate(var(--xb), var(--yb));
+  animation: ex-move 5s infinite both;
+}
+
+/* Трос тренажёра: тонкая линия от блока к кисти. */
+.ex-cable {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: calc(1.6px * var(--ex-k, 1));
+  stroke-linecap: round;
+}
+
+/* Сустав или трос, который идёт по шагам пути: ключевые кадры у него свои, рядом с рисунком. */
+.ex-t,
+.ex-cable {
+  animation: 5s linear infinite both;
+}
+
+.ex-still .ex-j,
+.ex-still .ex-m,
+.ex-still .ex-t,
+.ex-still .ex-cable {
+  animation: none;
+}
+
+@keyframes ex-pose {
+  0%,
+  8% {
+    transform: rotate(var(--a));
+    animation-timing-function: cubic-bezier(0.45, 0.02, 0.3, 1);
+  }
+  40%,
+  49% {
+    transform: rotate(var(--b));
+    animation-timing-function: cubic-bezier(0.45, 0, 0.3, 1);
+  }
+  82%,
+  100% {
+    transform: rotate(var(--a));
+  }
+}
+
+@keyframes ex-move {
+  0%,
+  8% {
+    transform: translate(var(--xa), var(--ya));
+    animation-timing-function: cubic-bezier(0.45, 0.02, 0.3, 1);
+  }
+  40%,
+  49% {
+    transform: translate(var(--xb), var(--yb));
+    animation-timing-function: cubic-bezier(0.45, 0, 0.3, 1);
+  }
+  82%,
+  100% {
+    transform: translate(var(--xa), var(--ya));
+  }
+}
+
+/* Карта мышц: силуэт спереди и сзади, рабочие мышцы — цветом бренда, помогающие — светлее,
+   остальные едва намечены. */
+.mm-outline * {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 4.2;
+  stroke-linejoin: round;
+}
+
+.mm-rest {
+  fill: currentColor;
+  fill-opacity: 0.14;
+}
+
+.mm-main {
+  fill: var(--illus-accent);
+}
+
+.mm-help {
+  fill: var(--illus-accent);
+  fill-opacity: 0.38;
+}

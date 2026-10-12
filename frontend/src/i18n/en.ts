@@ -25,8 +25,10 @@ export const en: Dictionary = {
     home: 'Home',
     diary: 'Food',
     measurements: 'Measurements',
+    workouts: 'Workouts',
     profile: 'Profile',
     admin: 'Admin',
+    more: 'More',
   },
   offline: {
     title: 'Cannot reach the server',
@@ -454,6 +456,209 @@ export const en: Dictionary = {
     in: 'in',
     percent: '%',
   },
+  exercises: {
+    title: 'Exercises',
+    search: 'Find an exercise',
+    groups: 'Muscle group',
+    mine: 'My list',
+    catalog: 'Reference',
+    mineEmpty: 'The list is empty: add exercises from the reference or create your own.',
+    nothingFound: 'Nothing found.',
+    add: 'Add to the list: {{name}}',
+    added: 'Added to the list: {{name}}.',
+    own: 'Own exercise',
+    ownTag: 'Own',
+    removed: 'Removed',
+    restore: 'Restore',
+    restoreNamed: 'Restore: {{name}}',
+    work: 'Working',
+    help: 'Assisting',
+    technique: 'Technique',
+    records: 'Records',
+    time: 'time',
+    addToList: 'Add to my list',
+    remove: 'Remove from the list',
+    removeConfirm: 'Remove “{{name}}” from the list? Everything recorded for it will be kept.',
+    removeYes: 'Yes, remove',
+    cancel: 'Cancel',
+    edit: 'Edit',
+    notFound: 'There is no such exercise.',
+    toList: 'To the exercise list',
+    outOfList: 'Removed from the list.',
+  },
+  exerciseForm: {
+    newTitle: 'Own exercise',
+    editTitle: 'Edit exercise',
+    name: 'Name',
+    nameHint: 'For example: one-arm dumbbell row, hammer machine press.',
+    kind: 'What a set records',
+    kindFixed: 'What a set records cannot be changed after the exercise is created.',
+    muscles: 'Which muscles work',
+    musclesHint: 'Optional. They are highlighted on the muscle map.',
+    create: 'Add',
+  },
+  exerciseKinds: {
+    weight_reps: 'Weight × reps',
+    reps: 'Reps',
+    time: 'Time',
+    cardio: 'Cardio',
+  },
+  cardioFields: {
+    distance: 'distance',
+    incline: 'incline',
+    level: 'resistance level',
+  },
+  muscles: {
+    chest: 'Chest',
+    delts: 'Delts',
+    biceps: 'Biceps',
+    triceps: 'Triceps',
+    forearms: 'Forearms',
+    abs: 'Abs',
+    obliques: 'Obliques',
+    traps: 'Traps',
+    lats: 'Lats',
+    lower_back: 'Lower back',
+    glutes: 'Glutes',
+    quads: 'Quads',
+    hamstrings: 'Hamstrings',
+    calves: 'Calves',
+  },
+  muscleGroups: {
+    all: 'All',
+    legs: 'Legs',
+    chest: 'Chest',
+    back: 'Back',
+    shoulders: 'Shoulders',
+    arms: 'Arms',
+    core: 'Core',
+    cardio: 'Cardio',
+  },
+  more: {
+    title: 'More',
+  },
+  exerciseNames: {
+    elliptical: 'Elliptical',
+    treadmill_walk: 'Treadmill walk',
+    exercise_bike: 'Exercise bike',
+    rowing_machine: 'Rowing machine',
+    lat_pulldown: 'Lat pulldown',
+    dumbbell_bench_press: 'Dumbbell bench press',
+    seated_dumbbell_press: 'Seated dumbbell press, neutral grip',
+    rope_pushdown: 'Rope pushdown',
+    seated_front_raise: 'Seated front raise',
+    ez_bar_curl: 'EZ-bar curl',
+    crunch: 'Crunch',
+    back_extension: 'Back extension',
+    deadlift: 'Deadlift',
+    leg_press: 'Leg press',
+    leg_extension: 'Leg extension',
+    lying_leg_curl: 'Lying leg curl',
+    plank: 'Plank',
+    goblet_squat: 'Goblet squat',
+    lever_row: 'Single-arm lever row',
+    lateral_overhead_raise: 'Lateral raise to overhead',
+    hammer_curl: 'Hammer curl',
+    kettlebell_swing: 'Kettlebell swing',
+    russian_twist: 'Russian twist with a plate',
+    table_tennis: 'Table tennis',
+    barbell_squat: 'Barbell squat',
+    bench_press: 'Bench press',
+    pull_up: 'Pull-up',
+    push_up: 'Push-up',
+    dip: 'Dip',
+    barbell_row: 'Bent-over barbell row',
+    overhead_press: 'Overhead press',
+    dumbbell_lunge: 'Dumbbell lunge',
+    romanian_deadlift: 'Romanian deadlift',
+    calf_raise: 'Calf raise',
+    lateral_raise: 'Lateral raise',
+    dumbbell_fly: 'Dumbbell fly',
+    seated_cable_row: 'Seated cable row',
+    french_press: 'Lying triceps extension',
+    hanging_leg_raise: 'Hanging leg raise',
+    glute_bridge: 'Glute bridge',
+  },
+  exerciseSteps: {
+    elliptical:
+      'Whole foot on the pedal, back straight.\nMove smoothly without locking the knees.\nThe resistance level sets the load.',
+    treadmill_walk:
+      'Walk at a steady pace without holding the rails.\nIncline adds load without running.\nLook ahead, shoulders relaxed.',
+    exercise_bike:
+      'Set the seat so the lower leg is almost straight.\nPedal evenly, keep the torso still.\nThe resistance level sets the load.',
+    rowing_machine:
+      'Push with the legs, then lean back and pull the handle to the waist.\nReturn in reverse: arms, torso, legs.\nKeep the back straight throughout.',
+    lat_pulldown:
+      'Grip wider than the shoulders, thighs under the pads.\nPull the bar to the upper chest, squeezing the shoulder blades.\nStraighten the arms smoothly.',
+    dumbbell_bench_press:
+      'Lie on the bench, feet on the floor, dumbbells at the chest.\nPress the dumbbells up over the shoulders.\nLower slowly, elbows at an angle to the torso.',
+    seated_dumbbell_press:
+      'Sit upright without back support, dumbbells at the shoulders, palms facing each other.\nPress overhead without arching the lower back.\nLower to the shoulders under control.',
+    rope_pushdown:
+      'Elbows tucked in, rope at chest height.\nExtend the arms down and spread the rope ends apart.\nReturn without letting the elbows drift.',
+    seated_front_raise:
+      'Sit upright, dumbbells down.\nRaise straight arms in front to shoulder height.\nLower slowly, no swinging.',
+    ez_bar_curl:
+      'Stand with the bar in straight arms, elbows at the sides.\nCurl the bar to the shoulders.\nLower under control, elbows stay in place.',
+    crunch:
+      'Lie on your back, knees bent, lower back pressed down.\nLift the shoulder blades, curling the torso toward the hips.\nLower without lifting the lower back.',
+    back_extension:
+      'Thighs on the pads, body in one line with the legs.\nLower the torso with a straight back.\nRise to a straight line, no higher.',
+    deadlift:
+      'Bar over mid-foot, back straight, shoulders over the bar.\nStand up by pushing the floor away; the bar travels along the legs.\nLower the same way, hips going back.',
+    leg_press:
+      'Feet shoulder-width on the platform, lower back against the pad.\nLower the platform until the knees reach a right angle.\nPress without locking the knees.',
+    leg_extension:
+      'Pad above the feet, back against the seat.\nStraighten the legs.\nLower slowly without dropping the weight.',
+    lying_leg_curl:
+      'Lie face down, pad above the heels.\nCurl the legs, bringing the pad toward the glutes.\nLower under control, hips stay down.',
+    plank:
+      'Elbows under the shoulders, body in a straight line from heels to head.\nAbs and glutes tight, lower back does not sag.\nBreathe evenly and hold.',
+    goblet_squat:
+      'Kettlebell at the chest, elbows down, feet slightly wider than the shoulders.\nSquat down, knees in line with the toes.\nStand up, pushing through the heels.',
+    lever_row:
+      'Chest against the pad, take one handle.\nPull the elbow back along the torso, squeezing the shoulder blade.\nStraighten the arm and repeat; then switch sides.',
+    lateral_overhead_raise:
+      'Stand with dumbbells at the sides.\nRaise the arms out to the sides and on up overhead.\nLower the same way.',
+    hammer_curl:
+      'Stand with dumbbells in straight arms, palms facing each other.\nCurl without turning the wrists.\nLower under control, elbows at the sides.',
+    kettlebell_swing:
+      'Hips back, kettlebell between the legs, back straight.\nSnap the hips forward — the kettlebell flies to chest height.\nLet it swing back and send the hips back again.',
+    russian_twist:
+      'Sit with the torso leaning back, plate in front of the chest.\nRotate the torso from side to side.\nBack straight; the movement comes from the torso, not the arms.',
+    table_tennis: 'A game or a practice session at the table.\nTime is recorded.',
+    barbell_squat:
+      'Bar on the shoulders, feet shoulder-width apart.\nHips back and down, knees in line with the toes.\nThighs to parallel — and up through the heels.',
+    bench_press:
+      'Lie on the bench, shoulder blades together, feet on the floor.\nLower the bar to the lower chest.\nPress up to straight arms.',
+    pull_up:
+      'Hang from the bar with a grip slightly wider than the shoulders.\nPull up until the chin is over the bar.\nLower to straight arms without dropping.',
+    push_up:
+      'Plank on straight arms, hands under the shoulders, body in a straight line.\nLower by bending the elbows, almost to the floor.\nPush up without sagging at the lower back.',
+    dip: 'Support yourself on the bars with straight arms.\nLower by bending the elbows to a right angle.\nPush up to straight arms.',
+    barbell_row:
+      'Bend over with a straight back, bar in straight arms.\nPull the bar to the waist, squeezing the shoulder blades.\nLower under control, torso still.',
+    overhead_press:
+      'Stand with the bar at the chest, elbows under the bar.\nPress the bar overhead to straight arms.\nLower to the chest without arching the lower back.',
+    dumbbell_lunge:
+      'Stand with dumbbells in straight arms.\nStep forward and lower until both knees bend to a right angle.\nPush off the front leg and return.',
+    romanian_deadlift:
+      'Stand with the bar in straight arms, knees slightly bent.\nSend the hips back, lowering the bar along the legs to mid-shin.\nStand tall by driving the hips forward.',
+    calf_raise:
+      'Stand with the balls of the feet on a step, heels free.\nRise onto the toes as high as possible.\nSlowly lower the heels below the step.',
+    lateral_raise:
+      'Stand with dumbbells at the sides.\nRaise the arms out to the sides to shoulder height.\nLower slowly, no swinging.',
+    dumbbell_fly:
+      'Lie on the bench, dumbbells over the chest, elbows slightly bent.\nOpen the arms out to the sides to chest level.\nBring them back along the same path.',
+    seated_cable_row:
+      'Sit with feet on the supports, back straight.\nPull the handle to the waist, squeezing the shoulder blades.\nStraighten the arms without rounding the back.',
+    french_press:
+      'Lie on the bench, bar over the chest in straight arms.\nBend the arms, lowering the bar to the forehead; elbows point up.\nStraighten the arms without flaring the elbows.',
+    hanging_leg_raise:
+      'Hang from the bar.\nRaise the legs in front to horizontal.\nLower slowly, no swinging.',
+    glute_bridge:
+      'Lie on your back, knees bent, feet on the floor.\nLift the hips to a straight line from knees to shoulders.\nLower without resting fully on the floor.',
+  },
   sex: {
     male: 'Male',
     female: 'Female',
@@ -544,6 +749,7 @@ export const en: Dictionary = {
     waterRange: 'Must be 1 to 5000 ml',
     mealName: 'Name must be up to 40 characters',
     metricName: 'Name must be up to 40 characters',
+    exerciseName: 'Name must be up to 60 characters',
     barcode: 'Check the barcode: 8, 12 or 13 digits',
   },
 }

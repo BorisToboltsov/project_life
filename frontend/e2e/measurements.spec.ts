@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-import { adminInviteLink, register } from './steps.ts'
+import { adminInviteLink, openUnderMore, register } from './steps.ts'
 
 test('замеры: ввод с главной, история, график, правка и удаление', async ({ page }, testInfo) => {
   const problems: string[] = []
@@ -80,7 +80,7 @@ test('замеры в имперской системе вводятся и по
 }, testInfo) => {
   const email = `imperial-${testInfo.project.name}-${Date.now()}@example.com`
   await register(page, adminInviteLink(), 'Вера', email)
-  await page.getByRole('link', { name: 'Профиль' }).click()
+  await openUnderMore(page, 'Профиль')
   await page.getByLabel('Единицы').selectOption('imperial')
   await page.getByRole('button', { name: 'Сохранить' }).click()
   await expect(page.getByText('Сохранено')).toBeVisible()
@@ -94,7 +94,7 @@ test('замеры в имперской системе вводятся и по
   await expect(page.getByRole('link', { name: /Талия/ })).toContainText('34,5 дюйм')
 
   // После возврата к метрической системе те же замеры — в килограммах и сантиметрах.
-  await page.getByRole('link', { name: 'Профиль' }).click()
+  await openUnderMore(page, 'Профиль')
   await page.getByLabel('Единицы').selectOption('metric')
   await page.getByRole('button', { name: 'Сохранить' }).click()
   await expect(page.getByText('Сохранено')).toBeVisible()

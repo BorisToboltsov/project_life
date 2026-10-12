@@ -58,6 +58,17 @@ const screens = {
   products: lazyRouteComponent(() => import('@/pages/products/ProductsPage'), 'ProductsPage'),
   productNew: lazyRouteComponent(() => import('@/pages/products/ProductPages'), 'ProductNewPage'),
   productEdit: lazyRouteComponent(() => import('@/pages/products/ProductPages'), 'ProductEditPage'),
+  exercises: lazyRouteComponent(() => import('@/pages/exercises/ExercisesPage'), 'ExercisesPage'),
+  exercise: lazyRouteComponent(() => import('@/pages/exercises/ExercisePage'), 'ExercisePage'),
+  exerciseNew: lazyRouteComponent(
+    () => import('@/pages/exercises/ExerciseFormPages'),
+    'ExerciseNewPage',
+  ),
+  exerciseEdit: lazyRouteComponent(
+    () => import('@/pages/exercises/ExerciseFormPages'),
+    'ExerciseEditPage',
+  ),
+  more: lazyRouteComponent(() => import('@/pages/more/MorePage'), 'MorePage'),
   profile: lazyRouteComponent(() => import('@/pages/profile/ProfilePage'), 'ProfilePage'),
   admin: lazyRouteComponent(() => import('@/pages/admin/AdminPage'), 'AdminPage'),
 }
@@ -218,6 +229,36 @@ const routeTree = rootRoute.addChildren([
       path: '/products/$id',
       component: screens.productEdit,
     }),
+    createRoute({
+      getParentRoute: () => appRoute,
+      path: '/workouts',
+      // Пока раздел — это список упражнений; тренировки придут следующим шагом.
+      beforeLoad: () => {
+        throw redirect({ to: '/workouts/exercises' })
+      },
+    }),
+    createRoute({
+      getParentRoute: () => appRoute,
+      path: '/workouts/exercises',
+      component: screens.exercises,
+    }),
+    createRoute({
+      getParentRoute: () => appRoute,
+      path: '/workouts/exercises/new',
+      component: screens.exerciseNew,
+    }),
+    // `$key` — код штатного упражнения или ключ своего; есть ли такое, решает экран.
+    createRoute({
+      getParentRoute: () => appRoute,
+      path: '/workouts/exercises/$key',
+      component: screens.exercise,
+    }),
+    createRoute({
+      getParentRoute: () => appRoute,
+      path: '/workouts/exercises/$key/edit',
+      component: screens.exerciseEdit,
+    }),
+    createRoute({ getParentRoute: () => appRoute, path: '/more', component: screens.more }),
     createRoute({ getParentRoute: () => appRoute, path: '/profile', component: screens.profile }),
     createRoute({
       getParentRoute: () => appRoute,
