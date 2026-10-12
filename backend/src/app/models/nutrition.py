@@ -45,6 +45,11 @@ class Product(Base):
     protein_g: Mapped[Decimal] = mapped_column(MACRO)
     fat_g: Mapped[Decimal] = mapped_column(MACRO)
     carbs_g: Mapped[Decimal] = mapped_column(MACRO)
+    # Что ещё печатают на этикетке; пусто — на упаковке этого нет или значение не внесли.
+    sugars_g: Mapped[Decimal | None] = mapped_column(MACRO)
+    saturated_fat_g: Mapped[Decimal | None] = mapped_column(MACRO)
+    fiber_g: Mapped[Decimal | None] = mapped_column(MACRO)
+    salt_g: Mapped[Decimal | None] = mapped_column(MACRO)
     # Штрихкод с упаковки; пусто — продукт находится только по названию.
     barcode: Mapped[str | None] = mapped_column(BARCODE)
     # Откуда продукт: от этого зависит, что приложение показывает о его происхождении.
@@ -139,6 +144,10 @@ class FoodEntry(Base):
     protein_g: Mapped[Decimal] = mapped_column(MACRO)
     fat_g: Mapped[Decimal] = mapped_column(MACRO)
     carbs_g: Mapped[Decimal] = mapped_column(MACRO)
+    sugars_g: Mapped[Decimal | None] = mapped_column(MACRO)
+    saturated_fat_g: Mapped[Decimal | None] = mapped_column(MACRO)
+    fiber_g: Mapped[Decimal | None] = mapped_column(MACRO)
+    salt_g: Mapped[Decimal | None] = mapped_column(MACRO)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
 

@@ -27,8 +27,12 @@ OATMEAL = {
     "fat_g": 6.2,
     "carbs_g": 61.8,
 }
-# Чем API дополняет продукт, который человек завёл без штрихкода.
-BY_HAND = {"barcode": None, "source": "user"}
+# Чего нет на этикетке или что с неё не внесли.
+NO_LABEL = {"sugars_g": None, "saturated_fat_g": None, "fiber_g": None, "salt_g": None}
+# Что ещё печатают на этикетке кроме калорий, белков, жиров и углеводов.
+LABEL = {"sugars_g": 1.8, "saturated_fat_g": 3.2, "fiber_g": 0, "salt_g": 0.1}
+# Чем API дополняет продукт, который человек завёл без штрихкода и без этикетки.
+BY_HAND = {**NO_LABEL, "barcode": None, "source": "user"}
 PRESETS = ("breakfast", "lunch", "dinner", "snack")
 
 # Штрихкоды с верной контрольной цифрой.
@@ -38,7 +42,7 @@ EAN_8 = "46012340"
 UPC_A = "036000291452"
 UPC_A_AS_EAN_13 = "0036000291452"
 # Продукт, как его отдаёт Open Food Facts: состав на 100 г полный.
-OFF_COTTAGE_CHEESE = {
+OFF_COTTAGE_CHEESE: dict[str, Any] = {
     "product_name": "Творог 5 %",
     "brands": "Простоквашино, Danone",
     "quantity": "200 г",
@@ -49,6 +53,8 @@ OFF_COTTAGE_CHEESE = {
         "carbohydrates_100g": 1.8,
     },
 }
+# Тот же состав с тем, что ещё печатают на этикетке.
+OFF_LABEL = {"sugars_100g": 1.8, "saturated-fat_100g": 3.2, "fiber_100g": 0, "salt_100g": 0.1}
 
 
 async def put_product(
@@ -64,6 +70,26 @@ async def add_product(client: AsyncClient, account: Account, **fields: Any) -> s
     response = await put_product(client, account, {**COTTAGE_CHEESE, **fields})
     assert response.status_code == 201, response.text
     return response.json()["id"]
+
+
+async def search(client: AsyncClient, account: Account, q: str = "") -> list[dict[str, Any]]:
+    """Первая страница своего каталога."""
+    response = await client.get("/api/products", params={"q": q}, headers=account.headers)
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+async def search_outside(
+    client: AsyncClient, account: Account, q: str, page: int | None = None
+) -> Response:
+    """Страница поиска по названию в Open Food Facts."""
+    params = {"q": q} if page is None else {"q": q, "page": page}
+    return await client.get("/api/products/external", params=params, headers=account.headers)
+
+
+def off_hit(barcode: str, **fields: Any) -> dict[str, Any]:
+    """Продукт, как его отдаёт поиск Open Food Facts: со штрихкодом и марками списком."""
+    return {**OFF_COTTAGE_CHEESE, "code": barcode, "brands": ["Простоквашино", "Danone"], **fields}
 
 
 async def lookup(client: AsyncClient, account: Account, barcode: str) -> Response:

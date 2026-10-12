@@ -61,6 +61,17 @@ export function summaryOf(
   }))
 }
 
+/** Чего нет на этикетке или что с неё не внесли. */
+export const noLabel = { saturated_fat_g: null, sugars_g: null, fiber_g: null, salt_g: null }
+
+/** Страница поиска в Open Food Facts. */
+export function outsideOf(
+  items: Schemas['ExternalProductOut'][],
+  next: number | null = null,
+): Schemas['ExternalSearchOut'] {
+  return { status: 'ok', items, next_page: next }
+}
+
 export const cottageCheese: Schemas['ProductOut'] = {
   id: '0199b7a0-0000-7000-8000-0000000000c1',
   name: 'Творог 5 %',
@@ -69,6 +80,7 @@ export const cottageCheese: Schemas['ProductOut'] = {
   protein_g: 17.2,
   fat_g: 5,
   carbs_g: 1.8,
+  ...noLabel,
   barcode: null,
   source: 'user',
   editable: true,
@@ -82,6 +94,7 @@ export const oatmeal: Schemas['ProductOut'] = {
   protein_g: 12.3,
   fat_g: 6.2,
   carbs_g: 61.8,
+  ...noLabel,
   barcode: null,
   source: 'user',
   editable: false,
@@ -95,6 +108,7 @@ export const kefir: Schemas['ProductOut'] = {
   protein_g: 3,
   fat_g: 1,
   carbs_g: 4,
+  ...noLabel,
   barcode: null,
   source: 'user',
   editable: true,

@@ -24,6 +24,9 @@ import { isoToDisplay } from '@/lib/dates'
 import type { ErrorKey } from '@/lib/errors'
 import { formatGrams } from '@/lib/nutrition'
 import { uuidv7 } from '@/lib/uuid'
+import { ExternalSearch } from '@/pages/products/ExternalSearch'
+import type { Missing } from '@/pages/products/lookup'
+import { MissingProduct } from '@/pages/products/MissingProduct'
 import { ProductForm } from '@/pages/products/ProductForm'
 import { ProductLine } from '@/pages/products/ProductLine'
 
@@ -157,22 +160,27 @@ function ProductList({
 
 function AddFood({ date, meal }: { date: string; meal: Meal }) {
   const { t, i18n } = useTranslation()
-  const { product: createdId, scanned: scannedId } = route.useSearch() as {
-    product?: string
-    scanned?: string
-  }
+  const {
+    product: createdId,
+    scanned: scannedId,
+    picked: pickedId,
+  } = route.useSearch() as { product?: string; scanned?: string; picked?: string }
   const navigate = useNavigate()
   const mealName = useMealName()
   const [query, setQuery] = useState('')
   const [opened, setOpened] = useState<string>()
   const [added, setAdded] = useState<{ product: Product; amount: number }>()
+  // Продукт из Open Food Facts, состав которого нужно дополнить: вместо списков — форма.
+  const [missing, setMissing] = useState<Missing>()
   const q = query.trim()
   const found = useProductSearch(q, q !== '')
   const suggestions = useSuggestions(meal.id)
   const created = useProduct(createdId)
-  const byBarcode = useProduct(scannedId)
-  // Количество подставляется из подсказок, поэтому найденный сканером продукт ждёт их.
-  const scanned = suggestions.isPending ? undefined : (byBarcode.data ?? undefined)
+  // Продукт, с которым сюда пришли из сканера или из поиска в Open Food Facts.
+  const broughtId = scannedId ?? pickedId
+  const byId = useProduct(broughtId)
+  // Количество подставляется из подсказок, поэтому такой продукт ждёт их.
+  const brought = suggestions.isPending ? undefined : (byId.data ?? undefined)
   // Созданный продукт показывается отдельно, пока его не внесли: дальше он в «недавних».
   const justCreated =
     created.data && !suggestions.data?.recent.some((item) => item.id === created.data?.id)
@@ -180,17 +188,18 @@ function AddFood({ date, meal }: { date: string; meal: Meal }) {
       : undefined
 
   const titles = {
-    scanned: t('addFood.scanned'),
+    brought: scannedId ? t('addFood.scanned') : t('addFood.picked'),
     created: t('addFood.created'),
     inMeal: t('addFood.inMeal'),
     frequent: t('addFood.frequent'),
     recent: t('addFood.recent'),
-    results: t('addFood.results'),
+    results: t('search.inCatalog'),
   }
-  // Найденный сканером и только что созданный продукт раскрыт сразу: осталось ввести
+  const here = { to: '/diary/$date/add/$meal', params: { date, meal: meal.id } } as const
+  // Продукт, с которым пришли, и только что созданный раскрыты сразу: осталось ввести
   // количество.
-  const chosen = scanned
-    ? `${titles.scanned}:${scanned.id}`
+  const chosen = brought
+    ? `${titles.brought}:${brought.id}`
     : justCreated && `${titles.created}:${justCreated.id}`
   const lists = { opened: opened ?? (chosen || undefined), onOpen: setOpened, date, meal, onAdded }
 
@@ -198,15 +207,33 @@ function AddFood({ date, meal }: { date: string; meal: Meal }) {
     setAdded({ product, amount })
     setOpened('')
     setQuery('')
-    // Отсканированный продукт внесён: при возврате на экран он снова не всплывёт.
-    if (scannedId) {
-      void navigate({
-        to: '/diary/$date/add/$meal',
-        params: { date, meal: meal.id },
-        search: {},
-        replace: true,
-      })
-    }
+    // Продукт, с которым пришли, внесён: при возврате на экран он снова не всплывёт.
+    if (broughtId) void navigate({ ...here, search: {}, replace: true })
+  }
+
+  /** Продукт выбран в Open Food Facts и уже в каталоге: осталось ввести количество. */
+  async function onPicked(product: Product) {
+    setQuery('')
+    setOpened(undefined)
+    await navigate({ ...here, search: { picked: product.id }, replace: true })
+  }
+
+  if (missing) {
+    return (
+      <MissingProduct
+        missing={missing}
+        onSaved={async (product) => {
+          setMissing(undefined)
+          setQuery('')
+          await navigate({ ...here, search: { product }, replace: true })
+        }}
+        cancel={
+          <Button variant="ghost" className="h-11" onClick={() => setMissing(undefined)}>
+            {t('products.cancel')}
+          </Button>
+        }
+      />
+    )
   }
 
   const fresh = (products: Product[]): Choice[] =>
@@ -219,7 +246,7 @@ function AddFood({ date, meal }: { date: string; meal: Meal }) {
     [...(suggestions.data?.in_meal ?? []), ...(suggestions.data?.recent ?? [])].find(
       (item) => item.id === product.id,
     )?.amount ?? DEFAULT_AMOUNT
-  const nothingToSuggest = suggestions.data?.recent.length === 0 && !justCreated && !scanned
+  const nothingToSuggest = suggestions.data?.recent.length === 0 && !justCreated && !brought
 
   return (
     <div className="grid gap-4">
@@ -254,15 +281,26 @@ function AddFood({ date, meal }: { date: string; meal: Meal }) {
           {found.data?.length === 0 && (
             <p className="text-sm text-muted-foreground">{t('addFood.nothingFound')}</p>
           )}
+          {found.hasNextPage && (
+            <Button
+              variant="outline"
+              className="h-11 justify-self-start"
+              disabled={found.isFetchingNextPage}
+              onClick={() => void found.fetchNextPage()}
+            >
+              {t('search.more')}
+            </Button>
+          )}
+          <ExternalSearch q={q} onFound={onPicked} onMissing={setMissing} />
         </>
       ) : (
         <>
           <ProductList
-            title={titles.scanned}
-            choices={scanned ? [{ product: scanned, amount: lastAmount(scanned) }] : []}
+            title={titles.brought}
+            choices={brought ? [{ product: brought, amount: lastAmount(brought) }] : []}
             {...lists}
           />
-          {scanned?.source === 'open_food_facts' && (
+          {brought?.source === 'open_food_facts' && (
             <p className="text-sm text-muted-foreground">{t('products.fromOpenFoodFacts')}</p>
           )}
           <ProductList

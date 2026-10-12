@@ -20,6 +20,8 @@ x-backend: &backend
     LIFE_PUBLIC_URL: ${PUBLIC_URL:?}
     # Где искать продукт по штрихкоду; пустое значение в .env оставляет только свой каталог.
     LIFE_OFF_URL: ${OFF_URL-https://world.openfoodfacts.org}
+    # Где искать продукт по названию; пустое значение выключает только этот поиск.
+    LIFE_OFF_SEARCH_URL: ${OFF_SEARCH_URL-https://search.openfoodfacts.org}
 
 services:
   db:

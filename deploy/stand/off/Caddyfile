@@ -4,6 +4,10 @@
 #   4601… — продукт с полным составом;
 #   4602… — продукт без состава: приложение попросит его дополнить;
 #   всё остальное — «не найдено», тем же ответом, что у настоящего сервиса.
+#
+# Поиск по названию (/search — у настоящего сервиса он на своём адресе) находит продукт с
+# тем штрихкодом, который стоит в самом тексте поиска: «йогурт 4601…» — полный продукт,
+# «морс 4602…» — без состава, текст без штрихкода — ничего.
 :80 {
 	root * /srv
 	header Content-Type application/json
@@ -12,6 +16,15 @@
 	rewrite @complete /complete.json
 	@incomplete path_regexp ^/api/v2/product/4602\d+$
 	rewrite @incomplete /incomplete.json
+
+	@search path /search
+	handle @search {
+		@found_complete vars_regexp code {query.q} (4601\d+)
+		respond @found_complete `{"hits":[{"code":"{re.code.1}","product_name":"Йогурт натуральный","brands":["Стенд"],"quantity":"350 г","nutriments":{"energy-kcal_100g":68,"proteins_100g":5,"fat_100g":3.2,"carbohydrates_100g":4.7}}],"page":1,"page_size":20,"page_count":1,"count":1}`
+		@found_incomplete vars_regexp code {query.q} (4602\d+)
+		respond @found_incomplete `{"hits":[{"code":"{re.code.1}","product_name":"Морс клюквенный","brands":["Стенд"],"quantity":"1 л","nutriments":{}}],"page":1,"page_size":20,"page_count":1,"count":1}`
+		respond `{"hits":[],"page":1,"page_size":20,"page_count":0,"count":0}`
+	}
 
 	@unknown not path /complete.json /incomplete.json
 	respond @unknown `{"status":0,"status_verbose":"product not found"}` 404

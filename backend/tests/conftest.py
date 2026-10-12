@@ -24,6 +24,7 @@ os.environ["LIFE_ENVIRONMENT"] = "test"
 os.environ["LIFE_DATABASE_URL"] = TEST_DATABASE_URL
 # Наружу тесты не ходят: Open Food Facts выключен, пока тест не подменит его фикстурой `off`.
 os.environ["LIFE_OFF_URL"] = ""
+os.environ["LIFE_OFF_SEARCH_URL"] = ""
 
 PASSWORD = "correct horse battery"
 
@@ -138,12 +139,18 @@ def make_user() -> MakeUser:
     return make
 
 
+# Поиск по названию у Open Food Facts живёт на своём адресе.
+SEARCH_HOST = "search.off.test"
+
+
 @dataclass
 class OffStub:
     """Подменный Open Food Facts: ответы задаёт тест, запросы приложения записываются."""
 
     # Штрихкод → продукт, как его отдаёт сервис; неизвестный штрихкод — «не найдено».
     products: dict[str, dict[str, Any]] = field(default_factory=dict[str, dict[str, Any]])
+    # Что находит поиск по названию — по любому тексту, в этом порядке.
+    hits: list[Any] = field(default_factory=list[Any])
     # Ответ на любой запрос вместо обычного: сбой сервиса или сети.
     broken: httpx.Response | Exception | None = None
     # Что происходит в приложении, пока сервис думает над ответом.
@@ -158,6 +165,18 @@ class OffStub:
             raise self.broken
         if self.broken is not None:
             return self.broken
+        if request.url.host == SEARCH_HOST:
+            size, page = int(request.url.params["page_size"]), int(request.url.params["page"])
+            return httpx.Response(
+                200,
+                json={
+                    "hits": self.hits[(page - 1) * size : page * size],
+                    "page": page,
+                    "page_size": size,
+                    "page_count": -(-len(self.hits) // size),
+                    "count": len(self.hits),
+                },
+            )
         barcode = request.url.path.rsplit("/", 1)[-1]
         if barcode not in self.products:
             return httpx.Response(
@@ -172,7 +191,11 @@ class OffStub:
         from app.main import app
         from app.services.open_food_facts import OpenFoodFacts, get_open_food_facts
 
-        source = OpenFoodFacts("https://off.test", httpx.MockTransport(self.respond))
+        source = OpenFoodFacts(
+            "https://off.test",
+            httpx.MockTransport(self.respond),
+            search_url=f"https://{SEARCH_HOST}",
+        )
         app.dependency_overrides[get_open_food_facts] = lambda: source
 
 

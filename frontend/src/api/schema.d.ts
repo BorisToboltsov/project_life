@@ -545,9 +545,36 @@ export interface paths {
         };
         /**
          * Search Products
-         * @description Продукты каталога по алфавиту; `q` — слова, которые есть в названии, в любом порядке.
+         * @description Страница каталога по алфавиту; `q` — слова, которые есть в названии, в любом порядке,
+         *     `offset` — сколько продуктов уже показано.
+         *
+         *     Ответ — список, как до появления страниц: открытая вкладка прежней версии приложения
+         *     читает его по-прежнему. Откуда продолжать, говорит заголовок (ADR 0010).
          */
         get: operations["search_products_api_products_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/products/external": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search Open Food Facts
+         * @description Продукты Open Food Facts по названию — те, которых ещё нет в каталоге (ADR 0010).
+         *
+         *     Поиск ничего не сохраняет: в каталог продукт попадает, когда его выберут, — запросом
+         *     по штрихкоду, как при сканировании.
+         */
+        get: operations["search_open_food_facts_api_products_external_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -764,6 +791,40 @@ export interface components {
          * @enum {string}
          */
         ErrorSource: "backend" | "frontend";
+        /**
+         * ExternalProductOut
+         * @description Продукт из Open Food Facts, которого нет в каталоге (ADR 0010). В каталог он
+         *     попадает, когда его выберут, — поиском по этому штрихкоду.
+         */
+        ExternalProductOut: {
+            /** Barcode */
+            barcode: string;
+            /** Carbs G */
+            carbs_g: number | null;
+            /** Fat G */
+            fat_g: number | null;
+            /** Kcal */
+            kcal: number | null;
+            /** Name */
+            name: string;
+            /** Protein G */
+            protein_g: number | null;
+            unit: components["schemas"]["ProductUnit"];
+        };
+        /** ExternalSearchOut */
+        ExternalSearchOut: {
+            /** Items */
+            items: components["schemas"]["ExternalProductOut"][];
+            /** Next Page */
+            next_page: number | null;
+            status: components["schemas"]["ExternalSearchStatus"];
+        };
+        /**
+         * ExternalSearchStatus
+         * @description Чем кончился поиск по названию в Open Food Facts (ADR 0010).
+         * @enum {string}
+         */
+        ExternalSearchStatus: "ok" | "unavailable";
         /** FoodEntryIn */
         FoodEntryIn: {
             /** Amount */
@@ -1096,12 +1157,20 @@ export interface components {
             carbs_g: number | null;
             /** Fat G */
             fat_g: number | null;
+            /** Fiber G */
+            fiber_g: number | null;
             /** Kcal */
             kcal: number | null;
             /** Name */
             name: string | null;
             /** Protein G */
             protein_g: number | null;
+            /** Salt G */
+            salt_g: number | null;
+            /** Saturated Fat G */
+            saturated_fat_g: number | null;
+            /** Sugars G */
+            sugars_g: number | null;
             unit: components["schemas"]["ProductUnit"];
         };
         /** ProductIn */
@@ -1112,12 +1181,20 @@ export interface components {
             carbs_g: number | string;
             /** Fat G */
             fat_g: number | string;
+            /** Fiber G */
+            fiber_g?: number | string | null;
             /** Kcal */
             kcal: number | string;
             /** Name */
             name: string;
             /** Protein G */
             protein_g: number | string;
+            /** Salt G */
+            salt_g?: number | string | null;
+            /** Saturated Fat G */
+            saturated_fat_g?: number | string | null;
+            /** Sugars G */
+            sugars_g?: number | string | null;
             unit: components["schemas"]["ProductUnit"];
         };
         /** ProductOut */
@@ -1130,6 +1207,8 @@ export interface components {
             editable: boolean;
             /** Fat G */
             fat_g: number;
+            /** Fiber G */
+            fiber_g: number | null;
             /**
              * Id
              * Format: uuid
@@ -1141,7 +1220,13 @@ export interface components {
             name: string;
             /** Protein G */
             protein_g: number;
+            /** Salt G */
+            salt_g: number | null;
+            /** Saturated Fat G */
+            saturated_fat_g: number | null;
             source: components["schemas"]["ProductSource"];
+            /** Sugars G */
+            sugars_g: number | null;
             unit: components["schemas"]["ProductUnit"];
         };
         /**
@@ -1230,6 +1315,8 @@ export interface components {
             editable: boolean;
             /** Fat G */
             fat_g: number;
+            /** Fiber G */
+            fiber_g: number | null;
             /**
              * Id
              * Format: uuid
@@ -1241,7 +1328,13 @@ export interface components {
             name: string;
             /** Protein G */
             protein_g: number;
+            /** Salt G */
+            salt_g: number | null;
+            /** Saturated Fat G */
+            saturated_fat_g: number | null;
             source: components["schemas"]["ProductSource"];
+            /** Sugars G */
+            sugars_g: number | null;
             unit: components["schemas"]["ProductUnit"];
         };
         /** SuggestionsOut */
@@ -2789,6 +2882,7 @@ export interface operations {
         parameters: {
             query?: {
                 q?: string;
+                offset?: number;
             };
             header?: never;
             path?: never;
@@ -2799,6 +2893,8 @@ export interface operations {
             /** @description Successful Response */
             200: {
                 headers: {
+                    /** @description С какого продукта продолжать; нет — список кончился. */
+                    "X-Next-Offset"?: number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -2821,6 +2917,56 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_open_food_facts_api_products_external_get: {
+        parameters: {
+            query?: {
+                q?: string;
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExternalSearchOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };

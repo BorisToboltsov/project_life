@@ -285,6 +285,10 @@ async def save_entry(
             "protein_g": product.protein_g,
             "fat_g": product.fat_g,
             "carbs_g": product.carbs_g,
+            "sugars_g": product.sugars_g,
+            "saturated_fat_g": product.saturated_fat_g,
+            "fiber_g": product.fiber_g,
+            "salt_g": product.salt_g,
         }
     else:
         snapshot = {}
@@ -359,6 +363,10 @@ async def copy_entries(body: DiaryCopyIn, user: CurrentUser, db: SessionDep) -> 
             "protein_g": source.protein_g,
             "fat_g": source.fat_g,
             "carbs_g": source.carbs_g,
+            "sugars_g": source.sugars_g,
+            "saturated_fat_g": source.saturated_fat_g,
+            "fiber_g": source.fiber_g,
+            "salt_g": source.salt_g,
             "created_at": now + timedelta(microseconds=index),
         }
         for index, item in enumerate(body.items)

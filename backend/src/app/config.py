@@ -6,6 +6,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Секрет для разработки и тестов. На сервере обязан быть заменён — см. проверку ниже.
 DEV_JWT_SECRET = "dev-only-secret-never-use-in-production"  # noqa: S105
+# Сколько раз в минуту сервер обращается к Open Food Facts: за продуктом по штрихкоду и с
+# поиском по названию. Сам сервис отвечает с одного адреса на 15 запросов продукта в
+# минуту; предел нового поиска он не называет, у прежнего — 10. Держимся ниже.
+OFF_PRODUCTS_PER_MINUTE = 12
+OFF_SEARCHES_PER_MINUTE = 8
 
 
 class Settings(BaseSettings):
@@ -33,6 +38,12 @@ class Settings(BaseSettings):
     # Адрес Open Food Facts, где сервер ищет продукт по штрихкоду (ADR 0009). Пусто — наружу
     # не ходим: штрихкод ищется только в своём каталоге.
     off_url: str = "https://world.openfoodfacts.org"
+    # Адрес поиска Open Food Facts по названию (ADR 0010). Пусто — по названию продукт
+    # ищется только в своём каталоге; без `off_url` этот адрес не используется.
+    off_search_url: str = "https://search.openfoodfacts.org"
+    # Пределы берегут чужой сервис. Поднимает их только стенд, где сервис подменный.
+    off_products_per_minute: int = OFF_PRODUCTS_PER_MINUTE
+    off_searches_per_minute: int = OFF_SEARCHES_PER_MINUTE
 
     @model_validator(mode="after")
     def _require_real_secret_in_prod(self) -> Self:

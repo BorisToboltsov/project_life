@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next'
 import { type Product, PRODUCT_UNITS, PRODUCTS_KEY, saveProduct } from '@/api/nutrition'
 import { FormError, SelectField, TextField } from '@/components/form/fields'
 import { useAutoKcal } from '@/components/form/useAutoKcal'
-import { numberOf } from '@/components/form/validation'
+import { numberOf, optionalNumberOf } from '@/components/form/validation'
 import { Button } from '@/components/ui/button'
 import { normalizeBarcode } from '@/lib/barcode'
 import type { ErrorKey } from '@/lib/errors'
@@ -27,7 +27,8 @@ const KCAL_DIGITS = 1
  * Форма продукта каталога: название, единица, состав на 100 таких единиц и штрихкод. Без
  * `product` создаёт новый; `draft` — что о новом уже известно по штрихкоду. Калории
  * считаются по белкам, жирам и углеводам, пока их не ввели сами: на упаковке число бывает
- * другим. `onSaved` получает ключ сохранённого продукта, `cancel` — ссылка «Отмена».
+ * другим. Остальное с этикетки — сахара, насыщенные жиры, клетчатка, соль — необязательно.
+ * `onSaved` получает ключ сохранённого продукта, `cancel` — ссылка «Отмена».
  */
 export function ProductForm({
   product,
@@ -69,6 +70,10 @@ export function ProductForm({
       protein_g: numberOf(values.protein, 2),
       fat_g: numberOf(values.fat, 2),
       carbs_g: numberOf(values.carbs, 2),
+      saturated_fat_g: optionalNumberOf(values.saturatedFat, 2),
+      sugars_g: optionalNumberOf(values.sugars, 2),
+      fiber_g: optionalNumberOf(values.fiber, 2),
+      salt_g: optionalNumberOf(values.salt, 2),
       barcode: normalizeBarcode(values.barcode),
     })
     if (result.failure) {
@@ -132,6 +137,37 @@ export function ProductForm({
         />
       </div>
       <p className="text-sm text-muted-foreground">{t('products.kcalHint')}</p>
+      <fieldset className="grid gap-4">
+        <legend className="text-sm font-medium">{t('products.labelTitle')}</legend>
+        <p className="text-sm text-muted-foreground">{t('products.labelHint')}</p>
+        {/* Те же столбцы, что выше: насыщенные жиры под жирами, сахара под углеводами. */}
+        <div className="grid grid-cols-2 gap-4">
+          <TextField
+            label={t('products.saturatedFat')}
+            error={errors.saturatedFat?.message}
+            {...number}
+            {...form.register('saturatedFat')}
+          />
+          <TextField
+            label={t('products.sugars')}
+            error={errors.sugars?.message}
+            {...number}
+            {...form.register('sugars')}
+          />
+          <TextField
+            label={t('products.fiber')}
+            error={errors.fiber?.message}
+            {...number}
+            {...form.register('fiber')}
+          />
+          <TextField
+            label={t('products.salt')}
+            error={errors.salt?.message}
+            {...number}
+            {...form.register('salt')}
+          />
+        </div>
+      </fieldset>
       <TextField
         label={t('products.barcode')}
         inputMode="numeric"
