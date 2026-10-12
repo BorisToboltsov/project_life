@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { amountSchema, goalSchema, mealSchema } from './values'
+import { amountSchema, goalSchema, mealSchema, waterSchema } from './values'
 
 function issues(result: { success: boolean; error?: { issues: { message: string }[] } }) {
   return result.success ? [] : result.error!.issues.map((issue) => issue.message)
@@ -16,10 +16,20 @@ describe('amountSchema', () => {
   })
 })
 
-describe('goalSchema', () => {
-  const valid = { kcal: '2100', protein: '130', fat: '70', carbs: '230' }
+describe('waterSchema', () => {
+  it.each(['1', '250', '5000', ' 330 '])('принимает %s', (amount) => {
+    expect(waterSchema.safeParse({ amount }).success).toBe(true)
+  })
 
-  const empty = { kcal: '', protein: '', fat: '', carbs: '' }
+  it.each(['', '0', '0,5', '5001', '-250', 'стакан'])('отклоняет «%s»', (amount) => {
+    expect(issues(waterSchema.safeParse({ amount }))).toEqual(['validation.waterRange'])
+  })
+})
+
+describe('goalSchema', () => {
+  const valid = { kcal: '2100', protein: '130', fat: '70', carbs: '230', water: '2000' }
+
+  const empty = { kcal: '', protein: '', fat: '', carbs: '', water: '' }
 
   it('принимает разумную цель', () => {
     expect(goalSchema.safeParse(valid).success).toBe(true)
@@ -30,6 +40,10 @@ describe('goalSchema', () => {
     [{ protein: '150' }],
     [{ kcal: '2000', protein: '150' }],
     [{ protein: '130', fat: '70', carbs: '230' }],
+    // Одна вода — тоже цель.
+    [{ water: '2500' }],
+    [{ water: '100' }],
+    [{ kcal: '2000', water: '10000' }],
     // Пустая цель — тоже цель: так её снимают.
     [{}],
     // БЖУ ровно на все калории: 520 + 630 + 920.
@@ -43,6 +57,9 @@ describe('goalSchema', () => {
     [{ kcal: '10001' }, 'validation.goalKcalRange'],
     [{ protein: '1001' }, 'validation.goalMacroRange'],
     [{ carbs: 'много' }, 'validation.goalMacroRange'],
+    [{ water: '99' }, 'validation.goalWaterRange'],
+    [{ water: '10001' }, 'validation.goalWaterRange'],
+    [{ water: 'стакан' }, 'validation.goalWaterRange'],
     // Белки, жиры и углеводы дают 2070 ккал — в 2069 не помещаются.
     [{ kcal: '2069' }, 'validation.goalOverKcal'],
     [{ kcal: '500', protein: '126', fat: '', carbs: '' }, 'validation.goalOverKcal'],

@@ -5,7 +5,7 @@ import { useState } from 'react'
 import { type Control, useForm, useWatch } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 
-import { useMeasurementSummary } from '@/api/measurements'
+import { type Measurement, useMeasurementSummary } from '@/api/measurements'
 import { DIARY_KEY, type NutritionGoal, saveGoal, useNutritionGoal } from '@/api/nutrition'
 import type { User } from '@/auth/session'
 import { useUser } from '@/auth/useSession'
@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { isoToDisplay, today } from '@/lib/dates'
 import type { ErrorKey } from '@/lib/errors'
-import { parseDecimal } from '@/lib/numbers'
+import { formatNumber, parseDecimal } from '@/lib/numbers'
 import {
   ACTIVITIES,
   type Activity,
@@ -25,10 +25,13 @@ import {
   AIMS,
   type Body,
   formatKcal,
+  formatMl,
   macrosEnergy,
   suggestTargets,
+  suggestWater,
   type Targets,
 } from '@/lib/nutrition'
+import { displayUnit, measuredIn } from '@/lib/units'
 
 import { goalSchema, type GoalValues } from './values'
 
@@ -130,20 +133,79 @@ function Budget({ control }: { control: Control<GoalValues> }) {
   )
 }
 
+/**
+ * Под полем воды: откуда взялся расчёт и кнопка, которая возвращает его в поле, если там
+ * уже другое число. Без веса считать не из чего — строка говорит, что внести.
+ */
+function WaterHint({
+  control,
+  weight,
+  suggested,
+  onApply,
+}: {
+  control: Control<GoalValues>
+  weight: Measurement | null
+  suggested: number | null
+  onApply: () => void
+}) {
+  const { t, i18n } = useTranslation()
+  const user = useUser()
+  const typed = useWatch({ control, name: 'water' })
+
+  if (!weight || suggested === null) {
+    return <p className="text-sm text-muted-foreground">{t('goal.waterHintMissing')}</p>
+  }
+  const unit = displayUnit('mass', user.unit_system)
+  const value = formatMl(suggested, i18n.language)
+  return (
+    <>
+      <p className="text-sm text-muted-foreground">
+        {t('goal.waterHint', {
+          weight: formatNumber(measuredIn(weight, unit), i18n.language),
+          unit: t(`unitNames.${unit}`),
+          value,
+        })}
+      </p>
+      {typed !== String(suggested) && (
+        <Button
+          type="button"
+          variant="outline"
+          className="h-11 justify-self-start"
+          onClick={onApply}
+        >
+          {t('goal.waterApply', { value })}
+        </Button>
+      )}
+    </>
+  )
+}
+
 function textOf(value: number | null | undefined): string {
   return value == null ? '' : String(value)
 }
 
-function GoalForm({ goal, body }: { goal: NutritionGoal | null; body: Body | null }) {
+function GoalForm({
+  goal,
+  body,
+  weight,
+}: {
+  goal: NutritionGoal | null
+  body: Body | null
+  /** Последний замер веса: по нему считается ориентир цели по воде. */
+  weight: Measurement | null
+}) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [failure, setFailure] = useState<ErrorKey>()
+  const suggestedWater = weight ? suggestWater(weight.value) : null
   const defaults: GoalValues = {
     kcal: textOf(goal?.kcal),
     protein: textOf(goal?.protein_g),
     fat: textOf(goal?.fat_g),
     carbs: textOf(goal?.carbs_g),
+    // Пока цели по воде нет, в поле сразу стоит расчёт по весу.
+    water: textOf(goal?.water_ml ?? suggestedWater),
   }
   const form = useForm<GoalValues>({ resolver: zodResolver(goalSchema), defaultValues: defaults })
   const { errors, isSubmitting, isSubmitted } = form.formState
@@ -161,6 +223,8 @@ function GoalForm({ goal, body }: { goal: NutritionGoal | null; body: Body | nul
       protein: String(targets.protein_g),
       fat: String(targets.fat_g),
       carbs: String(targets.carbs_g),
+      // Расчёт по профилю воды не касается: в поле остаётся то, что набрано.
+      water: form.getValues('water'),
     }
     form.reset(values)
     auto.reset(values)
@@ -173,6 +237,7 @@ function GoalForm({ goal, body }: { goal: NutritionGoal | null; body: Body | nul
       protein_g: optionalNumberOf(values.protein, 0),
       fat_g: optionalNumberOf(values.fat, 0),
       carbs_g: optionalNumberOf(values.carbs, 0),
+      water_ml: optionalNumberOf(values.water, 0),
       local_date: today(),
     })
     if (result.failure) {
@@ -233,6 +298,27 @@ function GoalForm({ goal, body }: { goal: NutritionGoal | null; body: Body | nul
         />
       </div>
       <Budget control={form.control} />
+      <div className="grid gap-2">
+        <div className="grid grid-cols-2 gap-4">
+          <TextField
+            label={t('goal.water')}
+            error={errors.water?.message}
+            {...number}
+            {...form.register('water')}
+          />
+        </div>
+        <WaterHint
+          control={form.control}
+          weight={weight}
+          suggested={suggestedWater}
+          onApply={() =>
+            form.setValue('water', String(suggestedWater), {
+              shouldDirty: true,
+              shouldValidate: isSubmitted,
+            })
+          }
+        />
+      </div>
       <Card>
         <CardHeader>
           <CardTitle>{t('goal.hintTitle')}</CardTitle>
@@ -264,6 +350,6 @@ export function GoalPage() {
   if (goal.isPending || summary.isPending) {
     return <p className="text-muted-foreground">{t('common.loading')}</p>
   }
-  const weight = summary.data?.find((item) => item.metric === 'weight')?.latest?.value
-  return <GoalForm goal={goal.data ?? null} body={bodyOf(user, weight)} />
+  const weight = summary.data?.find((item) => item.metric === 'weight')?.latest ?? null
+  return <GoalForm goal={goal.data ?? null} body={bodyOf(user, weight?.value)} weight={weight} />
 }

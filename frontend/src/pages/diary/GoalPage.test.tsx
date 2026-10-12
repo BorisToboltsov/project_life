@@ -21,6 +21,7 @@ function fields() {
     protein: screen.getByLabelText('Белки, г'),
     fat: screen.getByLabelText('Жиры, г'),
     carbs: screen.getByLabelText('Углеводы, г'),
+    water: screen.getByLabelText('Вода, мл'),
   }
 }
 
@@ -36,9 +37,10 @@ describe('цель на день', () => {
 
     expect(await screen.findByRole('heading', { name: 'Цель на день' })).toBeInTheDocument()
     expect(screen.getByText(/Действует с 01\/10\/2026\./)).toBeInTheDocument()
-    const { kcal, protein } = fields()
+    const { kcal, protein, water } = fields()
     expect(kcal).toHaveValue('2100')
     expect(protein).toHaveValue('130')
+    expect(water).toHaveValue('2000')
     // 130 × 4 + 70 × 9 + 230 × 4 = 2070 из 2100.
     expect(screen.getByText('На БЖУ уходит 2 070 из 2 100 ккал, осталось 30.')).toBeInTheDocument()
     await userEvent.clear(kcal)
@@ -51,6 +53,7 @@ describe('цель на день', () => {
       protein_g: 130,
       fat_g: 70,
       carbs_g: 230,
+      water_ml: 2000,
       local_date: today(),
     })
   })
@@ -76,13 +79,14 @@ describe('цель на день', () => {
       protein_g: 150,
       fat_g: null,
       carbs_g: null,
+      water_ml: null,
       local_date: today(),
     })
   })
 
   it('пустая цель сохраняется: так её снимают', async () => {
     const calls = mockApi({
-      [GOAL]: json(200, { ...dailyGoal, fat_g: null, carbs_g: null }),
+      [GOAL]: json(200, { ...dailyGoal, fat_g: null, carbs_g: null, water_ml: null }),
       [SUMMARY]: json(200, summaryOf({})),
       [SAVE]: json(200, null),
       'GET /api/diary': json(200, diaryDay(today())),
@@ -102,6 +106,7 @@ describe('цель на день', () => {
       protein_g: null,
       fat_g: null,
       carbs_g: null,
+      water_ml: null,
       local_date: today(),
     })
   })
@@ -211,6 +216,8 @@ describe('цель на день', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Подставить' }))
     expect(fields().kcal).toHaveValue('1790')
     expect(fields().carbs).toHaveValue('222')
+    // Расчёт по профилю воды не касается: в поле остаётся её расчёт по весу.
+    expect(fields().water).toHaveValue('2400')
     // Подставленные калории — круглое число из расчёта, а не сумма БЖУ: они остаются
     // пределом и после правки БЖУ.
     expect(screen.getByText('На БЖУ уходит 1 788 из 1 790 ккал, осталось 2.')).toBeInTheDocument()
@@ -225,7 +232,92 @@ describe('цель на день', () => {
       protein_g: 90,
       fat_g: 60,
       carbs_g: 220,
+      water_ml: 2400,
     })
+  })
+
+  it('пока цели по воде нет, сразу подставляет расчёт по последнему весу', async () => {
+    const calls = mockApi({
+      [GOAL]: json(200, { ...dailyGoal, water_ml: null }),
+      [SUMMARY]: json(200, weight),
+      [SAVE]: json(200, dailyGoal),
+    })
+    await renderApp('/diary/goal', anna)
+
+    const { water } = await waitFor(fields)
+    // 80 кг × 30 мл.
+    expect(water).toHaveValue('2400')
+    expect(
+      screen.getByText('По весу 80 кг — около 2 400 мл: 30 мл на килограмм.'),
+    ).toBeInTheDocument()
+    // В поле уже стоит расчёт — подставлять нечего.
+    expect(screen.queryByRole('button', { name: /^Подставить 2\s400 мл$/ })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
+
+    await waitFor(() => expect(callsTo(calls, SAVE)).toHaveLength(1))
+    expect(callsTo(calls, SAVE)[0].body).toMatchObject({ kcal: 2100, water_ml: 2400 })
+  })
+
+  it('заданную цель по воде не затирает и возвращает расчёт кнопкой', async () => {
+    const calls = mockApi({
+      [GOAL]: json(200, dailyGoal),
+      [SUMMARY]: json(200, weight),
+      [SAVE]: json(200, dailyGoal),
+    })
+    await renderApp('/diary/goal', anna)
+
+    const { water } = await waitFor(fields)
+    expect(water).toHaveValue('2000')
+    await userEvent.click(screen.getByRole('button', { name: /^Подставить 2\s400 мл$/ }))
+    expect(water).toHaveValue('2400')
+    expect(screen.queryByRole('button', { name: /^Подставить 2\s400 мл$/ })).not.toBeInTheDocument()
+
+    // Своё число остаётся своим, а расчёт снова под рукой.
+    await userEvent.clear(water)
+    await userEvent.type(water, '1800')
+    expect(screen.getByRole('button', { name: /^Подставить 2\s400 мл$/ })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
+
+    await waitFor(() => expect(callsTo(calls, SAVE)).toHaveLength(1))
+    expect(callsTo(calls, SAVE)[0].body).toMatchObject({ water_ml: 1800 })
+  })
+
+  it('без веса оставляет поле воды пустым и говорит, что внести', async () => {
+    mockApi({ [GOAL]: json(200, null), [SUMMARY]: json(200, summaryOf({})) })
+    await renderApp('/diary/goal', anna)
+
+    const { water } = await waitFor(fields)
+    expect(water).toHaveValue('')
+    expect(
+      screen.getByText('Внесите вес — приложение предложит цель по воде: 30 мл на килограмм.'),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Подставить .* мл$/ })).not.toBeInTheDocument()
+  })
+
+  it('вес в подсказке воды — в единицах профиля', async () => {
+    mockApi({ [GOAL]: json(200, null), [SUMMARY]: json(200, weight) })
+    await renderApp('/diary/goal', { ...anna, unit_system: 'imperial' })
+
+    expect(
+      await screen.findByText('По весу 176,4 фунт — около 2 400 мл: 30 мл на килограмм.'),
+    ).toBeInTheDocument()
+  })
+
+  it('не принимает цель по воде вне разумных границ', async () => {
+    const calls = mockApi({
+      [GOAL]: json(200, dailyGoal),
+      [SUMMARY]: json(200, summaryOf({})),
+      [SAVE]: json(200, dailyGoal),
+    })
+    await renderApp('/diary/goal', anna)
+
+    const { water } = await waitFor(fields)
+    await userEvent.clear(water)
+    await userEvent.type(water, '50')
+    await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
+
+    expect(await screen.findByText('Вода — от 100 до 10 000 мл')).toBeInTheDocument()
+    expect(callsTo(calls, SAVE)).toEqual([])
   })
 
   it('не принимает цель вне разумных границ и показывает отказ сервера', async () => {

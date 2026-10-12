@@ -70,13 +70,20 @@ describe('день дневника', () => {
     mockApi({ [DAY]: json(200, diaryDay(DATE, [foodEntry(cottageCheese, 150)])) })
     await renderApp(`/diary/${DATE}`, anna)
 
-    expect(await screen.findByRole('link', { name: 'Задать цель' })).toBeInTheDocument()
+    // Цель предлагают задать и итог дня, и вода.
+    expect(await screen.findAllByRole('link', { name: 'Задать цель' })).toHaveLength(2)
     expect(screen.getByText('182 ккал', { selector: '.text-xl' })).toBeInTheDocument()
     expect(screen.queryByRole('progressbar')).not.toBeInTheDocument()
   })
 
   it('цель по части показателей сверяет только их', async () => {
-    const onlyKcalAndProtein = { ...dailyGoal, kcal: 2000, fat_g: null, carbs_g: null }
+    const onlyKcalAndProtein = {
+      ...dailyGoal,
+      kcal: 2000,
+      fat_g: null,
+      carbs_g: null,
+      water_ml: null,
+    }
     mockApi({
       [DAY]: json(200, diaryDay(DATE, [foodEntry(cottageCheese, 150)], onlyKcalAndProtein)),
     })

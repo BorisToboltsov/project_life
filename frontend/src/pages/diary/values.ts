@@ -13,6 +13,11 @@ export const amountSchema = z.object({ amount: numberIn(0.1, 5000, 'validation.a
 
 export type AmountValues = z.infer<typeof amountSchema>
 
+/** Порция воды в миллилитрах — своё количество вместо кнопки. */
+export const waterSchema = z.object({ amount: numberIn(1, 5000, 'validation.waterRange') })
+
+export type WaterValues = z.infer<typeof waterSchema>
+
 /** Штрихкод, введённый цифрами: опечатку выдаёт контрольная цифра. */
 export const barcodeSchema = z.object({
   barcode: z
@@ -24,13 +29,20 @@ export type BarcodeValues = z.infer<typeof barcodeSchema>
 
 const goalKcal = optionalNumberIn(500, 10000, 'validation.goalKcalRange')
 const goalMacro = optionalNumberIn(0, 1000, 'validation.goalMacroRange')
+const goalWater = optionalNumberIn(100, 10000, 'validation.goalWaterRange')
 
 /**
- * Цель на день: целые килокалории и граммы. Любое поле можно оставить пустым — цели по
- * этому показателю нет. Калории — предел для белков, жиров и углеводов.
+ * Цель на день: целые килокалории, граммы и миллилитры воды. Любое поле можно оставить
+ * пустым — цели по этому показателю нет. Калории — предел для белков, жиров и углеводов.
  */
 export const goalSchema = z
-  .object({ kcal: goalKcal, protein: goalMacro, fat: goalMacro, carbs: goalMacro })
+  .object({
+    kcal: goalKcal,
+    protein: goalMacro,
+    fat: goalMacro,
+    carbs: goalMacro,
+    water: goalWater,
+  })
   .refine(
     (values) => {
       const kcal = parseDecimal(values.kcal)

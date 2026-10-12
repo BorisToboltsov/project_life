@@ -23,6 +23,8 @@ export type Suggestion = Schemas['SuggestionOut']
 export type FoodEntry = Schemas['FoodEntryOut']
 export type Nutrients = Schemas['NutrientsOut']
 export type DiaryDay = Schemas['DiaryDayOut']
+/** Порция выпитой воды. */
+export type WaterIntake = Schemas['WaterIntakeOut']
 export type NutritionGoal = Schemas['NutritionGoalOut']
 
 /** В чём измеряется продукт. */
@@ -33,7 +35,7 @@ export const DIARY_KEY = ['diary'] as const
 /** То же для каталога продуктов. */
 export const PRODUCTS_KEY = ['products'] as const
 
-/** День дневника: записи по приёмам пищи, съеденное и цель этого дня. */
+/** День дневника: записи по приёмам пищи, съеденное, выпитая вода и цель этого дня. */
 export function useDiaryDay(date: string) {
   return useQuery({
     queryKey: [...DIARY_KEY, 'day', date],
@@ -182,6 +184,18 @@ export function saveMeal(id: string, body: Schemas['MealIn']) {
 export function deleteMeal(id: string) {
   return attempt(() =>
     api.DELETE('/api/diary/meals/{meal_id}', { params: { path: { meal_id: id } } }),
+  )
+}
+
+export function saveWater(id: string, body: Schemas['WaterIntakeIn']) {
+  return attempt(() =>
+    api.PUT('/api/diary/water/{intake_id}', { params: { path: { intake_id: id } }, body }),
+  )
+}
+
+export function deleteWater(id: string) {
+  return attempt(() =>
+    api.DELETE('/api/diary/water/{intake_id}', { params: { path: { intake_id: id } } }),
   )
 }
 

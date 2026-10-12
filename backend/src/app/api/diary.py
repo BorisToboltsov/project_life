@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import CurrentUser
 from app.db import SessionDep
 from app.errors import ApiError, ErrorCode, error_responses
-from app.models import FoodEntry, Meal, NutritionGoal, Product
+from app.models import FoodEntry, Meal, NutritionGoal, Product, WaterIntake
 from app.nutrition import total
 from app.schemas import (
     DayMealOut,
@@ -32,6 +32,9 @@ from app.schemas import (
     RecordId,
     SuggestionOut,
     SuggestionsOut,
+    WaterDayOut,
+    WaterIntakeIn,
+    WaterIntakeOut,
 )
 
 router = APIRouter(prefix="/diary", tags=["nutrition"])
@@ -62,7 +65,8 @@ def _shown(goal: NutritionGoal | None) -> NutritionGoalOut | None:
 async def read_day(
     user: CurrentUser, db: SessionDep, day: Annotated[DiaryDate, Query(alias="date")]
 ) -> DiaryDayOut:
-    """День дневника: записи по приёмам пищи, съеденное за приём и за день, цель дня."""
+    """День дневника: записи по приёмам пищи, съеденное за приём и за день, выпитая вода,
+    цель дня."""
     entries = list(
         await db.scalars(
             select(FoodEntry)
@@ -75,6 +79,11 @@ async def read_day(
         by_meal[entry.meal_id].append(entry)
     meals = await db.scalars(
         select(Meal).where(Meal.user_id == user.id).order_by(Meal.position, Meal.id)
+    )
+    water = await db.scalars(
+        select(WaterIntake)
+        .where(WaterIntake.user_id == user.id, WaterIntake.local_date == day)
+        .order_by(WaterIntake.created_at, WaterIntake.id)
     )
     return DiaryDayOut(
         local_date=day,
@@ -89,6 +98,7 @@ async def read_day(
             if meal.archived_at is None or by_meal[meal.id]
         ],
         totals=NutrientsOut.of(total(entry.eaten for entry in entries)),
+        water=WaterDayOut.of(list(water)),
         goal=_shown(await _goal_on(db, user.id, day)),
     )
 
@@ -330,6 +340,63 @@ async def delete_entry(entry_id: RecordId, user: CurrentUser, db: SessionDep) ->
     await db.commit()
 
 
+async def _own_intake(db: AsyncSession, intake_id: UUID, user_id: UUID) -> WaterIntake | None:
+    """Порция воды пользователя; чужая неотличима от несуществующей (инвариант I5)."""
+    intake = await db.get(WaterIntake, intake_id, with_for_update=True)
+    if intake is not None and intake.user_id != user_id:
+        raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND)
+    return intake
+
+
+@router.put(
+    "/water/{intake_id}",
+    responses={201: {"model": WaterIntakeOut}, **error_responses(404)},
+)
+async def save_water(
+    intake_id: RecordId,
+    body: WaterIntakeIn,
+    user: CurrentUser,
+    response: Response,
+    db: SessionDep,
+) -> WaterIntakeOut:
+    """Вносит порцию воды или заменяет свою же: повтор запроса не добавляет вторую
+    (ADR 0002)."""
+    fields = {"local_date": body.local_date, "amount_ml": body.amount_ml}
+    # Запоминаем заранее: откат ниже сбросил бы загруженные поля пользователя.
+    user_id = user.id
+    intake = await _own_intake(db, intake_id, user_id)
+    if intake is None:
+        intake = WaterIntake(id=intake_id, user_id=user_id, **fields)
+        db.add(intake)
+        try:
+            await db.flush()
+            response.status_code = status.HTTP_201_CREATED
+        except IntegrityError:
+            # Тот же ключ только что создал параллельный запрос — дальше это замена
+            # своей порции либо отказ, если порция чужая.
+            await db.rollback()
+            intake = await _own_intake(db, intake_id, user_id)
+    if intake is None:
+        raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND)
+    for name, value in fields.items():
+        setattr(intake, name, value)
+    await db.commit()
+    return WaterIntakeOut.model_validate(intake)
+
+
+@router.delete(
+    "/water/{intake_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses=error_responses(404),
+)
+async def delete_water(intake_id: RecordId, user: CurrentUser, db: SessionDep) -> None:
+    intake = await _own_intake(db, intake_id, user.id)
+    if intake is None:
+        raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND)
+    await db.delete(intake)
+    await db.commit()
+
+
 @router.post("/copy", status_code=status.HTTP_204_NO_CONTENT, responses=error_responses(404))
 async def copy_entries(body: DiaryCopyIn, user: CurrentUser, db: SessionDep) -> None:
     """Копирует свои записи на другой день вместе со снимками.
@@ -394,9 +461,13 @@ async def save_goal(
 ) -> NutritionGoalOut | None:
     """Задаёт цель с сегодняшнего дня. Прошлые дни остаются со своей прежней целью.
 
-    Показатель без значения — цели по нему нет; без всех четырёх цель с этого дня снята.
+    Показатель без значения — цели по нему нет; без всех цель с этого дня снята.
     """
     targets = body.model_dump(exclude={"local_date"})
+    if "water_ml" not in body.model_fields_set:
+        # Прежняя версия приложения о воде не знает: цель по воде остаётся какой была.
+        current = await _goal_on(db, user.id, body.local_date)
+        targets["water_ml"] = current.water_ml if current else None
     statement = insert(NutritionGoal).values(
         user_id=user.id, effective_from=body.local_date, **targets
     )

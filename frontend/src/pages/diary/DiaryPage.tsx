@@ -31,6 +31,7 @@ import { formatGrams, formatKcal } from '@/lib/nutrition'
 import { useMealName } from './mealName'
 import { Measure } from './Measure'
 import { DATE_MIN } from './values'
+import { WaterCard } from './WaterCard'
 
 function DayNav({ date }: { date: string }) {
   const { t } = useTranslation()
@@ -306,6 +307,8 @@ export function DiaryPage() {
       {day.data ? (
         <>
           <Summary day={day.data} />
+          {/* Ключ — день: раскрытое поле и отказ не переезжают на соседний. */}
+          <WaterCard key={date} date={date} day={day.data} title={t('water.title')} />
           {day.data.meals.map((meal) => (
             <MealCard key={meal.id} date={date} meal={meal} />
           ))}

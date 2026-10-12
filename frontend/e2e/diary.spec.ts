@@ -59,8 +59,9 @@ test('дневник питания: день внесён целиком, пр�
   await expect(breakfast.first()).toContainText('60 г · 211 ккал')
   await expect(page.getByText('393 ккал', { exact: true }).first()).toBeVisible()
 
-  // Цель на день хватит задать по одному показателю: остальные идут без неё.
-  await page.getByRole('link', { name: 'Задать цель' }).click()
+  // Цель на день хватит задать по одному показателю: остальные идут без неё. Задать её
+  // предлагают и итог дня, и вода под ним — идём из итога.
+  await page.getByRole('link', { name: 'Задать цель' }).first().click()
   await page.getByLabel('Белки, г').fill('130')
   await page.getByRole('button', { name: 'Сохранить' }).click()
   await expect(page.getByText('33,2 из 130 г')).toBeVisible()

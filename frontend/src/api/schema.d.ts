@@ -275,7 +275,8 @@ export interface paths {
         };
         /**
          * Read Day
-         * @description День дневника: записи по приёмам пищи, съеденное за приём и за день, цель дня.
+         * @description День дневника: записи по приёмам пищи, съеденное за приём и за день, выпитая вода,
+         *     цель дня.
          */
         get: operations["read_day_api_diary_get"];
         put?: never;
@@ -348,7 +349,7 @@ export interface paths {
          * Save Goal
          * @description Задаёт цель с сегодняшнего дня. Прошлые дни остаются со своей прежней целью.
          *
-         *     Показатель без значения — цели по нему нет; без всех четырёх цель с этого дня снята.
+         *     Показатель без значения — цели по нему нет; без всех цель с этого дня снята.
          */
         put: operations["save_goal_api_diary_goal_put"];
         post?: never;
@@ -401,6 +402,28 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/diary/water/{intake_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Save Water
+         * @description Вносит порцию воды или заменяет свою же: повтор запроса не добавляет вторую
+         *     (ADR 0002).
+         */
+        put: operations["save_water_api_diary_water__intake_id__put"];
+        post?: never;
+        /** Delete Water */
+        delete: operations["delete_water_api_diary_water__intake_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -721,6 +744,7 @@ export interface components {
             /** Meals */
             meals: components["schemas"]["DayMealOut"][];
             totals: components["schemas"]["NutrientsOut"];
+            water: components["schemas"]["WaterDayOut"];
         };
         /**
          * ErrorCode
@@ -1080,7 +1104,7 @@ export interface components {
         };
         /**
          * NutritionGoalIn
-         * @description Цель на день. `null` — цели по этому показателю нет; все четыре `null` снимают цель.
+         * @description Цель на день. `null` — цели по этому показателю нет; все `null` снимают цель.
          */
         NutritionGoalIn: {
             /** Carbs G */
@@ -1096,6 +1120,8 @@ export interface components {
             local_date: string;
             /** Protein G */
             protein_g: number | null;
+            /** Water Ml */
+            water_ml?: number | null;
         };
         /** NutritionGoalOut */
         NutritionGoalOut: {
@@ -1112,6 +1138,8 @@ export interface components {
             kcal: number | null;
             /** Protein G */
             protein_g: number | null;
+            /** Water Ml */
+            water_ml: number | null;
         };
         /** PasswordChangeIn */
         PasswordChangeIn: {
@@ -1395,6 +1423,41 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /**
+         * WaterDayOut
+         * @description Вода за день: порции в порядке внесения и их сумма.
+         */
+        WaterDayOut: {
+            /** Intakes */
+            intakes: components["schemas"]["WaterIntakeOut"][];
+            /** Total Ml */
+            total_ml: number;
+        };
+        /** WaterIntakeIn */
+        WaterIntakeIn: {
+            /** Amount Ml */
+            amount_ml: number;
+            /**
+             * Local Date
+             * Format: date
+             */
+            local_date: string;
+        };
+        /** WaterIntakeOut */
+        WaterIntakeOut: {
+            /** Amount Ml */
+            amount_ml: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Local Date
+             * Format: date
+             */
+            local_date: string;
         };
     };
     responses: never;
@@ -2513,6 +2576,115 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_water_api_diary_water__intake_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intake_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WaterIntakeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WaterIntakeOut"];
+                };
+            };
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WaterIntakeOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_water_api_diary_water__intake_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intake_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

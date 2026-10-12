@@ -25,9 +25,10 @@ from tests.nutrition import (
 
 pytestmark = pytest.mark.anyio
 
-GOAL = {"kcal": 2100, "protein_g": 130, "fat_g": 70, "carbs_g": 230}
+GOAL = {"kcal": 2100, "protein_g": 130, "fat_g": 70, "carbs_g": 230, "water_ml": 2000}
 NO_GOAL = dict.fromkeys(GOAL)
 NOTHING = {"kcal": 0, "protein_g": 0, "fat_g": 0, "carbs_g": 0}
+NO_WATER: dict[str, Any] = {"total_ml": 0, "intakes": []}
 
 
 async def set_goal(
@@ -258,6 +259,7 @@ async def test_empty_day_lists_every_meal(client: AsyncClient, make_user: MakeUs
             for preset, meal in zip(PRESETS, day["meals"], strict=True)
         ],
         "totals": NOTHING,
+        "water": NO_WATER,
         "goal": None,
     }
     assert len({meal["id"] for meal in day["meals"]}) == 4
@@ -718,12 +720,16 @@ async def test_past_days_keep_the_goal_they_had(client: AsyncClient, make_user: 
 @pytest.mark.parametrize(
     "targets",
     [
-        {"kcal": 2000, "protein_g": None, "fat_g": None, "carbs_g": None},
-        {"kcal": None, "protein_g": 150, "fat_g": None, "carbs_g": None},
-        {"kcal": 2000, "protein_g": 150, "fat_g": None, "carbs_g": None},
-        {"kcal": None, "protein_g": 130, "fat_g": 70, "carbs_g": 230},
+        {"kcal": 2000, "protein_g": None, "fat_g": None, "carbs_g": None, "water_ml": None},
+        {"kcal": None, "protein_g": 150, "fat_g": None, "carbs_g": None, "water_ml": None},
+        {"kcal": 2000, "protein_g": 150, "fat_g": None, "carbs_g": None, "water_ml": None},
+        {"kcal": None, "protein_g": 130, "fat_g": 70, "carbs_g": 230, "water_ml": None},
         # Белки, жиры и углеводы ровно на все калории: 520 + 630 + 920.
-        {"kcal": 2070, "protein_g": 130, "fat_g": 70, "carbs_g": 230},
+        {"kcal": 2070, "protein_g": 130, "fat_g": 70, "carbs_g": 230, "water_ml": None},
+        # Одна вода — тоже цель.
+        {"kcal": None, "protein_g": None, "fat_g": None, "carbs_g": None, "water_ml": 2500},
+        {"kcal": None, "protein_g": None, "fat_g": None, "carbs_g": None, "water_ml": 100},
+        {"kcal": 2000, "protein_g": None, "fat_g": None, "carbs_g": None, "water_ml": 10000},
     ],
 )
 async def test_goal_takes_any_set_of_targets(
@@ -766,12 +772,15 @@ async def test_goal_without_any_target_is_no_goal_from_today(
         # Белки, жиры и углеводы не помещаются в калории: 2070 ккал против 2069.
         {"kcal": 2069},
         {"kcal": 500, "protein_g": 126, "fat_g": None, "carbs_g": None},
+        {"water_ml": 99},
+        {"water_ml": 10001},
+        {"water_ml": 2000.5},
         # Показатель можно оставить пустым, но не пропустить.
         {"kcal": ...},
         # Цель начинается сегодня, а не задним числом и не с будущего.
         {"local_date": str(TODAY - timedelta(days=3))},
         {"local_date": str(TODAY + timedelta(days=3))},
-        {"water_ml": 2000},
+        {"sugars_g": 50},
     ],
 )
 async def test_implausible_goal_is_rejected(
