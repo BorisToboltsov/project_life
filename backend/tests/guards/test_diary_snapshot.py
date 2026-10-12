@@ -10,10 +10,14 @@ from typing import Any
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models import FoodEntry
 from tests.conftest import MakeUser
 from tests.nutrition import (
     COTTAGE_CHEESE,
+    LABEL,
     OATMEAL,
     TODAY,
     YESTERDAY,
@@ -115,6 +119,32 @@ async def test_copy_carries_the_snapshot_not_the_catalog(
     assert today["totals"] == (await read_day(client, user, YESTERDAY))["totals"]
     [copy] = today["meals"][0]["entries"]
     assert (copy["product_name"], copy["unit"]) == ("Творог 5 %", "g")
+
+
+async def test_snapshot_keeps_the_whole_label(
+    client: AsyncClient, db: AsyncSession, make_user: MakeUser
+) -> None:
+    """Что ещё печатают на этикетке, в итоги дня не входит, но снимается в запись так же,
+    как калории: когда итоги появятся, прошлые дни не придётся достраивать по каталогу."""
+    user = await make_user()
+    product_id = await add_product(client, user, **LABEL)
+    entry_id = await add_entry(client, user, product_id, 150, day=YESTERDAY)
+    copy_id = "0199b7a0-0000-7000-8000-00000000c0de"
+
+    # Продукт исправили и убрали этикетку — запись и её копия держат прежнее.
+    await put_product(client, user, {**OATMEAL, "sugars_g": 1}, product_id)
+    await put_entry(client, user, product_id, 200, day=YESTERDAY, entry_id=entry_id)
+    copied = await client.post(
+        "/api/diary/copy",
+        headers=user.headers,
+        json={"to_date": str(TODAY), "items": [{"source_id": entry_id, "id": copy_id}]},
+    )
+
+    assert copied.status_code == 204
+    entries = list(await db.scalars(select(FoodEntry).order_by(FoodEntry.local_date)))
+    assert [str(entry.id) for entry in entries] == [entry_id, copy_id]
+    for entry in entries:
+        assert {name: float(getattr(entry, name)) for name in LABEL} == LABEL
 
 
 async def test_removing_a_meal_does_not_change_past_days(

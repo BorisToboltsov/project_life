@@ -17,7 +17,10 @@ from tests.nutrition import (
     COTTAGE_CHEESE,
     EAN_8,
     EAN_13,
+    LABEL,
+    NO_LABEL,
     OFF_COTTAGE_CHEESE,
+    OFF_LABEL,
     UPC_A,
     UPC_A_AS_EAN_13,
     add_entry,
@@ -48,6 +51,7 @@ async def test_product_of_the_catalog_is_found_without_asking_outside(
         "barcode": EAN_13,
         "product": {
             **COTTAGE_CHEESE,
+            **NO_LABEL,
             "id": product_id,
             "barcode": EAN_13,
             "source": "user",
@@ -109,6 +113,7 @@ async def test_complete_product_goes_straight_into_the_catalog(
     assert response.json()["status"] == "found"
     assert found == {
         **COTTAGE_CHEESE,
+        **NO_LABEL,
         "name": "Творог 5 %, Простоквашино",
         "id": found["id"],
         "barcode": EAN_13,
@@ -135,6 +140,36 @@ async def test_found_product_is_ready_for_the_diary(
     await add_entry(client, user, product_id, 150)
 
     assert (await read_day(client, user))["totals"]["kcal"] == 181.5
+
+
+async def test_what_else_is_on_the_label_comes_with_the_product(
+    client: AsyncClient, make_user: MakeUser, off: OffStub
+) -> None:
+    nutriments = {**OFF_COTTAGE_CHEESE["nutriments"], **OFF_LABEL}
+    off.products[EAN_13] = {**OFF_COTTAGE_CHEESE, "nutriments": nutriments}
+    # Сахаров больше, чем углеводов, насыщенных жиров — чем жиров: в источнике ошибка.
+    # Продукт всё равно полный, только без этих двух значений.
+    off.products[EAN_8] = {
+        **OFF_COTTAGE_CHEESE,
+        "nutriments": {**nutriments, "sugars_100g": 1.81, "saturated-fat_100g": 5.5},
+    }
+    # Неполному продукту известное с этикетки тоже подставляется в форму.
+    off.products[UPC_A_AS_EAN_13] = {"product_name": "Творог", "nutriments": OFF_LABEL}
+    user = await make_user()
+
+    complete, doubtful, partial = [
+        (await lookup(client, user, barcode)).json() for barcode in (EAN_13, EAN_8, UPC_A)
+    ]
+
+    assert {name: complete["product"][name] for name in LABEL} == LABEL
+    assert doubtful["status"] == "found"
+    assert {name: doubtful["product"][name] for name in LABEL} == {
+        **LABEL,
+        "sugars_g": None,
+        "saturated_fat_g": None,
+    }
+    assert partial["status"] == "draft"
+    assert {name: partial["draft"][name] for name in LABEL} == LABEL
 
 
 async def test_name_follows_the_language_of_whoever_scans(
@@ -223,7 +258,7 @@ async def test_incomplete_product_comes_back_as_a_draft(
         "status": "draft",
         "barcode": EAN_13,
         "product": None,
-        "draft": {"unit": "g", **draft},
+        "draft": {"unit": "g", **NO_LABEL, **draft},
     }
     # В каталог неполный продукт не попал, а в «не найдено» не записан.
     assert list(await db.scalars(select(Product))) == []

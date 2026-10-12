@@ -120,10 +120,13 @@ const addFoodRoute = createRoute({
   // `$meal` — ключ приёма пищи из списка пользователя; есть ли такой, решает экран.
   params: { parse: ({ date, meal }) => ({ date: dateParam(date), meal }) },
   // Ключ продукта, с которым сюда пришли, — он показывается первым: `product` — созданный
-  // по пути, `scanned` — найденный по штрихкоду.
-  validateSearch: (search: Record<string, unknown>): { product?: string; scanned?: string } => ({
+  // по пути, `scanned` — найденный по штрихкоду, `picked` — выбранный в Open Food Facts.
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { product?: string; scanned?: string; picked?: string } => ({
     ...(typeof search.product === 'string' && { product: search.product }),
     ...(typeof search.scanned === 'string' && { scanned: search.scanned }),
+    ...(typeof search.picked === 'string' && { picked: search.picked }),
   }),
   component: screens.addFood,
 })

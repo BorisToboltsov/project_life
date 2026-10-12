@@ -19,6 +19,10 @@ describe('productSchema', () => {
       protein: '17.2',
       fat: '5',
       carbs: '1.8',
+      saturatedFat: '',
+      sugars: '',
+      fiber: '',
+      salt: '',
       barcode: '',
     })
     expect(productSchema.safeParse(valid).success).toBe(true)
@@ -26,14 +30,20 @@ describe('productSchema', () => {
 
   it('заготовка по штрихкоду заполняет то, что известно, и оставляет пустым остальное', () => {
     const draft = { name: 'Чай', unit: 'ml' as const, kcal: 1, protein_g: null, fat_g: null }
+    // С этикетки известно не всё: ноль — это значение, а не пустое поле.
+    const label = { sugars_g: 2.5, salt_g: 0, fiber_g: null }
 
-    expect(productDefaults({ ...draft, barcode: '4600000000008' })).toEqual({
+    expect(productDefaults({ ...draft, ...label, barcode: '4600000000008' })).toEqual({
       name: 'Чай',
       unit: 'ml',
       kcal: '1',
       protein: '',
       fat: '',
       carbs: '',
+      saturatedFat: '',
+      sugars: '2.5',
+      fiber: '',
+      salt: '0',
       barcode: '4600000000008',
     })
     // Источник знает только штрихкод: названия нет.
@@ -66,6 +76,12 @@ describe('productSchema', () => {
     [{ kcal: '900,1' }, 'validation.kcalRange'],
     [{ fat: '100,5' }, 'validation.macroRange'],
     [{ protein: '40', fat: '40', carbs: '20,5' }, 'validation.macroSum'],
+    [{ fiber: '-1' }, 'validation.macroRange'],
+    [{ salt: '100,5' }, 'validation.macroRange'],
+    [{ sugars: 'мало' }, 'validation.macroRange'],
+    // Часть не бывает больше целого.
+    [{ saturatedFat: '5,01' }, 'validation.saturatedOverFat'],
+    [{ sugars: '1,81' }, 'validation.sugarsOverCarbs'],
   ])('отклоняет %o', (fields, message) => {
     expect(issues(productSchema.safeParse({ ...valid, ...fields }))).toEqual([message])
   })
@@ -75,6 +91,17 @@ describe('productSchema', () => {
     expect(productDefaults(kefir).unit).toBe('ml')
     expect(productSchema.safeParse(productDefaults(kefir)).success).toBe(true)
     expect(productSchema.safeParse({ ...valid, unit: 'kg' }).success).toBe(false)
+  })
+
+  it('остальное с этикетки необязательно, а часть может равняться целому', () => {
+    const label = { saturatedFat: '5', sugars: '1,8', fiber: '0', salt: '0,11' }
+
+    expect(productSchema.safeParse({ ...valid, ...label }).success).toBe(true)
+    expect(productSchema.safeParse({ ...valid, sugars: ' ' }).success).toBe(true)
+    // Пока в «целом» ошибка, на часть не жалуемся: хватит одной ошибки.
+    expect(issues(productSchema.safeParse({ ...valid, fat: '', saturatedFat: '9' }))).toEqual([
+      'validation.macroRange',
+    ])
   })
 
   it('чистый жир и вода — тоже продукты', () => {

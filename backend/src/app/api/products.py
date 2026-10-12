@@ -17,18 +17,30 @@ from app.nutrition import ProductSource
 from app.schemas import (
     BarcodeLookupIn,
     BarcodeLookupOut,
+    ExternalProductOut,
+    ExternalSearchOut,
+    ExternalSearchStatus,
     LookupStatus,
     ProductDraftOut,
     ProductIn,
     ProductOut,
     RecordId,
 )
-from app.services.open_food_facts import Miss, OffProduct
+from app.services.open_food_facts import (
+    SEARCH_MAX_PAGE,
+    SEARCH_MIN_LENGTH,
+    Miss,
+    OffListing,
+    OffProduct,
+    search_terms,
+)
 
 router = APIRouter(prefix="/products", tags=["nutrition"])
 
-# Столько продуктов отдаёт поиск: дальше запрос стоит уточнить.
-SEARCH_LIMIT = 50
+# Столько продуктов каталога на странице: остальное приходит по «Показать ещё».
+PAGE_SIZE = 20
+# Заголовок ответа: с какого продукта продолжать. Нет заголовка — список кончился.
+NEXT_OFFSET = "X-Next-Offset"
 # Столько помнится, что штрихкода нет в источнике: за это время продукт там мог появиться.
 MISS_TTL = timedelta(days=7)
 
@@ -41,16 +53,45 @@ def _barcode_taken() -> ApiError:
     return ApiError(status.HTTP_409_CONFLICT, ErrorCode.BARCODE_TAKEN)
 
 
-@router.get("")
+@router.get(
+    "",
+    responses={
+        200: {
+            "headers": {
+                NEXT_OFFSET: {
+                    "description": "С какого продукта продолжать; нет — список кончился.",
+                    "schema": {"type": "integer"},
+                }
+            }
+        }
+    },
+)
 async def search_products(
-    user: CurrentUser, db: SessionDep, q: Annotated[str, Query(max_length=120)] = ""
+    user: CurrentUser,
+    db: SessionDep,
+    response: Response,
+    q: Annotated[str, Query(max_length=120)] = "",
+    offset: Annotated[int, Query(ge=0, le=100_000)] = 0,
 ) -> list[ProductOut]:
-    """Продукты каталога по алфавиту; `q` — слова, которые есть в названии, в любом порядке."""
-    query = select(Product).order_by(func.lower(Product.name), Product.id).limit(SEARCH_LIMIT)
+    """Страница каталога по алфавиту; `q` — слова, которые есть в названии, в любом порядке,
+    `offset` — сколько продуктов уже показано.
+
+    Ответ — список, как до появления страниц: открытая вкладка прежней версии приложения
+    читает его по-прежнему. Откуда продолжать, говорит заголовок (ADR 0010).
+    """
+    # Один продукт сверх страницы говорит, есть ли следующая.
+    query = (
+        select(Product)
+        .order_by(func.lower(Product.name), Product.id)
+        .offset(offset)
+        .limit(PAGE_SIZE + 1)
+    )
     for word in q.split():
         query = query.where(Product.name.icontains(word, autoescape=True))
-    products = await db.scalars(query)
-    return [ProductOut.of(product, user) for product in products]
+    products = list(await db.scalars(query))
+    if len(products) > PAGE_SIZE:
+        response.headers[NEXT_OFFSET] = str(offset + PAGE_SIZE)
+    return [ProductOut.of(product, user) for product in products[:PAGE_SIZE]]
 
 
 async def _with_barcode(db: AsyncSession, barcode: str) -> Product | None:
@@ -87,6 +128,10 @@ def _complete(found: OffProduct, barcode: str) -> ProductIn | None:
                 "protein_g": found.protein_g,
                 "fat_g": found.fat_g,
                 "carbs_g": found.carbs_g,
+                "sugars_g": found.sugars_g,
+                "saturated_fat_g": found.saturated_fat_g,
+                "fiber_g": found.fiber_g,
+                "salt_g": found.salt_g,
                 "barcode": barcode,
             }
         )
@@ -149,6 +194,51 @@ async def lookup_barcode(
         await db.refresh(user)
         product = await _with_barcode(db, barcode)
     return answer(LookupStatus.FOUND if product else LookupStatus.UNAVAILABLE, product)
+
+
+@router.get("/external", responses=error_responses(429))
+async def search_open_food_facts(
+    user: CurrentUser,
+    db: SessionDep,
+    source: OpenFoodFactsDep,
+    q: Annotated[str, Query(max_length=120)] = "",
+    page: Annotated[int, Query(ge=1, le=SEARCH_MAX_PAGE)] = 1,
+) -> ExternalSearchOut:
+    """Продукты Open Food Facts по названию — те, которых ещё нет в каталоге (ADR 0010).
+
+    Поиск ничего не сохраняет: в каталог продукт попадает, когда его выберут, — запросом
+    по штрихкоду, как при сканировании.
+    """
+
+    def answer(
+        outcome: ExternalSearchStatus, items: list[ExternalProductOut], next_page: int | None = None
+    ) -> ExternalSearchOut:
+        return ExternalSearchOut(status=outcome, items=items, next_page=next_page)
+
+    text = search_terms(q)
+    if not source.searchable or len(text) < SEARCH_MIN_LENGTH:
+        return answer(ExternalSearchStatus.OK, [])
+    found = source.recalled(text, page)
+    if found is None:
+        if not source.admits_search(user.id):
+            raise ApiError(status.HTTP_429_TOO_MANY_REQUESTS, ErrorCode.TOO_MANY_ATTEMPTS)
+        # Запрос наружу длится секунды: соединение с базой на это время возвращается в пул.
+        await db.commit()
+        found = await source.search(text, page)
+    if isinstance(found, Miss):
+        return answer(ExternalSearchStatus.UNAVAILABLE, [])
+
+    # Один штрихкод — одна строка: в источнике бывают дубли.
+    listed: dict[str, OffListing] = {}
+    for listing in found.products(user.language):
+        listed.setdefault(listing.barcode, listing)
+    # Что уже есть в каталоге, находится своим поиском — второй раз не показывается.
+    known = set(await db.scalars(select(Product.barcode).where(Product.barcode.in_(list(listed)))))
+    return answer(
+        ExternalSearchStatus.OK,
+        [ExternalProductOut.of(listing) for code, listing in listed.items() if code not in known],
+        page + 1 if found.has_more else None,
+    )
 
 
 @router.get("/{product_id}", responses=error_responses(404))

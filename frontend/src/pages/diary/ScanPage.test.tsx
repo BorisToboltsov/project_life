@@ -6,7 +6,7 @@ import type { Schemas } from '@/api/client'
 import { callsTo, json, mockApi, sequence } from '@/test/api'
 import { renderApp } from '@/test/app'
 import { stubCamera } from '@/test/camera'
-import { anna, cottageCheese, diaryDay, meals } from '@/test/fixtures'
+import { anna, cottageCheese, diaryDay, meals, noLabel } from '@/test/fixtures'
 
 const DATE = '2026-10-11'
 const MEAL = `/diary/${DATE}/add/${meals.breakfast.id}`
@@ -148,6 +148,7 @@ describe('сканер по пути в приём пищи', () => {
       protein_g: 17.2,
       fat_g: 5,
       carbs_g: 1.8,
+      ...noLabel,
       barcode: BARCODE,
     })
     expect(router.state.location.pathname).toBe(MEAL)
@@ -168,6 +169,8 @@ describe('сканер по пути в приём пищи', () => {
             protein_g: 3,
             fat_g: 1,
             carbs_g: null,
+            ...noLabel,
+            sugars_g: 3.9,
           },
         }),
       ),
@@ -186,6 +189,9 @@ describe('сканер по пути в приём пищи', () => {
     expect(screen.getByLabelText('Калории, ккал')).toHaveValue('40')
     expect(screen.getByLabelText('Белки, г')).toHaveValue('3')
     expect(screen.getByLabelText('Углеводы, г')).toHaveValue('')
+    // Известное с этикетки подставлено тоже.
+    expect(screen.getByLabelText('Сахара, г')).toHaveValue('3.9')
+    expect(screen.getByLabelText('Клетчатка, г')).toHaveValue('')
     expect(screen.getByLabelText('Штрихкод')).toHaveValue(BARCODE)
     // Калории с упаковки расчётом не затираются.
     await userEvent.type(screen.getByLabelText('Углеводы, г'), '4')

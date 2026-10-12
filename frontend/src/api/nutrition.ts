@@ -1,6 +1,6 @@
-import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-query'
 
-import { attempt } from '@/lib/errors'
+import { attempt, type ErrorKey } from '@/lib/errors'
 
 import { api, type Schemas } from './client'
 
@@ -15,6 +15,10 @@ export type Product = Schemas['ProductOut']
 export type BarcodeLookup = Schemas['BarcodeLookupOut']
 /** Что источник знает о продукте, которого нет в каталоге. */
 export type ProductDraft = Schemas['ProductDraftOut']
+/** Продукт из Open Food Facts, найденный по названию: в каталоге его ещё нет. */
+export type ExternalProduct = Schemas['ExternalProductOut']
+/** Страница поиска в Open Food Facts; `failure` — запрос к своему серверу не удался. */
+export type ExternalPage = Schemas['ExternalSearchOut'] & { failure?: ErrorKey }
 export type Suggestion = Schemas['SuggestionOut']
 export type FoodEntry = Schemas['FoodEntryOut']
 export type Nutrients = Schemas['NutrientsOut']
@@ -59,16 +63,68 @@ export function useNutritionGoal() {
   })
 }
 
+/** Заголовок ответа каталога: с какого продукта продолжать; нет — список кончился. */
+const NEXT_OFFSET = 'X-Next-Offset'
+
+/** Строки без повторов: каталог мог измениться между запросами двух страниц. */
+function distinct<T>(items: T[], key: (item: T) => string): T[] {
+  return [...new Map(items.map((item) => [key(item), item])).values()]
+}
+
 /**
- * Поиск по каталогу; пустой запрос — начало каталога по алфавиту. Пока идёт новый
- * запрос, остаётся прежний список: строки не мигают при наборе.
+ * Поиск по каталогу, страница за страницей; пустой запрос — каталог по алфавиту. Пока идёт
+ * новый запрос, остаётся прежний список: строки не мигают при наборе.
  */
 export function useProductSearch(q: string, enabled = true) {
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: [...PRODUCTS_KEY, 'search', q],
     enabled,
     placeholderData: keepPreviousData,
-    queryFn: async () => (await api.GET('/api/products', { params: { query: { q } } })).data ?? [],
+    initialPageParam: 0,
+    queryFn: async ({ pageParam }) => {
+      const { data, response } = await api.GET('/api/products', {
+        params: { query: { q, offset: pageParam } },
+      })
+      const next = Number(response.headers.get(NEXT_OFFSET))
+      return { items: data ?? [], next: next > 0 ? next : undefined }
+    },
+    getNextPageParam: (last) => last.next,
+    select: (data) =>
+      distinct(
+        data.pages.flatMap((page) => page.items),
+        (product) => product.id,
+      ),
+  })
+}
+
+/**
+ * Продукты Open Food Facts по названию — те, которых ещё нет в каталоге. Каждая страница —
+ * запрос сервера наружу, а их число ограничено: сам по себе поиск не повторяется, только
+ * когда изменился каталог или человек попросил.
+ */
+export function useExternalSearch(q: string, enabled: boolean) {
+  return useInfiniteQuery({
+    queryKey: [...PRODUCTS_KEY, 'external', q],
+    enabled,
+    staleTime: Infinity,
+    initialPageParam: 1,
+    queryFn: async ({ pageParam }): Promise<ExternalPage> => {
+      const result = await attempt(() =>
+        api.GET('/api/products/external', { params: { query: { q, page: pageParam } } }),
+      )
+      return result.failure
+        ? { status: 'unavailable', items: [], next_page: null, failure: result.failure }
+        : result.data
+    },
+    getNextPageParam: (last) => last.next_page ?? undefined,
+    select: (data) => ({
+      items: distinct(
+        data.pages.flatMap((page) => page.items),
+        (product) => product.barcode,
+      ),
+      // Чем кончилась последняя страница: на ней поиск мог споткнуться.
+      last: data.pages.at(-1),
+    }),
   })
 }
 

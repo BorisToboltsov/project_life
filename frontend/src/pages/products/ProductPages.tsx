@@ -7,6 +7,7 @@ import { deleteProduct, type Product, PRODUCTS_KEY, useProduct } from '@/api/nut
 import { FormError } from '@/components/form/fields'
 import { Button } from '@/components/ui/button'
 import type { ErrorKey } from '@/lib/errors'
+import { formatNumber } from '@/lib/numbers'
 
 import { ProductForm } from './ProductForm'
 import { ProductLine } from './ProductLine'
@@ -55,6 +56,26 @@ function ProductSource({ product }: { product: Product }) {
         </a>
       )}
     </p>
+  )
+}
+
+const LABEL_NUTRIENTS = ['saturated_fat_g', 'sugars_g', 'fiber_g', 'salt_g'] as const
+
+/** Что ещё известно с этикетки — те значения, что внесены; хранятся до сотой грамма. */
+function ProductLabel({ product }: { product: Product }) {
+  const { t, i18n } = useTranslation()
+  const known = LABEL_NUTRIENTS.filter((name) => product[name] != null)
+  if (known.length === 0) return null
+  return (
+    <ul aria-label={t('products.labelTitle')} className="mt-2 text-sm text-muted-foreground">
+      {known.map((name) => (
+        <li key={name}>
+          {t(`labelNutrients.${name}`, {
+            value: formatNumber(product[name] ?? 0, i18n.language, 2),
+          })}
+        </li>
+      ))}
+    </ul>
   )
 }
 
@@ -128,6 +149,7 @@ export function ProductEditPage() {
         <h1 className="text-2xl font-semibold">{t('products.title')}</h1>
         <div className="rounded-lg border p-3">
           <ProductLine product={product.data} />
+          <ProductLabel product={product.data} />
         </div>
         <ProductSource product={product.data} />
         <p className="text-sm text-muted-foreground">{t('products.readOnly')}</p>

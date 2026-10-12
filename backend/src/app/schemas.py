@@ -32,7 +32,7 @@ from app.models import (
     User,
 )
 from app.nutrition import MealPreset, Nutrients, ProductSource, ProductUnit, energy_kcal
-from app.services.open_food_facts import OffProduct
+from app.services.open_food_facts import OffListing, OffProduct
 
 
 def _known_timezone(value: str) -> str:
@@ -337,6 +337,10 @@ def _barcode(value: str) -> str:
 Barcode = Annotated[str, StringConstraints(max_length=32), AfterValidator(_barcode)]
 
 
+def _known(value: Decimal | None) -> float | None:
+    return None if value is None else float(value)
+
+
 class ProductIn(Strict):
     name: ProductName
     unit: ProductUnit
@@ -345,6 +349,11 @@ class ProductIn(Strict):
     protein_g: Macro
     fat_g: Macro
     carbs_g: Macro
+    # Что ещё печатают на этикетке; `null` — значения нет.
+    sugars_g: Macro | None = None
+    saturated_fat_g: Macro | None = None
+    fiber_g: Macro | None = None
+    salt_g: Macro | None = None
     # `null` — у продукта нет штрихкода.
     barcode: Barcode | None = None
 
@@ -352,6 +361,15 @@ class ProductIn(Strict):
     def _fits_in_100_grams(self) -> Self:
         if self.protein_g + self.fat_g + self.carbs_g > 100:
             raise ValueError("macronutrients exceed 100 g per 100 g")
+        return self
+
+    @model_validator(mode="after")
+    def _part_fits_in_the_whole(self) -> Self:
+        # Сахара — часть углеводов, насыщенные жиры — часть жиров.
+        if self.sugars_g is not None and self.sugars_g > self.carbs_g:
+            raise ValueError("sugars exceed carbohydrates")
+        if self.saturated_fat_g is not None and self.saturated_fat_g > self.fat_g:
+            raise ValueError("saturated fat exceeds fat")
         return self
 
 
@@ -363,6 +381,10 @@ class ProductOut(BaseModel):
     protein_g: float
     fat_g: float
     carbs_g: float
+    sugars_g: float | None
+    saturated_fat_g: float | None
+    fiber_g: float | None
+    salt_g: float | None
     barcode: str | None
     source: ProductSource
     # Может ли продукт менять тот, кто спрашивает: автор или администратор.
@@ -378,6 +400,10 @@ class ProductOut(BaseModel):
             protein_g=float(product.protein_g),
             fat_g=float(product.fat_g),
             carbs_g=float(product.carbs_g),
+            sugars_g=_known(product.sugars_g),
+            saturated_fat_g=_known(product.saturated_fat_g),
+            fiber_g=_known(product.fiber_g),
+            salt_g=_known(product.salt_g),
             barcode=product.barcode,
             source=product.source,
             editable=viewer.role == Role.ADMIN or product.created_by == viewer.id,
@@ -410,19 +436,24 @@ class ProductDraftOut(BaseModel):
     protein_g: float | None
     fat_g: float | None
     carbs_g: float | None
+    sugars_g: float | None
+    saturated_fat_g: float | None
+    fiber_g: float | None
+    salt_g: float | None
 
     @classmethod
     def of(cls, found: OffProduct) -> Self:
-        def known(value: Decimal | None) -> float | None:
-            return None if value is None else float(value)
-
         return cls(
             name=found.name,
             unit=found.unit,
-            kcal=known(found.kcal),
-            protein_g=known(found.protein_g),
-            fat_g=known(found.fat_g),
-            carbs_g=known(found.carbs_g),
+            kcal=_known(found.kcal),
+            protein_g=_known(found.protein_g),
+            fat_g=_known(found.fat_g),
+            carbs_g=_known(found.carbs_g),
+            sugars_g=_known(found.sugars_g),
+            saturated_fat_g=_known(found.saturated_fat_g),
+            fiber_g=_known(found.fiber_g),
+            salt_g=_known(found.salt_g),
         )
 
 
@@ -434,6 +465,48 @@ class BarcodeLookupOut(BaseModel):
     product: ProductOut | None = None
     # Заготовка продукта — при `draft`.
     draft: ProductDraftOut | None = None
+
+
+class ExternalProductOut(BaseModel):
+    """Продукт из Open Food Facts, которого нет в каталоге (ADR 0010). В каталог он
+    попадает, когда его выберут, — поиском по этому штрихкоду."""
+
+    barcode: str
+    name: str
+    unit: ProductUnit
+    # Состав на 100 единиц; `null` — источник этого не знает.
+    kcal: float | None
+    protein_g: float | None
+    fat_g: float | None
+    carbs_g: float | None
+
+    @classmethod
+    def of(cls, listing: OffListing) -> Self:
+        found = listing.product
+        return cls(
+            barcode=listing.barcode,
+            name=listing.name,
+            unit=found.unit,
+            kcal=_known(found.kcal),
+            protein_g=_known(found.protein_g),
+            fat_g=_known(found.fat_g),
+            carbs_g=_known(found.carbs_g),
+        )
+
+
+class ExternalSearchStatus(StrEnum):
+    """Чем кончился поиск по названию в Open Food Facts (ADR 0010)."""
+
+    OK = "ok"
+    # Open Food Facts не ответил или исчерпан общий предел обращений к нему.
+    UNAVAILABLE = "unavailable"
+
+
+class ExternalSearchOut(BaseModel):
+    status: ExternalSearchStatus
+    items: list[ExternalProductOut]
+    # Какую страницу спрашивать дальше; `null` — больше ничего нет.
+    next_page: int | None
 
 
 class SuggestionOut(ProductOut):

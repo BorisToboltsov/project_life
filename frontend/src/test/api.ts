@@ -11,12 +11,17 @@ export interface ApiCall {
 
 type Route = (call: ApiCall) => Response
 
-export function json(status: number, body?: unknown): Route {
+export function json(status: number, body?: unknown, headers: Record<string, string> = {}): Route {
   return () =>
     new Response(body === undefined ? null : JSON.stringify(body), {
       status,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...headers },
     })
+}
+
+/** Страница каталога, за которой есть следующая: откуда продолжать, говорит заголовок. */
+export function page(items: unknown[], next: number): Route {
+  return json(200, items, { 'X-Next-Offset': String(next) })
 }
 
 /** Ответы по очереди: первый вызов получает первый ответ, последний ответ повторяется. */

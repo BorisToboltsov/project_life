@@ -2,7 +2,8 @@
 # отвечать за Open Food Facts самим. Используется стендом для e2e (make stand); на сервере
 # этого файла нет.
 services:
-  # Подменный Open Food Facts: бэкенд стенда ходит сюда (OFF_URL в e2e.env), а не наружу.
+  # Подменный Open Food Facts: бэкенд стенда ходит сюда (OFF_URL и OFF_SEARCH_URL в
+  # e2e.env), а не наружу.
   off:
     image: caddy:2-alpine
     volumes:
@@ -12,5 +13,10 @@ services:
     build: ../backend
   backend:
     build: ../backend
+    environment:
+      # Пределы обращений берегут настоящий Open Food Facts; подменному они ни к чему, а
+      # прогон не должен в них упираться.
+      LIFE_OFF_PRODUCTS_PER_MINUTE: 600
+      LIFE_OFF_SEARCHES_PER_MINUTE: 600
   web:
     build: ../frontend

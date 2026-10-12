@@ -5,28 +5,15 @@ import { useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 
-import {
-  type BarcodeLookup,
-  lookupBarcode,
-  type ProductDraft,
-  productKey,
-  PRODUCTS_KEY,
-} from '@/api/nutrition'
 import { FormError, TextField } from '@/components/form/fields'
 import { BarcodeScanner } from '@/components/scanner/BarcodeScanner'
 import { Button } from '@/components/ui/button'
 import { normalizeBarcode } from '@/lib/barcode'
 import type { ErrorKey } from '@/lib/errors'
-import { ProductForm } from '@/pages/products/ProductForm'
+import { lookUp, type Missing } from '@/pages/products/lookup'
+import { MissingProduct } from '@/pages/products/MissingProduct'
 
 import { barcodeSchema, type BarcodeValues } from './values'
-
-/** Продукта в каталоге нет: чем кончился поиск и что о продукте известно. */
-interface Missing {
-  status: Exclude<BarcodeLookup['status'], 'found'>
-  barcode: string
-  draft?: ProductDraft | null
-}
 
 type Step =
   | { at: 'scan' }
@@ -94,25 +81,18 @@ export function ScanPage() {
 
   async function find(barcode: string) {
     setStep({ at: 'lookup', barcode })
-    const result = await lookupBarcode(barcode)
+    const looked = await lookUp(queryClient, barcode)
     if (!shown.current) return
-    if (result.failure) {
-      setStep({ at: 'failed', barcode, failure: result.failure })
+    if ('failure' in looked) {
+      setStep({ at: 'failed', barcode, failure: looked.failure })
       return
     }
-    const { status, product, draft } = result.data
-    if (status !== 'found' || !product) {
-      setStep({
-        at: 'create',
-        missing: { status: status === 'found' ? 'not_found' : status, barcode, draft },
-      })
+    if ('missing' in looked) {
+      setStep({ at: 'create', missing: looked.missing })
       return
     }
-    queryClient.setQueryData(productKey(product.id), product)
-    // Продукт мог появиться в каталоге только что — из Open Food Facts.
-    void queryClient.invalidateQueries({ queryKey: [...PRODUCTS_KEY, 'search'] })
     // Сканер в истории не остаётся: «назад» из приёма пищи не включит камеру снова.
-    await navigate({ ...toMeal, search: { scanned: product.id }, replace: true })
+    await navigate({ ...toMeal, search: { scanned: looked.product.id }, replace: true })
   }
 
   const again = (
@@ -122,24 +102,18 @@ export function ScanPage() {
   )
 
   if (step.at === 'create') {
-    const { status, barcode, draft } = step.missing
     return (
-      <div className="grid gap-4">
-        <h1 className="text-2xl font-semibold">{t('products.newTitle')}</h1>
-        <p role="status" className="text-sm text-muted-foreground">
-          {t(`lookupNotices.${status}`, { barcode })}
-        </p>
-        <ProductForm
-          draft={{ ...draft, barcode }}
-          onSaved={(product) => navigate({ ...toMeal, search: { product }, replace: true })}
-          cancel={
-            <Button asChild variant="ghost" className="h-11">
-              <Link {...toMeal}>{t('products.cancel')}</Link>
-            </Button>
-          }
-        />
+      <MissingProduct
+        missing={step.missing}
+        onSaved={(product) => navigate({ ...toMeal, search: { product }, replace: true })}
+        cancel={
+          <Button asChild variant="ghost" className="h-11">
+            <Link {...toMeal}>{t('products.cancel')}</Link>
+          </Button>
+        }
+      >
         <div>{again}</div>
-      </div>
+      </MissingProduct>
     )
   }
 

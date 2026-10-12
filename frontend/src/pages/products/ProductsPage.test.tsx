@@ -2,11 +2,24 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 
-import { callsTo, json, mockApi, sequence } from '@/test/api'
+import { callsTo, json, mockApi, page, sequence } from '@/test/api'
 import { renderApp } from '@/test/app'
-import { anna, cottageCheese, kefir, oatmeal } from '@/test/fixtures'
+import { anna, cottageCheese, kefir, noLabel, oatmeal, outsideOf } from '@/test/fixtures'
 
 const SEARCH = 'GET /api/products'
+const OUTSIDE = 'GET /api/products/external'
+const LOOKUP = 'POST /api/products/lookup'
+
+const yogurt = {
+  barcode: '4600000000008',
+  name: 'Йогурт натуральный',
+  unit: 'g' as const,
+  kcal: 68,
+  protein_g: 5,
+  fat_g: 3.2,
+  carbs_g: 4.7,
+}
+const granola = { ...yogurt, barcode: '46012340', name: 'Гранола', kcal: null }
 const UUID7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 
 describe('каталог продуктов', () => {
@@ -30,7 +43,7 @@ describe('каталог продуктов', () => {
     await userEvent.type(screen.getByLabelText('Поиск'), 'твор')
 
     await waitFor(() => expect(within(list).getAllByRole('listitem')).toHaveLength(1))
-    expect(callsTo(calls, SEARCH).at(-1)?.query).toEqual({ q: 'твор' })
+    expect(callsTo(calls, SEARCH).at(-1)?.query).toEqual({ q: 'твор', offset: '0' })
   })
 
   it('различает пустой каталог и пустой результат поиска', async () => {
@@ -40,6 +53,170 @@ describe('каталог продуктов', () => {
     expect(await screen.findByText('В каталоге пока пусто.')).toBeInTheDocument()
     await userEvent.type(screen.getByLabelText('Поиск'), 'кефир')
     expect(await screen.findByText('Ничего не найдено.')).toBeInTheDocument()
+  })
+
+  it('каталог приходит страницами: остальное — по «Показать ещё»', async () => {
+    const calls = mockApi({
+      [SEARCH]: (call) =>
+        (call.query.offset === '0'
+          ? page([kefir, oatmeal], 20)
+          : json(200, [oatmeal, cottageCheese]))(call),
+    })
+    await renderApp('/products', anna)
+
+    const list = await screen.findByRole('list', { name: 'Каталог продуктов' })
+    await waitFor(() => expect(within(list).getAllByRole('listitem')).toHaveLength(2))
+    await userEvent.click(screen.getByRole('button', { name: 'Показать ещё' }))
+
+    // Продукт, попавший на обе страницы, — каталог успел измениться — показан один раз.
+    await waitFor(() => expect(within(list).getAllByRole('listitem')).toHaveLength(3))
+    expect(callsTo(calls, SEARCH).map((call) => call.query)).toEqual([
+      { q: '', offset: '0' },
+      { q: '', offset: '20' },
+    ])
+    expect(screen.queryByRole('button', { name: 'Показать ещё' })).not.toBeInTheDocument()
+    // Без текста искать в Open Food Facts нечего.
+    expect(
+      screen.queryByRole('button', { name: 'Искать в Open Food Facts' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('по кнопке ищет в Open Food Facts отдельной секцией и листает её', async () => {
+    const calls = mockApi({
+      [SEARCH]: json(200, [cottageCheese]),
+      [OUTSIDE]: (call) =>
+        json(200, call.query.page === '1' ? outsideOf([yogurt], 2) : outsideOf([granola]))(call),
+    })
+    await renderApp('/products', anna)
+
+    await userEvent.type(await screen.findByLabelText('Поиск'), 'йо')
+    // Свой каталог ищется при наборе, Open Food Facts — только по кнопке.
+    expect(await screen.findByRole('heading', { name: 'В каталоге' })).toBeInTheDocument()
+    expect(callsTo(calls, OUTSIDE)).toEqual([])
+    await userEvent.click(screen.getByRole('button', { name: 'Искать в Open Food Facts' }))
+
+    const outside = await screen.findByRole('list', { name: 'Open Food Facts' })
+    expect(screen.getByRole('heading', { name: 'Open Food Facts' })).toBeInTheDocument()
+    expect(within(outside).getAllByRole('listitem')).toHaveLength(1)
+    await userEvent.click(screen.getByRole('button', { name: 'Показать ещё' }))
+    await waitFor(() => expect(within(outside).getAllByRole('listitem')).toHaveLength(2))
+    expect(within(outside).getByRole('button', { name: /Гранола/ })).toHaveTextContent(
+      'Состав неполный',
+    )
+    expect(callsTo(calls, OUTSIDE).map((call) => call.query)).toEqual([
+      { q: 'йо', page: '1' },
+      { q: 'йо', page: '2' },
+    ])
+    expect(screen.queryByRole('button', { name: 'Показать ещё' })).not.toBeInTheDocument()
+
+    // Новый текст — новая просьба: прежняя выдача убрана, наружу без кнопки ничего не ушло.
+    await userEvent.type(screen.getByLabelText('Поиск'), 'г')
+    expect(screen.queryByRole('list', { name: 'Open Food Facts' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Искать в Open Food Facts' })).toBeInTheDocument()
+    expect(callsTo(calls, OUTSIDE)).toHaveLength(2)
+  })
+
+  it('выбранный в Open Food Facts продукт берётся в каталог и открывается', async () => {
+    const imported = {
+      ...cottageCheese,
+      ...yogurt,
+      id: '0199b7a0-0000-7000-8000-0000000000c9',
+      source: 'open_food_facts' as const,
+    }
+    const calls = mockApi({
+      [SEARCH]: json(200, []),
+      [OUTSIDE]: json(200, outsideOf([yogurt])),
+      [LOOKUP]: json(200, { status: 'found', barcode: yogurt.barcode, product: imported }),
+      'GET /api/products/*': json(200, imported),
+    })
+    const { router } = await renderApp('/products', anna)
+
+    await userEvent.type(await screen.findByLabelText('Поиск'), 'йогурт')
+    await userEvent.click(await screen.findByRole('button', { name: 'Искать в Open Food Facts' }))
+    await userEvent.click(await screen.findByRole('button', { name: /Йогурт натуральный/ }))
+
+    await waitFor(() => expect(router.state.location.pathname).toBe(`/products/${imported.id}`))
+    expect(callsTo(calls, LOOKUP)[0].body).toEqual({ barcode: yogurt.barcode })
+    // Продукт теперь свой: открылась его карточка с пометкой об источнике.
+    expect(await screen.findByLabelText('Название')).toHaveValue('Йогурт натуральный')
+    expect(screen.getByText(/Состав взят из Open Food Facts/)).toBeInTheDocument()
+  })
+
+  it('неполный продукт из Open Food Facts дополняют в форме и возвращаются в каталог', async () => {
+    const draft = { ...granola, name: 'Гранола, Стенд', carbs_g: null, ...noLabel, fiber_g: 7 }
+    const calls = mockApi({
+      [SEARCH]: json(200, []),
+      [OUTSIDE]: json(200, outsideOf([granola])),
+      [LOOKUP]: json(200, { status: 'draft', barcode: granola.barcode, draft }),
+      'PUT /api/products/*': json(201, cottageCheese),
+    })
+    await renderApp('/products', anna)
+
+    await userEvent.type(await screen.findByLabelText('Поиск'), 'гранола')
+    await userEvent.click(await screen.findByRole('button', { name: 'Искать в Open Food Facts' }))
+    await userEvent.click(await screen.findByRole('button', { name: /Гранола/ }))
+
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      `Продукт ${granola.barcode} есть в Open Food Facts, но состав там неполный.`,
+    )
+    // Что знает запрос по штрихкоду, важнее того, что было в выдаче поиска.
+    expect(screen.getByLabelText('Название')).toHaveValue('Гранола, Стенд')
+    expect(screen.getByLabelText('Клетчатка, г')).toHaveValue('7')
+    expect(screen.getByLabelText('Углеводы, г')).toHaveValue('')
+    await userEvent.type(screen.getByLabelText('Углеводы, г'), '60')
+    // Калорий источник не знает — посчитаны по БЖУ: 5 × 4 + 3,2 × 9 + 60 × 4.
+    expect(screen.getByLabelText('Калории, ккал')).toHaveValue('288.8')
+    await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
+
+    expect(await screen.findByLabelText('Поиск')).toBeInTheDocument()
+    expect(callsTo(calls, 'PUT /api/products/*')[0].body).toMatchObject({
+      barcode: granola.barcode,
+      fiber_g: 7,
+    })
+  })
+
+  it('Open Food Facts не отвечает — поиск можно повторить', async () => {
+    const calls = mockApi({
+      [SEARCH]: json(200, []),
+      [OUTSIDE]: sequence(
+        json(200, { status: 'unavailable', items: [], next_page: null }),
+        json(429, { detail: 'too_many_attempts' }),
+        json(200, outsideOf([])),
+      ),
+    })
+    await renderApp('/products', anna)
+
+    await userEvent.type(await screen.findByLabelText('Поиск'), 'йогурт')
+    await userEvent.click(await screen.findByRole('button', { name: 'Искать в Open Food Facts' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Open Food Facts не отвечает. Попробуйте позже.',
+    )
+
+    // Свой предел обращений наружу — тоже причина попробовать позже.
+    await userEvent.click(screen.getByRole('button', { name: 'Повторить' }))
+    expect(await screen.findByText(/Слишком много попыток/)).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Повторить' }))
+    expect(await screen.findByText('В Open Food Facts ничего не нашлось.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Повторить' })).not.toBeInTheDocument()
+    expect(callsTo(calls, OUTSIDE)).toHaveLength(3)
+  })
+
+  it('отказ при выборе продукта остаётся на экране; выбрать можно снова', async () => {
+    const calls = mockApi({
+      [SEARCH]: json(200, []),
+      [OUTSIDE]: json(200, outsideOf([yogurt])),
+      [LOOKUP]: json(429, { detail: 'too_many_attempts' }),
+    })
+    await renderApp('/products', anna)
+
+    await userEvent.type(await screen.findByLabelText('Поиск'), 'йогурт')
+    await userEvent.click(await screen.findByRole('button', { name: 'Искать в Open Food Facts' }))
+    await userEvent.click(await screen.findByRole('button', { name: /Йогурт натуральный/ }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/Слишком много попыток/)
+    expect(screen.getByRole('button', { name: /Йогурт натуральный/ })).toBeEnabled()
+    expect(callsTo(calls, LOOKUP)).toHaveLength(1)
   })
 
   it('создаёт продукт и возвращается в каталог', async () => {
@@ -68,12 +245,16 @@ describe('каталог продуктов', () => {
       protein_g: 17.2,
       fat_g: 5,
       carbs_g: 1.8,
+      ...noLabel,
       barcode: null,
     })
   })
 
   it('считает калории по белкам, жирам и углеводам, пока их не ввели сами', async () => {
-    const calls = mockApi({ [SEARCH]: json(200, []), 'PUT /api/products/*': json(201, oatmeal) })
+    const calls = mockApi({
+      [SEARCH]: json(200, []),
+      'PUT /api/products/*': json(201, oatmeal),
+    })
     await renderApp('/products/new', anna)
 
     const kcal = await screen.findByLabelText('Калории, ккал')
@@ -112,7 +293,10 @@ describe('каталог продуктов', () => {
   })
 
   it('жидкость заводится в миллилитрах', async () => {
-    const calls = mockApi({ [SEARCH]: json(200, []), 'PUT /api/products/*': json(201, kefir) })
+    const calls = mockApi({
+      [SEARCH]: json(200, []),
+      'PUT /api/products/*': json(201, kefir),
+    })
     await renderApp('/products/new', anna)
 
     expect(await screen.findByText('Состав указывается на 100 г продукта.')).toBeInTheDocument()
@@ -132,7 +316,45 @@ describe('каталог продуктов', () => {
       protein_g: 3,
       fat_g: 1,
       carbs_g: 4,
+      ...noLabel,
       barcode: null,
+    })
+  })
+
+  it('остальное с этикетки вносится по желанию и сверяется с жирами и углеводами', async () => {
+    const calls = mockApi({
+      [SEARCH]: json(200, []),
+      'PUT /api/products/*': json(201, cottageCheese),
+    })
+    await renderApp('/products/new', anna)
+
+    expect(await screen.findByRole('group', { name: 'Ещё с этикетки' })).toBeInTheDocument()
+    await userEvent.type(screen.getByLabelText('Название'), 'Творог 5 %')
+    await userEvent.type(screen.getByLabelText('Белки, г'), '17,2')
+    await userEvent.type(screen.getByLabelText('Жиры, г'), '5')
+    await userEvent.type(screen.getByLabelText('Углеводы, г'), '1,8')
+    await userEvent.type(screen.getByLabelText('Насыщенные жиры, г'), '5,5')
+    await userEvent.type(screen.getByLabelText('Сахара, г'), '2')
+    await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
+
+    expect(await screen.findByText('Насыщенные жиры — не больше жиров')).toBeInTheDocument()
+    expect(screen.getByText('Сахара — не больше углеводов')).toBeInTheDocument()
+    expect(callsTo(calls, 'PUT /api/products/*')).toEqual([])
+
+    await userEvent.clear(screen.getByLabelText('Насыщенные жиры, г'))
+    await userEvent.type(screen.getByLabelText('Насыщенные жиры, г'), '3,2')
+    await userEvent.clear(screen.getByLabelText('Сахара, г'))
+    await userEvent.type(screen.getByLabelText('Сахара, г'), '1,8')
+    await userEvent.type(screen.getByLabelText('Соль, г'), '0,1')
+    await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
+
+    await waitFor(() => expect(callsTo(calls, 'PUT /api/products/*')).toHaveLength(1))
+    // Пустое поле — значения нет; ноль пришлось бы ввести.
+    expect(callsTo(calls, 'PUT /api/products/*')[0].body).toMatchObject({
+      saturated_fat_g: 3.2,
+      sugars_g: 1.8,
+      fiber_g: null,
+      salt_g: 0.1,
     })
   })
 
@@ -186,6 +408,7 @@ describe('продукт', () => {
       protein_g: 17.2,
       fat_g: 5,
       carbs_g: 1.8,
+      ...noLabel,
       barcode: null,
     })
   })
@@ -255,6 +478,20 @@ describe('продукт', () => {
     expect(screen.getByText(/Изменить его может автор или администратор/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Сохранить' })).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'К каталогу' })).toHaveAttribute('href', '/products')
+  })
+
+  it('чужой продукт показывает то, что ещё известно с этикетки', async () => {
+    const labelled = { ...oatmeal, saturated_fat_g: 1.1, sugars_g: 1, fiber_g: 0, salt_g: 0.03 }
+    mockApi({ [`GET /api/products/${oatmeal.id}`]: json(200, { ...labelled, salt_g: null }) })
+    await renderApp(`/products/${oatmeal.id}`, anna)
+
+    const label = await screen.findByRole('list', { name: 'Ещё с этикетки' })
+    // Ноль — значение, его показываем; чего нет — не показываем.
+    expect(
+      within(label)
+        .getAllByRole('listitem')
+        .map((item) => item.textContent),
+    ).toEqual(['Насыщенные жиры — 1,1 г', 'Сахара — 1 г', 'Клетчатка — 0 г'])
   })
 
   it('у продукта из Open Food Facts назван источник и есть ссылка на него', async () => {

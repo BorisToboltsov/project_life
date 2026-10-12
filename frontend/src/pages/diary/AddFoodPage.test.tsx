@@ -2,9 +2,18 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 
-import { callsTo, json, mockApi } from '@/test/api'
+import { callsTo, json, mockApi, page } from '@/test/api'
 import { renderApp } from '@/test/app'
-import { anna, cottageCheese, diaryDay, kefir, meals, oatmeal } from '@/test/fixtures'
+import {
+  anna,
+  cottageCheese,
+  diaryDay,
+  kefir,
+  meals,
+  noLabel,
+  oatmeal,
+  outsideOf,
+} from '@/test/fixtures'
 
 const DATE = '2026-10-11'
 const PAGE = `/diary/${DATE}/add/${meals.breakfast.id}`
@@ -12,6 +21,8 @@ const PAGE = `/diary/${DATE}/add/${meals.breakfast.id}`
 const DAY = { 'GET /api/diary': json(200, diaryDay(DATE)) }
 const SUGGESTIONS = 'GET /api/diary/suggestions'
 const SEARCH = 'GET /api/products'
+const OUTSIDE = 'GET /api/products/external'
+const LOOKUP = 'POST /api/products/lookup'
 const SAVE = 'PUT /api/diary/entries/*'
 const UUID7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 
@@ -126,6 +137,147 @@ describe('добавление в приём пищи', () => {
 
     expect(await screen.findByText('Ничего не найдено.')).toBeInTheDocument()
     expect(screen.queryByRole('list', { name: 'Частые' })).not.toBeInTheDocument()
+  })
+
+  it('каталог приходит страницами: остальное — по «Показать ещё»', async () => {
+    const calls = mockApi({
+      ...DAY,
+      [SUGGESTIONS]: json(200, nothing),
+      [SEARCH]: (call) =>
+        (call.query.offset === '0' ? page([oatmeal], 20) : json(200, [kefir]))(call),
+    })
+    await renderApp(PAGE, anna)
+
+    await userEvent.type(await screen.findByLabelText('Поиск продукта'), 'е')
+    const list = await screen.findByRole('list', { name: 'В каталоге' })
+    expect(within(list).getAllByRole('listitem')).toHaveLength(1)
+    await userEvent.click(screen.getByRole('button', { name: 'Показать ещё' }))
+
+    await waitFor(() => expect(within(list).getAllByRole('listitem')).toHaveLength(2))
+    expect(callsTo(calls, SEARCH).map((call) => call.query)).toEqual([
+      { q: 'е', offset: '0' },
+      { q: 'е', offset: '20' },
+    ])
+    // Дальше ничего нет — и кнопки нет. Одна буква в Open Food Facts не уходит.
+    expect(screen.queryByRole('button', { name: 'Показать ещё' })).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Искать в Open Food Facts' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('по кнопке ищет в Open Food Facts; выбранный продукт ждёт количества', async () => {
+    const yogurt = {
+      barcode: '4600000000008',
+      name: 'Йогурт натуральный',
+      unit: 'g' as const,
+      kcal: 68,
+      protein_g: 5,
+      fat_g: 3.2,
+      carbs_g: 4.7,
+    }
+    const imported = {
+      ...cottageCheese,
+      ...yogurt,
+      id: '0199b7a0-0000-7000-8000-0000000000c9',
+      source: 'open_food_facts' as const,
+    }
+    const calls = mockApi({
+      ...DAY,
+      [SUGGESTIONS]: json(200, nothing),
+      [SEARCH]: json(200, []),
+      [OUTSIDE]: json(200, outsideOf([yogurt])),
+      [LOOKUP]: json(200, { status: 'found', barcode: yogurt.barcode, product: imported }),
+      'GET /api/products/*': json(200, imported),
+      [SAVE]: json(201, {}),
+    })
+    const { router } = await renderApp(PAGE, anna)
+
+    // Пока текст набирают, наружу он не уходит: только свой каталог.
+    await userEvent.type(await screen.findByLabelText('Поиск продукта'), 'йогурт')
+    expect(await screen.findByText('Ничего не найдено.')).toBeInTheDocument()
+    expect(
+      screen.getByText('Текст поиска будет отправлен в открытую базу продуктов Open Food Facts.'),
+    ).toBeInTheDocument()
+    expect(callsTo(calls, OUTSIDE)).toEqual([])
+
+    await userEvent.click(screen.getByRole('button', { name: 'Искать в Open Food Facts' }))
+    const outside = await screen.findByRole('list', { name: 'Open Food Facts' })
+    expect(callsTo(calls, OUTSIDE).map((call) => call.query)).toEqual([{ q: 'йогурт', page: '1' }])
+    expect(within(outside).getByText('68 ккал · Б 5 · Ж 3,2 · У 4,7 на 100 г')).toBeInTheDocument()
+
+    // Выбор — запрос по штрихкоду: продукт уже в каталоге и раскрыт для количества.
+    await userEvent.click(within(outside).getByRole('button', { name: /Йогурт натуральный/ }))
+    const picked = await screen.findByRole('list', { name: 'Из Open Food Facts' })
+    expect(callsTo(calls, LOOKUP)[0].body).toEqual({ barcode: yogurt.barcode })
+    expect(router.state.location.search).toEqual({ picked: imported.id })
+    expect(screen.getByLabelText('Поиск продукта')).toHaveValue('')
+    expect(
+      screen.getByText('Состав взят из Open Food Facts. Сверьте его с упаковкой.'),
+    ).toBeInTheDocument()
+    await userEvent.clear(within(picked).getByLabelText('Сколько, г'))
+    await userEvent.type(within(picked).getByLabelText('Сколько, г'), '350')
+    await userEvent.click(within(picked).getByRole('button', { name: 'Добавить' }))
+
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Добавлено: Йогурт натуральный, 350 г',
+    )
+    expect(callsTo(calls, SAVE)[0].body).toMatchObject({ product_id: imported.id, amount: 350 })
+    await waitFor(() => expect(router.state.location.search).toEqual({}))
+  })
+
+  it('продукт из Open Food Facts с неполным составом дополняют в форме', async () => {
+    const tea = {
+      barcode: '4600000000008',
+      name: 'Чай чёрный',
+      unit: 'ml' as const,
+      kcal: null,
+      protein_g: null,
+      fat_g: null,
+      carbs_g: null,
+    }
+    const created = { ...kefir, name: tea.name, barcode: tea.barcode }
+    const calls = mockApi({
+      ...DAY,
+      [SUGGESTIONS]: json(200, nothing),
+      [SEARCH]: json(200, []),
+      [OUTSIDE]: json(200, outsideOf([tea])),
+      // Запрос по штрихкоду источник не застал: известное берётся из выдачи поиска.
+      [LOOKUP]: json(200, { status: 'unavailable', barcode: tea.barcode }),
+      'PUT /api/products/*': json(201, created),
+      'GET /api/products/*': json(200, created),
+    })
+    await renderApp(PAGE, anna)
+
+    await userEvent.type(await screen.findByLabelText('Поиск продукта'), 'чай')
+    await userEvent.click(await screen.findByRole('button', { name: 'Искать в Open Food Facts' }))
+    const row = await screen.findByRole('button', { name: /Чай чёрный/ })
+    expect(row).toHaveTextContent('Состав неполный — его нужно будет дополнить с упаковки.')
+    await userEvent.click(row)
+
+    expect(await screen.findByRole('heading', { name: 'Новый продукт' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Название')).toHaveValue('Чай чёрный')
+    expect(screen.getByLabelText('В чём измеряется')).toHaveValue('ml')
+    expect(screen.getByLabelText('Штрихкод')).toHaveValue(tea.barcode)
+
+    // «Отмена» возвращает к поиску, а не уводит с экрана.
+    await userEvent.click(screen.getByRole('button', { name: 'Отмена' }))
+    expect(await screen.findByLabelText('Поиск продукта')).toHaveValue('чай')
+    await userEvent.click(screen.getByRole('button', { name: 'Искать в Open Food Facts' }))
+    await userEvent.click(await screen.findByRole('button', { name: /Чай чёрный/ }))
+
+    await userEvent.type(await screen.findByLabelText('Белки, г'), '0')
+    await userEvent.type(screen.getByLabelText('Жиры, г'), '0')
+    await userEvent.type(screen.getByLabelText('Углеводы, г'), '0')
+    await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
+
+    // Сохранённый продукт ждёт количества, как созданный по пути.
+    const list = await screen.findByRole('list', { name: 'Только что создан' })
+    expect(within(list).getByLabelText('Сколько, мл')).toHaveValue('100')
+    expect(callsTo(calls, 'PUT /api/products/*')[0].body).toMatchObject({
+      name: 'Чай чёрный',
+      unit: 'ml',
+      barcode: tea.barcode,
+    })
   })
 
   it('не принимает граммовку вне диапазона', async () => {
@@ -253,6 +405,7 @@ describe('новый продукт по пути в приём пищи', () =>
       protein_g: 12.3,
       fat_g: 6.2,
       carbs_g: 61.8,
+      ...noLabel,
       barcode: null,
     })
     expect(router.state.location.search).toEqual({ product: id })

@@ -17,7 +17,7 @@ async function createProduct(
   if (unit) await page.getByLabel('В чём измеряется').selectOption({ label: unit })
   if (kcal !== null) await page.getByLabel('Калории, ккал').fill(kcal)
   await page.getByLabel('Белки, г').fill(protein)
-  await page.getByLabel('Жиры, г').fill(fat)
+  await page.getByLabel('Жиры, г', { exact: true }).fill(fat)
   await page.getByLabel('Углеводы, г').fill(carbs)
   if (expected) await expect(page.getByLabel('Калории, ккал')).toHaveValue(expected)
   await page.getByRole('button', { name: 'Сохранить' }).click()
@@ -69,7 +69,7 @@ test('дневник питания: день внесён целиком, пр�
   // Полная цель: калории — предел для белков, жиров и углеводов.
   await page.getByRole('link', { name: 'Изменить цель' }).click()
   await page.getByLabel('Калории, ккал').fill('2000')
-  await page.getByLabel('Жиры, г').fill('70')
+  await page.getByLabel('Жиры, г', { exact: true }).fill('70')
   await page.getByLabel('Углеводы, г').fill('230')
   await expect(page.getByText(/БЖУ дают 2\s070 ккал — на 70 больше цели/)).toBeVisible()
   await page.getByRole('button', { name: 'Сохранить' }).click()
@@ -99,6 +99,8 @@ test('дневник питания: день внесён целиком, пр�
   await page.getByRole('link', { name: new RegExp(oatmeal) }).click()
   await page.getByLabel('Калории, ккал').fill('400')
   await page.getByRole('button', { name: 'Сохранить' }).click()
+  // Каталог открывается с начала и приходит страницами: продукт снова находим поиском.
+  await page.getByLabel('Поиск').fill(oatmeal)
   await expect(page.getByRole('link', { name: new RegExp(oatmeal) })).toContainText('400 ккал')
   await page.getByRole('link', { name: 'Питание' }).click()
   await expect(page.getByText(/^393 из 2\s100 ккал$/)).toBeVisible()

@@ -13,6 +13,7 @@ from tests.nutrition import (
     COTTAGE_CHEESE,
     EAN_8,
     EAN_13,
+    LABEL,
     OATMEAL,
     UPC_A,
     UPC_A_AS_EAN_13,
@@ -143,6 +144,14 @@ async def test_product_is_deleted_by_its_author(client: AsyncClient, make_user: 
         {"unit": ...},
         # Белки, жиры и углеводы вместе не помещаются в 100 г.
         {"protein_g": 40, "fat_g": 40, "carbs_g": 20.01},
+        # То, что ещё печатают на этикетке, — в тех же пределах и с той же точностью.
+        {"sugars_g": -0.1},
+        {"saturated_fat_g": 100.01},
+        {"fiber_g": 1.234},
+        {"salt_g": "много"},
+        # Часть не бывает больше целого: сахара — углеводов, насыщенные жиры — жиров.
+        {"sugars_g": 1.81},
+        {"saturated_fat_g": 5.01},
         # Штрихкод: неверная контрольная цифра, не та длина, не цифры.
         {"barcode": "4600000000000"},
         {"barcode": "460000000"},
@@ -178,6 +187,44 @@ async def test_pure_fat_and_empty_water_are_products_too(
 
     assert (await put_product(client, author, oil)).status_code == 201
     assert (await put_product(client, author, water)).status_code == 201
+
+
+async def test_product_keeps_what_else_is_on_the_label(
+    client: AsyncClient, make_user: MakeUser
+) -> None:
+    author = await make_user()
+
+    created = await put_product(client, author, {**COTTAGE_CHEESE, **LABEL})
+    # Значения необязательны по одному, а запрос без них их стирает: это замена продукта.
+    partly = await put_product(
+        client, author, {**COTTAGE_CHEESE, "fiber_g": 0, "salt_g": None}, created.json()["id"]
+    )
+    cleared = await put_product(client, author, COTTAGE_CHEESE, created.json()["id"])
+
+    assert created.status_code == 201
+    assert created.json() == {
+        **COTTAGE_CHEESE,
+        **BY_HAND,
+        **LABEL,
+        "id": created.json()["id"],
+        "editable": True,
+    }
+    assert {name: partly.json()[name] for name in LABEL} == {
+        "sugars_g": None,
+        "saturated_fat_g": None,
+        "fiber_g": 0,
+        "salt_g": None,
+    }
+    assert cleared.json() == {**created.json(), **BY_HAND}
+
+
+async def test_part_may_equal_the_whole(client: AsyncClient, make_user: MakeUser) -> None:
+    author = await make_user()
+    sugar = {"name": "Сахар", "unit": "g", "kcal": 399, "protein_g": 0, "fat_g": 0}
+
+    response = await put_product(client, author, {**sugar, "carbs_g": 99.8, "sugars_g": 99.8})
+
+    assert response.status_code == 201
 
 
 async def test_product_is_measured_in_grams_or_millilitres(
@@ -290,12 +337,36 @@ async def test_search_takes_wildcards_literally(client: AsyncClient, make_user: 
     assert await search(client, author.headers, "_") == []
 
 
-async def test_search_returns_a_limited_page(client: AsyncClient, make_user: MakeUser) -> None:
+async def test_catalog_comes_page_by_page(client: AsyncClient, make_user: MakeUser) -> None:
     author = await make_user()
-    for number in range(52):
+    for number in range(45):
         await add_product(client, author, name=f"Продукт {number:02}")
+    await add_product(client, author, name="Кефир")
 
-    names = await search(client, author.headers)
+    async def page(offset: int | None, q: str = "продукт") -> tuple[list[str], str | None]:
+        params = {"q": q} if offset is None else {"q": q, "offset": offset}
+        response = await client.get("/api/products", params=params, headers=author.headers)
+        assert response.status_code == 200
+        # Ответ — список, как до появления страниц: прежняя версия приложения читает его.
+        return [item["name"] for item in response.json()], response.headers.get("X-Next-Offset")
 
-    assert len(names) == 50
-    assert names[0] == "Продукт 00"
+    first, second, third = await page(None), await page(20), await page(40)
+
+    # Каждая страница говорит заголовком, откуда продолжать; последняя — ничего не говорит.
+    assert (first[1], second[1], third[1]) == ("20", "40", None)
+    assert first[0] + second[0] + third[0] == [f"Продукт {number:02}" for number in range(45)]
+    # Ровно полная последняя страница — тоже последняя.
+    assert await page(25) == ([f"Продукт {number:02}" for number in range(25, 45)], None)
+    assert await page(45) == ([], None)
+    assert await page(None, q="") == (["Кефир", *first[0][:19]], "20")
+
+
+@pytest.mark.parametrize("offset", [-1, 100_001, "дальше"])
+async def test_page_cannot_start_just_anywhere(
+    client: AsyncClient, make_user: MakeUser, offset: Any
+) -> None:
+    author = await make_user()
+
+    response = await client.get("/api/products", params={"offset": offset}, headers=author.headers)
+
+    assert response.status_code == 422

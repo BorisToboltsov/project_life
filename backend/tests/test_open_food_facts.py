@@ -8,9 +8,18 @@ import pytest
 from app.models import Language
 from app.nutrition import ProductUnit
 from app.services import open_food_facts
-from app.services.open_food_facts import Miss, OffProduct, OpenFoodFacts, parse
-from tests.conftest import OffStub
-from tests.nutrition import EAN_13, OFF_COTTAGE_CHEESE
+from app.services.open_food_facts import (
+    SEARCH_FIELDS,
+    Miss,
+    OffListing,
+    OffProduct,
+    OffSearchPage,
+    OpenFoodFacts,
+    parse,
+    search_terms,
+)
+from tests.conftest import SEARCH_HOST, OffStub
+from tests.nutrition import EAN_8, EAN_13, OFF_COTTAGE_CHEESE, OFF_LABEL, UPC_A, off_hit
 
 pytestmark = pytest.mark.anyio
 
@@ -138,6 +147,40 @@ def test_impossible_macronutrient_is_unknown() -> None:
     assert (found.protein_g, found.fat_g, found.carbs_g) == (None, None, Decimal("61.85"))
 
 
+def test_label_carries_more_than_the_four_main_values() -> None:
+    found = parse(nutriments(**OFF_COTTAGE_CHEESE["nutriments"], **OFF_LABEL), Language.RU)
+
+    assert (found.sugars_g, found.saturated_fat_g, found.fiber_g, found.salt_g) == (
+        Decimal("1.80"),
+        Decimal("3.20"),
+        Decimal("0.00"),
+        Decimal("0.10"),
+    )
+
+
+@pytest.mark.parametrize(
+    ("values", "sugars", "saturated"),
+    [
+        # Часть равна целому — так бывает: сахар, сливочное масло.
+        ({"carbohydrates_100g": 99.8, "sugars_100g": 99.8}, "99.80", None),
+        ({"fat_100g": 82.5, "saturated-fat_100g": 82.5}, None, "82.50"),
+        # Часть больше целого — ошибка в источнике.
+        ({"carbohydrates_100g": 4.7, "sugars_100g": 4.71}, None, None),
+        ({"fat_100g": 3.2, "saturated-fat_100g": 32}, None, None),
+        # Целое неизвестно — сверить не с чем: значение остаётся, сверит форма.
+        ({"sugars_100g": 4.7, "saturated-fat_100g": 2}, "4.70", "2.00"),
+        ({"sugars_100g": 100.5, "saturated-fat_100g": "мало"}, None, None),
+    ],
+)
+def test_part_is_not_bigger_than_the_whole(
+    values: dict[str, Any], sugars: str | None, saturated: str | None
+) -> None:
+    found = parse(nutriments(**values), Language.RU)
+
+    assert found.sugars_g == (Decimal(sugars) if sugars else None)
+    assert found.saturated_fat_g == (Decimal(saturated) if saturated else None)
+
+
 def test_product_without_nutrition_facts_is_parsed_too() -> None:
     assert parse({"product_name": "Чай", "nutriments": "нет"}, Language.RU) == OffProduct(
         name="Чай", unit=ProductUnit.G, kcal=None, protein_g=None, fat_g=None, carbs_g=None
@@ -147,8 +190,13 @@ def test_product_without_nutrition_facts_is_parsed_too() -> None:
 # --- Запрос ------------------------------------------------------------------------------
 
 
-def client_of(stub: OffStub) -> OpenFoodFacts:
-    return OpenFoodFacts("https://off.test/", httpx.MockTransport(stub.respond))
+def client_of(stub: OffStub, **pace: int) -> OpenFoodFacts:
+    return OpenFoodFacts(
+        "https://off.test/",
+        httpx.MockTransport(stub.respond),
+        search_url=f"https://{SEARCH_HOST}/",
+        **pace,
+    )
 
 
 async def test_product_is_asked_by_barcode() -> None:
@@ -208,10 +256,9 @@ async def test_slow_answer_is_not_awaited(monkeypatch: pytest.MonkeyPatch) -> No
     assert await slow.product(EAN_13, Language.RU) is Miss.UNAVAILABLE
 
 
-async def test_requests_to_the_source_are_paced(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(open_food_facts, "OVERALL_LIMIT", 2)
+async def test_requests_to_the_source_are_paced() -> None:
     stub = OffStub(products={EAN_13: OFF_COTTAGE_CHEESE})
-    source = client_of(stub)
+    source = client_of(stub, products_per_minute=2)
 
     answers = [await source.product(EAN_13, Language.RU) for _ in range(3)]
 
@@ -224,3 +271,240 @@ async def test_requests_to_the_source_are_paced(monkeypatch: pytest.MonkeyPatch)
 def test_source_without_an_address_is_switched_off() -> None:
     assert not OpenFoodFacts("").enabled
     assert OpenFoodFacts("https://off.test").enabled
+
+
+# --- Поиск по названию -------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("typed", "sent"),
+    [
+        ("Творог", "творог"),
+        ("  Творог   5 %  ", "творог 5 %"),
+        ("Молоко 3,2% «Простоквашино»", "молоко 3,2% простоквашино"),
+        ("Coca-Cola Zero", "coca cola zero"),
+        # Язык запросов сервиса до него не доходит: ни поля, ни скобки, ни операторы.
+        ('brands:"Danone" AND (кефир OR йогурт)', "brands danone and кефир or йогурт"),
+        ("кефир~2 -сахар +био *", "кефир 2 сахар био"),
+        ("сыр_плавленый\\/", "сыр плавленый"),
+        ("?!", ""),
+        ("", ""),
+    ],
+)
+def test_search_text_goes_out_as_plain_words(typed: str, sent: str) -> None:
+    assert search_terms(typed) == sent
+
+
+async def test_products_are_searched_by_name() -> None:
+    stub = OffStub(hits=[off_hit(EAN_13), off_hit(EAN_8, product_name="Творог 9 %")])
+    source = client_of(stub)
+
+    found = await source.search("творог", 1)
+
+    assert isinstance(found, OffSearchPage)
+    assert found.products(Language.RU) == [
+        # Марки в выдаче — список; в название идёт первая, как у продукта по штрихкоду.
+        OffListing(EAN_13, "Творог 5 %, Простоквашино", parse(OFF_COTTAGE_CHEESE, Language.RU)),
+        OffListing(
+            EAN_8,
+            "Творог 9 %, Простоквашино",
+            parse({**OFF_COTTAGE_CHEESE, "product_name": "Творог 9 %"}, Language.RU),
+        ),
+    ]
+    assert not found.has_more
+    [request] = stub.requests
+    assert request.url.copy_with(query=None) == f"https://{SEARCH_HOST}/search"
+    assert dict(request.url.params) == {
+        "q": "творог",
+        "langs": "en,ru",
+        "page_size": "20",
+        "page": "1",
+        "fields": SEARCH_FIELDS,
+    }
+
+
+async def test_name_in_search_results_follows_the_language() -> None:
+    stub = OffStub(hits=[off_hit(EAN_13, brands=[], product_name_en="Cottage cheese")])
+
+    found = await client_of(stub).search("творог", 1)
+
+    assert isinstance(found, OffSearchPage)
+    assert [listing.name for listing in found.products(Language.EN)] == ["Cottage cheese"]
+    assert [listing.name for listing in found.products(Language.RU)] == ["Творог 5 %"]
+
+
+async def test_only_products_the_catalog_can_take_are_listed() -> None:
+    stub = OffStub(
+        hits=[
+            # Без названия, со штрихкодом не той длины или с неверной контрольной цифрой
+            # продукт выбрать было бы нельзя.
+            off_hit(EAN_13, product_name=""),
+            off_hit("46000000000"),
+            off_hit("4600000000000"),
+            {"product_name": "Без штрихкода"},
+            "не продукт",
+            # UPC-A — тот же EAN-13: в каталоге он хранится с ведущим нулём.
+            off_hit(UPC_A),
+            off_hit(EAN_8, brands="Простоквашино, Danone", nutriments={}),
+        ]
+    )
+
+    found = await client_of(stub).search("творог", 1)
+
+    assert isinstance(found, OffSearchPage)
+    listed = found.products(Language.RU)
+    assert [listing.barcode for listing in listed] == [f"0{UPC_A}", EAN_8]
+    # Продукт без состава показывается: его дополнят при выборе.
+    assert (listed[1].name, listed[1].product.kcal) == ("Творог 5 %, Простоквашино", None)
+
+
+async def test_search_results_come_page_by_page() -> None:
+    stub = OffStub(hits=[off_hit(EAN_13)] * 45)
+    source = client_of(stub)
+
+    pages = [await source.search("творог", number) for number in (1, 2, 3)]
+
+    assert all(isinstance(page, OffSearchPage) for page in pages)
+    assert [len(page.hits) for page in pages if isinstance(page, OffSearchPage)] == [20, 20, 5]
+    assert [page.has_more for page in pages if isinstance(page, OffSearchPage)] == [
+        True,
+        True,
+        False,
+    ]
+    assert [request.url.params["page"] for request in stub.requests] == ["1", "2", "3"]
+
+
+async def test_search_does_not_page_past_what_the_service_gives() -> None:
+    stub = OffStub(
+        broken=httpx.Response(200, json={"hits": [off_hit(EAN_13)], "page_count": 100_000})
+    )
+    source = client_of(stub)
+
+    last, before = (
+        await source.search("творог", open_food_facts.SEARCH_MAX_PAGE),
+        await source.search("творог", open_food_facts.SEARCH_MAX_PAGE - 1),
+    )
+
+    assert isinstance(last, OffSearchPage)
+    assert isinstance(before, OffSearchPage)
+    assert (last.has_more, before.has_more) == (False, True)
+
+
+async def test_recent_search_is_recalled_without_asking_again(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    stub = OffStub(hits=[off_hit(EAN_13)])
+    source = client_of(stub)
+    now = 1000.0
+    monkeypatch.setattr(open_food_facts.time, "monotonic", lambda: now)
+
+    assert source.recalled("творог", 1) is None
+    found = await source.search("творог", 1)
+
+    assert source.recalled("творог", 1) is found
+    # Другой текст и другая страница — другой вопрос.
+    assert source.recalled("кефир", 1) is None
+    assert source.recalled("творог", 2) is None
+    now += open_food_facts.SEARCH_TTL.total_seconds()
+    assert source.recalled("творог", 1) is None
+
+
+async def test_only_so_many_searches_are_remembered(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(open_food_facts, "SEARCH_REMEMBERED", 2)
+    source = client_of(OffStub(hits=[off_hit(EAN_13)]))
+
+    for text in ("творог", "кефир", "хлеб"):
+        await source.search(text, 1)
+
+    assert source.recalled("творог", 1) is None
+    assert source.recalled("кефир", 1) is not None
+    assert source.recalled("хлеб", 1) is not None
+
+
+@pytest.mark.parametrize(
+    "broken",
+    [
+        httpx.Response(500, json={"hits": []}),
+        httpx.Response(429, json={"hits": []}),
+        httpx.Response(400, json={"detail": "1 validation error for SearchParameters"}),
+        httpx.Response(200, text="<html>maintenance</html>"),
+        httpx.Response(200, json=[off_hit(EAN_13)]),
+        httpx.Response(200, json={"page_count": 1}),
+        httpx.Response(200, json={"hits": "много", "page_count": 1}),
+        httpx.ConnectError("нет сети"),
+        httpx.ReadTimeout("молчит"),
+    ],
+)
+async def test_failed_search_is_unavailable_and_not_remembered(
+    broken: httpx.Response | Exception,
+) -> None:
+    source = client_of(OffStub(broken=broken))
+
+    assert await source.search("творог", 1) is Miss.UNAVAILABLE
+    assert source.recalled("творог", 1) is None
+
+
+async def test_search_without_a_page_count_has_no_next_page() -> None:
+    source = client_of(OffStub(broken=httpx.Response(200, json={"hits": [off_hit(EAN_13)]})))
+
+    found = await source.search("творог", 1)
+
+    assert isinstance(found, OffSearchPage)
+    assert (len(found.hits), found.has_more) == (1, False)
+
+
+async def test_searches_are_paced_apart_from_barcodes() -> None:
+    stub = OffStub(hits=[off_hit(EAN_13)], products={EAN_13: OFF_COTTAGE_CHEESE})
+    source = client_of(stub, searches_per_minute=2)
+
+    answers = [await source.search(text, 1) for text in ("творог", "кефир", "хлеб")]
+
+    assert isinstance(answers[1], OffSearchPage)
+    assert answers[2] is Miss.UNAVAILABLE
+    assert len(stub.requests) == 2
+    # У запросов по штрихкоду счёт свой.
+    assert isinstance(await source.product(EAN_13, Language.RU), OffProduct)
+
+
+def test_pace_of_the_real_service_is_the_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Пределы берегут настоящий сервис — 15 запросов продукта и 10 поисков в минуту с
+    адреса; поднять их может только настройка, как на стенде с подменным сервисом."""
+    from app.config import Settings
+
+    paced = Settings()
+    monkeypatch.setenv("LIFE_OFF_PRODUCTS_PER_MINUTE", "600")
+    monkeypatch.setenv("LIFE_OFF_SEARCHES_PER_MINUTE", "500")
+    raised = Settings()
+
+    assert (paced.off_products_per_minute, paced.off_searches_per_minute) == (12, 8)
+    assert paced.off_products_per_minute < 15
+    assert paced.off_searches_per_minute < 10
+    assert (raised.off_products_per_minute, raised.off_searches_per_minute) == (600, 500)
+
+
+async def test_configured_pace_reaches_the_client(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.config import get_settings
+
+    monkeypatch.setenv("LIFE_OFF_URL", "https://off.test")
+    monkeypatch.setenv("LIFE_OFF_PRODUCTS_PER_MINUTE", "1")
+    get_settings.cache_clear()
+    open_food_facts.get_open_food_facts.cache_clear()
+    try:
+        source = open_food_facts.get_open_food_facts()
+        monkeypatch.setattr(source, "_transport", httpx.MockTransport(OffStub().respond))
+
+        assert await source.product(EAN_13, Language.RU) is Miss.NOT_FOUND
+        # Второй запрос отсечён пределом из настройки: наружу он не ушёл.
+        assert await source.product(EAN_13, Language.RU) is Miss.UNAVAILABLE
+    finally:
+        # Настройки и клиент кэшируются на весь процесс: остальным тестам нужны прежние.
+        monkeypatch.undo()
+        get_settings.cache_clear()
+        open_food_facts.get_open_food_facts.cache_clear()
+
+
+def test_search_needs_both_addresses() -> None:
+    assert OpenFoodFacts("https://off.test", search_url="https://search.off.test").searchable
+    assert not OpenFoodFacts("https://off.test").searchable
+    # Без запроса по штрихкоду найденное нечем взять в каталог.
+    assert not OpenFoodFacts("", search_url="https://search.off.test").searchable

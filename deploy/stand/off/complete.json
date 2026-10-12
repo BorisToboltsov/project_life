@@ -10,7 +10,10 @@
       "energy-kcal_100g": 68,
       "proteins_100g": 5,
       "fat_100g": 3.2,
-      "carbohydrates_100g": 4.7
+      "carbohydrates_100g": 4.7,
+      "sugars_100g": 4.7,
+      "saturated-fat_100g": 2.1,
+      "salt_100g": 0.12
     }
   }
 }
