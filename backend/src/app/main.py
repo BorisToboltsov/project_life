@@ -11,6 +11,7 @@ from app.api import (
     me,
     measurements,
     products,
+    workouts,
 )
 from app.api.deps import current_user, require_admin
 from app.config import get_settings
@@ -41,6 +42,7 @@ def create_app() -> FastAPI:
     private.include_router(me.router)
     private.include_router(measurements.router)
     private.include_router(exercises.router)
+    private.include_router(workouts.router)
     private.include_router(products.router)
     private.include_router(diary.router)
     private.include_router(error_reports.router)

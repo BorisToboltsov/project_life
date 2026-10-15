@@ -14,8 +14,10 @@ test('упражнения: справочник, карточка с рисун
   const email = `gym-${testInfo.project.name}-${Date.now()}@example.com`
   await register(page, adminInviteLink(), 'Борис', email)
 
-  // Раздел открывается списком: свой список пуст, справочник — все сорок.
+  // Раздел открывает журнал; список упражнений — отдельной кнопкой.
   await page.getByRole('link', { name: 'Тренировки' }).click()
+  await expect(page.getByRole('heading', { name: 'Тренировки' })).toBeVisible()
+  await page.getByRole('link', { name: 'Мои упражнения' }).click()
   await expect(page.getByRole('heading', { name: 'Упражнения' })).toBeVisible()
   const catalog = page.getByRole('list', { name: 'Справочник' }).getByRole('listitem')
   await expect(catalog).toHaveCount(40)

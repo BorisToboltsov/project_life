@@ -14,6 +14,7 @@ from app.models.nutrition import (
     preset_meals,
 )
 from app.models.user import Language, Role, Sex, UnitSystem, User
+from app.models.workout import Workout, WorkoutExercise, WorkoutSet
 
 __all__ = [
     "BarcodeMiss",
@@ -36,6 +37,9 @@ __all__ = [
     "UnitSystem",
     "User",
     "WaterIntake",
+    "Workout",
+    "WorkoutExercise",
+    "WorkoutSet",
     "preset_meals",
     "preset_metrics",
 ]

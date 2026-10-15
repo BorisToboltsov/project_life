@@ -103,11 +103,13 @@ async def test_kind_stays_fixed_while_the_exercise_is_out_of_the_list(
 
 def test_exercise_routes_are_the_four_the_gate_knows() -> None:
     """Новый маршрут упражнений заставит заглянуть сюда: он не должен уметь удалять."""
-    routes = {route for route in all_routes() if "/exercises" in route[1]}
+    routes = {route for route in all_routes() if route[1].startswith("/api/exercises")}
 
     assert routes == {
         ("GET", "/api/exercises"),
         ("POST", "/api/exercises/presets"),
         ("PUT", "/api/exercises/{exercise_id}"),
         ("DELETE", "/api/exercises/{exercise_id}"),
+        ("PUT", "/api/exercises/{exercise_id}/rest"),
+        ("GET", "/api/exercises/{exercise_id}/progress"),
     }

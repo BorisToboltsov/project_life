@@ -550,7 +550,7 @@ wheels = [
 
 [[package]]
 name = "project-life"
-version = "0.8.1"
+version = "0.8.4"
 source = { editable = "." }
 dependencies = [
     { name = "alembic" },

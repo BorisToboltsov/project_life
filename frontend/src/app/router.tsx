@@ -68,6 +68,8 @@ const screens = {
     () => import('@/pages/exercises/ExerciseFormPages'),
     'ExerciseEditPage',
   ),
+  workouts: lazyRouteComponent(() => import('@/pages/workouts/WorkoutsPage'), 'WorkoutsPage'),
+  workout: lazyRouteComponent(() => import('@/pages/workouts/WorkoutPage'), 'WorkoutPage'),
   more: lazyRouteComponent(() => import('@/pages/more/MorePage'), 'MorePage'),
   profile: lazyRouteComponent(() => import('@/pages/profile/ProfilePage'), 'ProfilePage'),
   admin: lazyRouteComponent(() => import('@/pages/admin/AdminPage'), 'AdminPage'),
@@ -232,10 +234,12 @@ const routeTree = rootRoute.addChildren([
     createRoute({
       getParentRoute: () => appRoute,
       path: '/workouts',
-      // Пока раздел — это список упражнений; тренировки придут следующим шагом.
-      beforeLoad: () => {
-        throw redirect({ to: '/workouts/exercises' })
-      },
+      component: screens.workouts,
+    }),
+    createRoute({
+      getParentRoute: () => appRoute,
+      path: '/workouts/$id',
+      component: screens.workout,
     }),
     createRoute({
       getParentRoute: () => appRoute,

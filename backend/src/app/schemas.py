@@ -34,6 +34,8 @@ from app.models import (
     UnitSystem,
     User,
     WaterIntake,
+    Workout,
+    WorkoutSet,
 )
 from app.nutrition import (
     MAX_AMOUNT,
@@ -339,6 +341,7 @@ class ExerciseOut(BaseModel):
     cardio_fields: list[CardioField]
     # Убрано из списка: записанное по нему остаётся, но новых подходов не вносят.
     archived: bool
+    rest_seconds: int
 
     @classmethod
     def of(cls, exercise: Exercise) -> Self:
@@ -351,6 +354,7 @@ class ExerciseOut(BaseModel):
             secondary=list(exercise.secondary),
             cardio_fields=list(exercise.cardio_fields),
             archived=exercise.archived_at is not None,
+            rest_seconds=exercise.rest_seconds,
         )
 
 
@@ -379,6 +383,155 @@ class ExerciseListOut(BaseModel):
     exercises: list[ExerciseOut]
     # Справочник целиком: экран показывает из него то, чего в списке нет.
     catalog: list[PresetExerciseOut]
+
+
+class ExerciseRestIn(Strict):
+    rest_seconds: Annotated[int, Field(ge=0, le=600)]
+
+
+class WorkoutIn(Strict):
+    started_at: AwareDatetime
+    local_date: date
+
+    @model_validator(mode="after")
+    def _plausible_time(self) -> Self:
+        if self.started_at > datetime.now(UTC) + timedelta(days=1):
+            raise ValueError("workout from the future")
+        if self.local_date < date(1900, 1, 1):
+            raise ValueError("date out of range")
+        if abs((self.local_date - self.started_at.astimezone(UTC).date()).days) > 1:
+            raise ValueError("local date does not match workout time")
+        return self
+
+
+class WorkoutFinishIn(Strict):
+    finished_at: AwareDatetime
+
+
+class WorkoutRepeatIn(WorkoutIn):
+    id: RecordId
+    item_ids: list[RecordId]
+
+    @model_validator(mode="after")
+    def _distinct_items(self) -> Self:
+        if len(set(self.item_ids)) != len(self.item_ids):
+            raise ValueError("item ids must be distinct")
+        return self
+
+
+class WorkoutExerciseIn(Strict):
+    exercise_id: UUID
+
+
+class WorkoutSetIn(Strict):
+    reps: Annotated[int, Field(ge=1, le=10000)] | None = None
+    weight_value: (
+        Annotated[Decimal, Field(ge=0, le=10000, max_digits=9, decimal_places=3)] | None
+    ) = None
+    weight_unit: Literal["kg", "lb"] | None = None
+    duration_seconds: Annotated[int, Field(ge=1, le=86400)] | None = None
+    distance_value: (
+        Annotated[Decimal, Field(gt=0, le=10000, max_digits=9, decimal_places=3)] | None
+    ) = None
+    distance_unit: Literal["km", "mi"] | None = None
+    incline_percent: (
+        Annotated[Decimal, Field(ge=0, le=100, max_digits=5, decimal_places=2)] | None
+    ) = None
+    level: Annotated[int, Field(ge=1, le=100)] | None = None
+
+    @model_validator(mode="after")
+    def _paired_units(self) -> Self:
+        if (self.weight_value is None) != (self.weight_unit is None):
+            raise ValueError("weight and unit must be provided together")
+        if (self.distance_value is None) != (self.distance_unit is None):
+            raise ValueError("distance and unit must be provided together")
+        return self
+
+
+class WorkoutSetOut(BaseModel):
+    id: UUID
+    kind: ExerciseKind
+    reps: int | None
+    weight_kg: float | None
+    weight_value: float | None
+    weight_unit: str | None
+    duration_seconds: int | None
+    distance_km: float | None
+    distance_value: float | None
+    distance_unit: str | None
+    incline_percent: float | None
+    level: int | None
+
+    @classmethod
+    def of(cls, row: WorkoutSet) -> Self:
+        return cls(
+            id=row.id,
+            kind=row.kind,
+            reps=row.reps,
+            weight_kg=float(row.weight_kg) if row.weight_kg is not None else None,
+            weight_value=float(row.weight_value) if row.weight_value is not None else None,
+            weight_unit=row.weight_unit,
+            duration_seconds=row.duration_seconds,
+            distance_km=float(row.distance_km) if row.distance_km is not None else None,
+            distance_value=float(row.distance_value) if row.distance_value is not None else None,
+            distance_unit=row.distance_unit,
+            incline_percent=float(row.incline_percent) if row.incline_percent is not None else None,
+            level=row.level,
+        )
+
+
+class WorkoutOut(BaseModel):
+    id: UUID
+    started_at: datetime
+    local_date: date
+    finished_at: datetime | None
+    exercise_count: int
+    set_count: int
+
+    @classmethod
+    def of(cls, row: Workout, exercise_count: int, set_count: int) -> Self:
+        return cls(
+            id=row.id,
+            started_at=row.started_at,
+            local_date=row.local_date,
+            finished_at=row.finished_at,
+            exercise_count=exercise_count,
+            set_count=set_count,
+        )
+
+
+class WorkoutExerciseOut(BaseModel):
+    id: UUID
+    exercise: ExerciseOut
+    position: int
+    sets: list[WorkoutSetOut]
+    previous: list[WorkoutSetOut]
+
+
+class WorkoutDetailOut(WorkoutOut):
+    exercises: list[WorkoutExerciseOut]
+
+
+class WorkoutListOut(BaseModel):
+    workouts: list[WorkoutOut]
+
+
+class ProgressPoint(BaseModel):
+    workout_id: UUID
+    local_date: date
+    value: float
+
+
+class ExerciseProgressOut(BaseModel):
+    exercise_id: UUID
+    kind: ExerciseKind
+    # Единица графика — каноническая: kg, reps, seconds или km.
+    metric: Literal["weight_kg", "reps", "duration_seconds", "distance_km"]
+    points: list[ProgressPoint]
+    max_weight_kg: float | None
+    max_reps: int | None
+    max_duration_seconds: int | None
+    max_distance_km: float | None
 
 
 # Отчёт об ошибке с клиента (инвариант I9). У каждого поля жёсткая форма: свободный текст —

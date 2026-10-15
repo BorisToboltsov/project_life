@@ -24,6 +24,10 @@ class ErrorCode(StrEnum):
     PORTION_NOT_FOUND = "portion_not_found"
     AMOUNT_OUT_OF_RANGE = "amount_out_of_range"
     BARCODE_TAKEN = "barcode_taken"
+    WORKOUT_ACTIVE = "workout_active"
+    WORKOUT_FINISHED = "workout_finished"
+    INVALID_WORKOUT_SET = "invalid_workout_set"
+    INVALID_WORKOUT_REPEAT = "invalid_workout_repeat"
 
 
 class ErrorResponse(BaseModel):

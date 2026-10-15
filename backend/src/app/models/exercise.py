@@ -34,6 +34,7 @@ class Exercise(Base):
         _only_muscles("muscles"),
         # У упражнения есть имя: код штатного или название, которое дал пользователь.
         CheckConstraint("preset IS NOT NULL OR name IS NOT NULL", name="named"),
+        CheckConstraint("rest_seconds BETWEEN 0 AND 600", name="rest_range"),
         # Штатное упражнение у пользователя одно: повторное добавление ничего не дублирует.
         Index(
             "uq_exercises_user_preset",
@@ -58,6 +59,8 @@ class Exercise(Base):
     )
     # Место в списке: меньше — раньше.
     position: Mapped[int]
+    # Индивидуальная пауза между подходами; ноль выключает таймер.
+    rest_seconds: Mapped[int] = mapped_column(server_default=text("'90'"))
     # Когда упражнение убрали из списка; пусто — оно в списке.
     archived_at: Mapped[datetime | None]
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
