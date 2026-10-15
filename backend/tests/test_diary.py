@@ -1005,3 +1005,45 @@ async def test_implausible_goal_is_rejected(
 
     assert response.status_code == 422
     assert await read_goal(client, user) is None
+
+
+async def test_selected_product_history_is_not_limited_to_suggestions(
+    client: AsyncClient, make_user: MakeUser
+) -> None:
+    user, other = await make_user(), await make_user()
+    egg = await add_product(client, user, **EGG)
+    await add_entry(client, user, egg, servings(2))
+    await add_entry(client, user, egg, packages(0.5), meal="dinner")
+    for number in range(12):
+        await add_entry(client, user, await add_product(client, user, name=f"Продукт {number}"))
+    await add_entry(client, other, egg, servings(9))
+    breakfast = await meal_id_of(client, user, "breakfast")
+    response = await client.get(
+        "/api/diary/suggestions",
+        headers=user.headers,
+        params={"meal_id": breakfast, "product_id": egg},
+    )
+    assert response.status_code == 200
+    result = response.json()
+    assert result["in_meal"][0]["portion"]["count"] == 2
+    assert result["recent"][0]["portion"]["count"] == 0.5
+    assert result["recent"][0]["portion"]["kind"] == "package"
+    stranger = await make_user()
+    isolated = await client.get(
+        "/api/diary/suggestions",
+        headers=stranger.headers,
+        params={"meal_id": breakfast, "product_id": egg},
+    )
+    assert isolated.json() == {"in_meal": [], "recent": [], "frequent": []}
+    await put_product(client, user, {**EGG, "serving_size": None}, egg)
+    removed = await client.get(
+        "/api/diary/suggestions",
+        headers=user.headers,
+        params={"meal_id": breakfast, "product_id": egg},
+    )
+    assert removed.json()["in_meal"][0]["portion"] is None
+    assert removed.json()["in_meal"][0]["amount"] == 120
+    missing = await client.get(
+        "/api/diary/suggestions", headers=user.headers, params={"product_id": str(uuid.uuid7())}
+    )
+    assert missing.json() == {"in_meal": [], "recent": [], "frequent": []}

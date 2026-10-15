@@ -43,6 +43,17 @@ import {
 import { QuantityField } from './QuantityField'
 import { useQuantityText } from './quantityText'
 
+/** Дожидаемся истории до создания формы, чтобы ответ не перезаписал набранное число. */
+function RememberedAmountForm(props: Parameters<typeof AmountForm>[0]) {
+  const { t } = useTranslation()
+  const history = useSuggestions(props.meal.id, props.product.id)
+  if (history.isPending) return <p role="status">{t('common.loading')}</p>
+  const last = [...(history.data?.in_meal ?? []), ...(history.data?.recent ?? [])].find(
+    (item) => item.id === props.product.id,
+  )
+  return <AmountForm {...props} quantity={last ? quantityOf(last) : props.quantity} />
+}
+
 function AmountForm({
   product,
   quantity,
@@ -147,7 +158,7 @@ function ProductList({
                 <ProductLine product={product} />
               </button>
               {open && (
-                <AmountForm
+                <RememberedAmountForm
                   product={product}
                   quantity={quantity}
                   date={date}

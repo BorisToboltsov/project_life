@@ -353,7 +353,7 @@ describe('добавление в приём пищи', () => {
 
     const found = await screen.findByRole('list', { name: 'По штрихкоду' })
     // Количество — из прошлого раза в этом же приёме пищи, а не из последнего вообще.
-    expect(within(found).getByLabelText('Сколько, мл')).toHaveValue('250')
+    expect(await within(found).findByLabelText('Сколько, мл')).toHaveValue('250')
     // Форма одна, хотя продукт есть ещё в двух списках.
     expect(screen.getAllByLabelText('Сколько, мл')).toHaveLength(1)
     // Состав внёс человек: об Open Food Facts речи нет.
@@ -568,4 +568,31 @@ describe('новый продукт по пути в приём пищи', () =>
 
     expect(await screen.findByLabelText('Поиск продукта')).toBeInTheDocument()
   })
+})
+
+it('поиск вспоминает продукт за пределами коротких списков подсказок', async () => {
+  const calls = mockApi({
+    ...DAY,
+    [SEARCH]: json(200, [egg]),
+    [SUGGESTIONS]: (call) =>
+      json(
+        200,
+        call.query.product_id
+          ? {
+              in_meal: [suggestionOf(egg, 180, { kind: 'serving', size: 60, count: 3 })],
+              recent: [suggestionOf(egg, 300, { kind: 'package', size: 600, count: 0.5 })],
+              frequent: [],
+            }
+          : nothing,
+      )(call),
+    [SAVE]: json(201, {}),
+  })
+  await renderApp(PAGE, anna)
+  await userEvent.type(await screen.findByLabelText('Поиск продукта'), 'яйцо')
+  await userEvent.click(await screen.findByRole('button', { name: /Яйцо куриное/ }))
+  expect(await screen.findByLabelText('Сколько порций')).toHaveValue('3')
+  await userEvent.click(screen.getByRole('button', { name: 'Добавить' }))
+  await waitFor(() => expect(callsTo(calls, SAVE)).toHaveLength(1))
+  expect(callsTo(calls, SAVE)[0].body).toMatchObject({ portion: { kind: 'serving', count: 3 } })
+  expect(callsTo(calls, SUGGESTIONS).some((call) => call.query.product_id === egg.id)).toBe(true)
 })

@@ -2865,6 +2865,7 @@ export interface operations {
         parameters: {
             query?: {
                 meal_id?: string | null;
+                product_id?: string | null;
             };
             header?: never;
             path?: never;
