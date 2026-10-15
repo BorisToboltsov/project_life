@@ -54,7 +54,9 @@ export function ExerciseProgress({ id }: { id: string }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{t('progress.title')}</CardTitle>
+        <CardTitle>
+          <h2>{t('progress.title')}</h2>
+        </CardTitle>
       </CardHeader>
       <CardContent className="grid gap-4">
         {points.length === 0 ? (

@@ -28,7 +28,7 @@ test('тренировка: подход, история, прогресс и п
 
   await page.goto('/workouts/exercises/deadlift')
   await expect(page.getByRole('heading', { name: 'Прогресс' })).toBeVisible()
-  await expect(page.getByText('50 кг')).toBeVisible()
+  await expect(page.getByText('50 кг', { exact: true })).toBeVisible()
   await page.getByRole('link', { name: 'Тренировки' }).click()
   await page.getByRole('link', { name: /Упражнения: 1 · Подходы: 1/ }).click()
   await page.getByRole('button', { name: 'Повторить тренировку' }).click()
