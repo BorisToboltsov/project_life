@@ -11,14 +11,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import CurrentUser
 from app.db import SessionDep
 from app.errors import ApiError, ErrorCode, error_responses
-from app.exercises import CATALOG
-from app.models import Exercise
+from app.exercises import CATALOG, ExerciseKind
+from app.models import Exercise, Workout, WorkoutExercise, WorkoutSet
 from app.schemas import (
     ExerciseIn,
     ExerciseListOut,
     ExerciseOut,
     ExercisePresetIn,
+    ExerciseProgressOut,
+    ExerciseRestIn,
     PresetExerciseOut,
+    ProgressPoint,
     RecordId,
 )
 
@@ -148,3 +151,81 @@ async def delete_exercise(exercise_id: RecordId, user: CurrentUser, db: SessionD
         raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND)
     exercise.archived_at = datetime.now(UTC)
     await db.commit()
+
+
+@router.put(
+    "/exercises/{exercise_id}/rest",
+    responses=error_responses(404),
+)
+async def set_exercise_rest(
+    exercise_id: RecordId, body: ExerciseRestIn, user: CurrentUser, db: SessionDep
+) -> ExerciseOut:
+    exercise = await _own_exercise(db, exercise_id, user.id)
+    if exercise is None:
+        raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND)
+    exercise.rest_seconds = body.rest_seconds
+    await db.commit()
+    return ExerciseOut.of(exercise)
+
+
+@router.get("/exercises/{exercise_id}/progress", responses=error_responses(404))
+async def exercise_progress(
+    exercise_id: RecordId, user: CurrentUser, db: SessionDep
+) -> ExerciseProgressOut:
+    exercise = await db.scalar(
+        select(Exercise).where(Exercise.id == exercise_id, Exercise.user_id == user.id)
+    )
+    if exercise is None:
+        raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND)
+    rows = (
+        await db.execute(
+            select(Workout, WorkoutSet)
+            .join(WorkoutExercise, WorkoutExercise.workout_id == Workout.id)
+            .join(WorkoutSet, WorkoutSet.workout_exercise_id == WorkoutExercise.id)
+            .where(
+                Workout.user_id == user.id,
+                Workout.finished_at.is_not(None),
+                WorkoutExercise.exercise_id == exercise.id,
+            )
+            .order_by(Workout.started_at, WorkoutSet.created_at, WorkoutSet.id)
+        )
+    ).all()
+    max_weight = max(
+        (float(entry.weight_kg) for _, entry in rows if entry.weight_kg is not None), default=None
+    )
+    max_reps = max((entry.reps for _, entry in rows if entry.reps is not None), default=None)
+    max_duration = max(
+        (entry.duration_seconds for _, entry in rows if entry.duration_seconds is not None),
+        default=None,
+    )
+    max_distance = max(
+        (float(entry.distance_km) for _, entry in rows if entry.distance_km is not None),
+        default=None,
+    )
+    if exercise.kind == ExerciseKind.WEIGHT_REPS:
+        metric = "weight_kg"
+    elif exercise.kind == ExerciseKind.REPS:
+        metric = "reps"
+    else:
+        metric = "duration_seconds"
+    best: dict[UUID, ProgressPoint] = {}
+    for workout, entry in rows:
+        raw = getattr(entry, metric)
+        if raw is None:
+            continue
+        value = float(raw)
+        old = best.get(workout.id)
+        if old is None or value > old.value:
+            best[workout.id] = ProgressPoint(
+                workout_id=workout.id, local_date=workout.local_date, value=value
+            )
+    return ExerciseProgressOut(
+        exercise_id=exercise.id,
+        kind=exercise.kind,
+        metric=metric,
+        points=list(best.values()),
+        max_weight_kg=max_weight,
+        max_reps=max_reps,
+        max_duration_seconds=max_duration,
+        max_distance_km=max_distance,
+    )

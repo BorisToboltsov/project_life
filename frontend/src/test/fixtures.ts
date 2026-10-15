@@ -366,6 +366,7 @@ export function listedExercise(
     id: `0199b7a0-0000-7000-8000-0000000000e${number}`,
     name: null,
     archived: false,
+    rest_seconds: 90,
   }
 }
 
@@ -379,6 +380,7 @@ export const dumbbellRow: Schemas['ExerciseOut'] = {
   secondary: [],
   cardio_fields: [],
   archived: false,
+  rest_seconds: 90,
 }
 
 /** Ответ списка упражнений: строки пользователя и справочник целиком. */

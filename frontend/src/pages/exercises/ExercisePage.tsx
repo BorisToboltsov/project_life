@@ -22,6 +22,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import type { ErrorKey } from '@/lib/errors'
 
 import { type Shown, useExerciseName, useMuscleList, useSteps } from './exerciseText'
+import { ExerciseProgress } from './ExerciseProgress'
 
 /** Упражнение карточки: что показать и строка из списка пользователя, если она есть. */
 interface Subject {
@@ -157,6 +158,7 @@ export function ExercisePage() {
           )}
         </CardContent>
       </Card>
+      {subject.row && <ExerciseProgress id={subject.row.id} />}
       {confirming ? (
         <div className="grid gap-2">
           <p className="text-sm">{t('exercises.removeConfirm', { name: title })}</p>

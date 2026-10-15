@@ -101,6 +101,84 @@ async def _delete_exercise(client: AsyncClient, owner: Account) -> Probe:
     return Probe((await _own_exercise(client, owner)).path)
 
 
+async def _exercise_rest(client: AsyncClient, owner: Account) -> Probe:
+    return Probe((await _own_exercise(client, owner)).path + "/rest", {"rest_seconds": 45})
+
+
+async def _exercise_progress(client: AsyncClient, owner: Account) -> Probe:
+    return Probe((await _own_exercise(client, owner)).path + "/progress")
+
+
+async def _own_workout(client: AsyncClient, owner: Account) -> Probe:
+    now = datetime.now(UTC)
+    body = {"started_at": now.isoformat(), "local_date": now.date().isoformat()}
+    path = f"/api/workouts/{uuid.uuid7()}"
+    created = await client.put(path, headers=owner.headers, json=body)
+    assert created.status_code == 201
+    return Probe(path, body)
+
+
+async def _get_workout(client: AsyncClient, owner: Account) -> Probe:
+    return Probe((await _own_workout(client, owner)).path)
+
+
+async def _finish_workout(client: AsyncClient, owner: Account) -> Probe:
+    return Probe(
+        (await _own_workout(client, owner)).path + "/finish",
+        {"finished_at": datetime.now(UTC).isoformat()},
+    )
+
+
+async def _repeat_workout(client: AsyncClient, owner: Account) -> Probe:
+    path = (await _own_workout(client, owner)).path
+    finished = await client.post(
+        path + "/finish",
+        headers=owner.headers,
+        json={"finished_at": datetime.now(UTC).isoformat()},
+    )
+    assert finished.status_code == 200
+    now = datetime.now(UTC)
+    return Probe(
+        path + "/repeat",
+        {
+            "id": str(uuid.uuid7()),
+            "item_ids": [],
+            "started_at": now.isoformat(),
+            "local_date": now.date().isoformat(),
+        },
+    )
+
+
+async def _own_workout_exercise(client: AsyncClient, owner: Account) -> Probe:
+    workout = await _own_workout(client, owner)
+    exercise = await client.post(
+        "/api/exercises/presets", headers=owner.headers, json={"preset": "plank"}
+    )
+    assert exercise.status_code == 200
+    body = {"exercise_id": exercise.json()["id"]}
+    path = workout.path + f"/exercises/{uuid.uuid7()}"
+    created = await client.put(path, headers=owner.headers, json=body)
+    assert created.status_code == 201
+    return Probe(path, body)
+
+
+async def _own_workout_set(client: AsyncClient, owner: Account) -> Probe:
+    item = await _own_workout_exercise(client, owner)
+    body = {"duration_seconds": 60}
+    path = item.path + f"/sets/{uuid.uuid7()}"
+    created = await client.put(path, headers=owner.headers, json=body)
+    assert created.status_code == 201
+    return Probe(path, body)
+
+
+async def _delete_workout_set(client: AsyncClient, owner: Account) -> Probe:
+    return Probe((await _own_workout_set(client, owner)).path)
+
+
+async def _delete_workout_exercise(client: AsyncClient, owner: Account) -> Probe:
+    return Probe((await _own_workout_exercise(client, owner)).path)
+
+
 def _product_body() -> dict[str, Any]:
     return {
         "name": "Творог 5 %",
@@ -181,6 +259,17 @@ OWNERSHIP: dict[Route, OwnershipCase] = {
     ("DELETE", "/api/metrics/{metric_id}"): _delete_metric,
     ("PUT", "/api/exercises/{exercise_id}"): _own_exercise,
     ("DELETE", "/api/exercises/{exercise_id}"): _delete_exercise,
+    ("PUT", "/api/exercises/{exercise_id}/rest"): _exercise_rest,
+    ("GET", "/api/exercises/{exercise_id}/progress"): _exercise_progress,
+    ("GET", "/api/workouts/{workout_id}"): _get_workout,
+    ("PUT", "/api/workouts/{workout_id}"): _own_workout,
+    ("DELETE", "/api/workouts/{workout_id}"): _get_workout,
+    ("POST", "/api/workouts/{workout_id}/finish"): _finish_workout,
+    ("POST", "/api/workouts/{workout_id}/repeat"): _repeat_workout,
+    ("PUT", "/api/workouts/{workout_id}/exercises/{item_id}"): _own_workout_exercise,
+    ("DELETE", "/api/workouts/{workout_id}/exercises/{item_id}"): _delete_workout_exercise,
+    ("PUT", "/api/workouts/{workout_id}/exercises/{item_id}/sets/{set_id}"): _own_workout_set,
+    ("DELETE", "/api/workouts/{workout_id}/exercises/{item_id}/sets/{set_id}"): _delete_workout_set,
     ("PUT", "/api/diary/entries/{entry_id}"): _own_food_entry,
     ("DELETE", "/api/diary/entries/{entry_id}"): _delete_food_entry,
     ("PUT", "/api/diary/meals/{meal_id}"): _own_meal,
@@ -306,7 +395,11 @@ async def test_record_id_must_be_a_client_uuid7(
     """Инвариант I8: ключ пользовательской записи — UUIDv7 от клиента, другой не принимается."""
     owner = await make_user()
     probe = await {**OWNERSHIP, **SHARED}[method, path](client, owner)
-    with_other_version = re.sub(r"[^/]+$", str(uuid.uuid4()), probe.path)
+    template_parts = path.split("/")
+    actual_parts = probe.path.split("/")
+    last_key = max(index for index, part in enumerate(template_parts) if part.startswith("{"))
+    actual_parts[last_key] = str(uuid.uuid4())
+    with_other_version = "/".join(actual_parts)
 
     response = await client.request(
         method, with_other_version, headers=owner.headers, json=probe.json

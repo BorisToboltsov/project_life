@@ -41,3 +41,16 @@ export function deleteExercise(id: string) {
     api.DELETE('/api/exercises/{exercise_id}', { params: { path: { exercise_id: id } } }),
   )
 }
+
+/** Прогресс по завершённым тренировкам — сервер считает его из подходов. */
+export function useExerciseProgress(id: string) {
+  return useQuery({
+    queryKey: ['exercise-progress', id],
+    queryFn: async () =>
+      (
+        await api.GET('/api/exercises/{exercise_id}/progress', {
+          params: { path: { exercise_id: id } },
+        })
+      ).data,
+  })
+}

@@ -78,6 +78,7 @@ async def test_list_describes_kind_muscles_and_cardio_fields(
             "secondary": ["quads", "traps"],
             "cardio_fields": [],
             "archived": False,
+            "rest_seconds": 90,
         },
         {
             "preset": "treadmill_walk",
@@ -87,6 +88,7 @@ async def test_list_describes_kind_muscles_and_cardio_fields(
             "secondary": ["calves"],
             "cardio_fields": ["distance", "incline"],
             "archived": False,
+            "rest_seconds": 90,
         },
         {
             "preset": None,
@@ -96,6 +98,7 @@ async def test_list_describes_kind_muscles_and_cardio_fields(
             "secondary": [],
             "cardio_fields": [],
             "archived": False,
+            "rest_seconds": 90,
         },
         {
             "preset": None,
@@ -105,6 +108,7 @@ async def test_list_describes_kind_muscles_and_cardio_fields(
             "secondary": [],
             "cardio_fields": ["distance", "incline", "level"],
             "archived": False,
+            "rest_seconds": 90,
         },
     ]
 
@@ -180,6 +184,7 @@ async def test_own_exercise_is_created_with_a_client_key(
         "secondary": [],
         "cardio_fields": [],
         "archived": False,
+        "rest_seconds": 90,
     }
 
 

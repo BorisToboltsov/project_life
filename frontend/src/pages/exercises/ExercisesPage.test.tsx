@@ -20,11 +20,12 @@ const rows = async (section: string) =>
 const group = (name: string) => screen.getByRole('button', { name })
 
 describe('список упражнений', () => {
-  it('раздел «Тренировки» открывает список упражнений', async () => {
-    mockApi({ [LIST]: json(200, exerciseList()) })
+  it('раздел «Тренировки» открывает журнал и ведёт к упражнениям', async () => {
+    mockApi({ 'GET /api/workouts': json(200, { workouts: [] }) })
     await renderApp('/workouts', anna)
 
-    expect(await screen.findByRole('heading', { name: 'Упражнения' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Тренировки' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Мои упражнения' })).toHaveAttribute('href', PAGE)
     expect(screen.getByRole('link', { name: 'Тренировки' })).toHaveAttribute('aria-current', 'page')
   })
 
