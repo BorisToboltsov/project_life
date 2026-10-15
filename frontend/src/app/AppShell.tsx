@@ -11,7 +11,7 @@ import {
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
-import { useUser } from '@/auth/useSession'
+import { UserContext, useSession, useUser } from '@/auth/useSession'
 import type { Dictionary } from '@/i18n/ru'
 import { cn } from '@/lib/utils'
 
@@ -34,6 +34,18 @@ const UNDER_MORE = ['/more', '/profile', '/admin']
  * собраны под «Ещё», в колонке они стоят сами.
  */
 export function AppShell() {
+  const { user } = useSession()
+  // Сессия закрывается раньше перехода роутера. Всё защищённое дерево получает
+  // пользователя через контекст и размонтируется целиком, не читая пустую сессию.
+  if (!user) return null
+  return (
+    <UserContext value={user}>
+      <AuthenticatedShell />
+    </UserContext>
+  )
+}
+
+function AuthenticatedShell() {
   const { t } = useTranslation()
   const user = useUser()
   const path = useRouterState({ select: (state) => state.location.pathname })

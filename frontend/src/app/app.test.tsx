@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -150,3 +150,29 @@ describe('нет связи с сервером', () => {
     expect(await screen.findByRole('heading', { name: 'Здравствуйте, Анна!' })).toBeInTheDocument()
   })
 })
+
+// Задержка роутера воспроизводит окно между закрытием сессии и размонтированием экрана.
+it.each(['logout', 'storage'] as const)(
+  'выход %s при задержанном переходе скрывает профиль без сбоя и отчёта',
+  async (cause) => {
+    const calls = mockApi({ 'POST /api/auth/logout': json(204) })
+    const { router } = await renderApp('/profile', anna)
+    await screen.findByRole('heading', { name: 'Профиль' })
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const invalidate = router.invalidate.bind(router)
+    const delayed = vi.spyOn(router, 'invalidate').mockImplementation(() => new Promise(() => {}))
+    await act(async () => {
+      if (cause === 'logout') await session.logout()
+      else
+        window.dispatchEvent(new StorageEvent('storage', { key: 'life.session', newValue: null }))
+    })
+    expect(screen.queryByRole('heading', { name: 'Профиль' })).not.toBeInTheDocument()
+    expect(errors).not.toHaveBeenCalled()
+    expect(callsTo(calls, 'POST /api/errors')).toHaveLength(0)
+    delayed.mockRestore()
+    await act(async () => {
+      await invalidate()
+    })
+    expect(await screen.findByRole('heading', { name: 'Вход' })).toBeInTheDocument()
+  },
+)

@@ -114,7 +114,10 @@ def _last_use(user_id: UUID, meal_id: UUID | None = None) -> Subquery:
     """Последняя запись пользователя с каждым продуктом каталога."""
     recency = (
         func.row_number()
-        .over(partition_by=FoodEntry.product_id, order_by=FoodEntry.created_at.desc())
+        .over(
+            partition_by=FoodEntry.product_id,
+            order_by=(FoodEntry.created_at.desc(), FoodEntry.id.desc()),
+        )
         .label("recency")
     )
     ranked = (
@@ -151,10 +154,43 @@ type _Used = Row[Product, Decimal, PortionKind | None, Decimal | None]
 
 @router.get("/suggestions")
 async def suggest_products(
-    user: CurrentUser, db: SessionDep, meal_id: UUID | None = None
+    user: CurrentUser, db: SessionDep, meal_id: UUID | None = None, product_id: UUID | None = None
 ) -> SuggestionsOut:
     """Продукты, которые пользователь вносит: чаще всего в приём пищи `meal_id`, недавно и
     часто вообще. У каждого — количество, внесённое в прошлый раз, и то, как его внесли."""
+    if product_id is not None:
+        # История выбранного продукта не ограничена десяткой подсказок и окном частоты.
+        # Чужие приёмы не дают доступа к чужим записям: отбор всегда по user.id.
+        product = await db.get(Product, product_id)
+        if product is None:
+            return SuggestionsOut(in_meal=[], recent=[], frequent=[])
+
+        async def last_in(meal: UUID | None) -> list[SuggestionOut]:
+            query = (
+                select(FoodEntry)
+                .where(*_with_product(user.id, meal), FoodEntry.product_id == product_id)
+                .order_by(FoodEntry.created_at.desc(), FoodEntry.id.desc())
+                .limit(1)
+            )
+            entry = await db.scalar(query)
+            if entry is None:
+                return []
+            kind = entry.portion_kind
+            return [
+                SuggestionOut(
+                    **ProductOut.of(product, user).model_dump(),
+                    amount=float(entry.amount),
+                    portion=PortionOut.of(
+                        kind, product.size_of(kind) if kind else None, entry.portion_count
+                    ),
+                )
+            ]
+
+        return SuggestionsOut(
+            in_meal=await last_in(meal_id) if meal_id else [],
+            recent=await last_in(None),
+            frequent=[],
+        )
     last, uses = _last_use(user.id), _uses(user.id)
     recent = await db.execute(
         select(Product, last.c.amount, last.c.portion_kind, last.c.portion_count)

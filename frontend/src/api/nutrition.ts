@@ -48,12 +48,15 @@ export function useDiaryDay(date: string) {
  * Продукты, которые пользователь вносит: чаще всего в приём пищи `mealId`, недавно и часто
  * вообще.
  */
-export function useSuggestions(mealId: string) {
+export function useSuggestions(mealId: string, productId?: string) {
   return useQuery({
-    queryKey: [...DIARY_KEY, 'suggestions', mealId],
+    queryKey: [...DIARY_KEY, 'suggestions', mealId, productId],
     queryFn: async () =>
-      (await api.GET('/api/diary/suggestions', { params: { query: { meal_id: mealId } } })).data ??
-      null,
+      (
+        await api.GET('/api/diary/suggestions', {
+          params: { query: { meal_id: mealId, product_id: productId } },
+        })
+      ).data ?? null,
   })
 }
 

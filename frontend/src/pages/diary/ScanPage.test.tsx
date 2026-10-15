@@ -57,7 +57,7 @@ describe('сканер по пути в приём пищи', () => {
     expect(router.state.location.pathname).toBe(MEAL)
     expect(router.state.location.search).toEqual({ scanned: scannedCheese.id })
     expect(within(found).getByText('Творог 5 %')).toBeInTheDocument()
-    expect(within(found).getByLabelText('Сколько, г')).toHaveValue('180')
+    expect(await within(found).findByLabelText('Сколько, г')).toHaveValue('180')
 
     await userEvent.click(within(found).getByRole('button', { name: 'Добавить' }))
 
@@ -95,7 +95,7 @@ describe('сканер по пути в приём пищи', () => {
     const found = await screen.findByRole('list', { name: 'По штрихкоду' })
     expect(callsTo(calls, LOOKUP)[0].body).toEqual({ barcode: BARCODE })
     // Продукт новый: количества из прошлого раза нет.
-    expect(within(found).getByLabelText('Сколько, г')).toHaveValue('100')
+    expect(await within(found).findByLabelText('Сколько, г')).toHaveValue('100')
     expect(
       screen.getByText('Состав взят из Open Food Facts. Сверьте его с упаковкой.'),
     ).toBeInTheDocument()
@@ -153,7 +153,7 @@ describe('сканер по пути в приём пищи', () => {
       barcode: BARCODE,
     })
     expect(router.state.location.pathname).toBe(MEAL)
-    expect(within(list).getByLabelText('Сколько, г')).toHaveValue('100')
+    expect(await within(list).findByLabelText('Сколько, г')).toHaveValue('100')
   })
 
   it('неполный продукт из Open Food Facts — форма с тем, что известно', async () => {
