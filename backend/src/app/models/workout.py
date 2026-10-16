@@ -41,6 +41,7 @@ class Workout(Base):
     repeated_from_id: Mapped[UUID | None] = mapped_column(
         ForeignKey("workouts.id", ondelete="SET NULL")
     )
+    source_group_id: Mapped[UUID | None] = mapped_column(ForeignKey("workout_groups.id"))
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 

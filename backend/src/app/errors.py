@@ -24,6 +24,7 @@ class ErrorCode(StrEnum):
     PORTION_NOT_FOUND = "portion_not_found"
     AMOUNT_OUT_OF_RANGE = "amount_out_of_range"
     BARCODE_TAKEN = "barcode_taken"
+    INVALID_WORKOUT_GROUP = "invalid_workout_group"
     WORKOUT_ACTIVE = "workout_active"
     WORKOUT_FINISHED = "workout_finished"
     INVALID_WORKOUT_SET = "invalid_workout_set"

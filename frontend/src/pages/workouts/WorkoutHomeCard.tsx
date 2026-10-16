@@ -10,6 +10,8 @@ import { today } from '@/lib/dates'
 import type { ErrorKey } from '@/lib/errors'
 import { uuidv7 } from '@/lib/uuid'
 
+import { WorkoutGroups } from './WorkoutGroups'
+
 export function WorkoutHomeCard() {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -56,6 +58,7 @@ export function WorkoutHomeCard() {
         </CardAction>
       </CardHeader>
       <CardContent className="grid gap-2">
+        <WorkoutGroups compact />
         {active && <p className="text-sm text-muted-foreground">{t('workouts.active')}</p>}
         {failure && (
           <p role="alert" className="text-destructive">

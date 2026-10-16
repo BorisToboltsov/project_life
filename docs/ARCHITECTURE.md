@@ -168,6 +168,15 @@
 `PUT /api/exercises/{id}/rest` сохраняет отдых; `GET /api/exercises/{id}/progress`
 вычисляет график и рекорды по завершённым тренировкам.
 
+### Группы тренировок
+
+`app.api.workout_groups` обслуживает `GET /api/workout-groups` (с необязательным днём
+`day`), `PUT` и `DELETE /api/workout-groups/{id}` и `POST /api/workout-groups/{id}/start`.
+Таблица `workout_groups` хранит название, недельное расписание, отдельные даты и архив;
+`workout_group_exercises` — состав и порядок. `workouts.source_group_id` связывает
+созданную тренировку с источником для повторяемого запуска. План на сегодня вычисляется
+в часовом поясе профиля. Решение — в [ADR 0017](adr/0017-workout-groups.md).
+
 ### Питание
 
 Решения — в [ADR 0007](adr/0007-food-diary.md) и [ADR 0008](adr/0008-meals-units-goal.md).
