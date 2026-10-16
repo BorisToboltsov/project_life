@@ -1027,3 +1027,35 @@ class DiaryCopyIn(Strict):
     # `null` — каждая запись остаётся в своём приёме пищи.
     to_meal_id: UUID | None = None
     items: Annotated[list[CopyItem], Field(min_length=1, max_length=200)]
+
+
+class WorkoutGroupIn(Strict):
+    name: ExerciseName
+    exercise_ids: Annotated[list[UUID], Field(min_length=1, max_length=100)]
+    weekdays: Annotated[list[Annotated[int, Field(ge=0, le=6)]], Field(max_length=7)] = []
+    start_date: date | None = None
+    end_date: date | None = None
+    dates: Annotated[list[date], Field(max_length=366)] = []
+
+    @model_validator(mode="after")
+    def _valid_schedule(self) -> Self:
+        for values in (self.exercise_ids, self.weekdays, self.dates):
+            if len(values) != len(set(values)):
+                raise ValueError("duplicate schedule or exercise")
+        if self.weekdays and self.start_date is None:
+            raise ValueError("weekly schedule needs start date")
+        if self.end_date is not None and (
+            self.start_date is None or self.end_date < self.start_date
+        ):
+            raise ValueError("invalid schedule range")
+        return self
+
+
+class WorkoutGroupOut(WorkoutGroupIn):
+    id: UUID
+    scheduled: bool
+
+
+class WorkoutGroupListOut(BaseModel):
+    date: date
+    groups: list[WorkoutGroupOut]

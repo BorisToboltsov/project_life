@@ -60,7 +60,7 @@ async def _item(db: AsyncSession, workout_id: UUID, item_id: UUID) -> WorkoutExe
     return row
 
 
-async def _counts(db: AsyncSession, workout_id: UUID) -> tuple[int, int]:
+async def workout_counts(db: AsyncSession, workout_id: UUID) -> tuple[int, int]:
     exercise_count = await db.scalar(
         select(func.count())
         .select_from(WorkoutExercise)
@@ -84,7 +84,7 @@ async def list_workouts(user: CurrentUser, db: SessionDep) -> WorkoutListOut:
     )
     workouts: list[WorkoutOut] = []
     for row in rows:
-        workouts.append(WorkoutOut.of(row, *await _counts(db, row.id)))
+        workouts.append(WorkoutOut.of(row, *await workout_counts(db, row.id)))
     return WorkoutListOut(workouts=workouts)
 
 
@@ -117,7 +117,7 @@ async def save_workout(
     if row.finished_at is not None and row.finished_at < row.started_at:
         raise ApiError(status.HTTP_409_CONFLICT, ErrorCode.WORKOUT_FINISHED)
     await db.commit()
-    return WorkoutOut.of(row, *await _counts(db, row.id))
+    return WorkoutOut.of(row, *await workout_counts(db, row.id))
 
 
 @router.get("/workouts/{workout_id}", responses=error_responses(404))
@@ -194,7 +194,7 @@ async def finish_workout(
     if row.finished_at is None:
         row.finished_at = body.finished_at
         await db.commit()
-    return WorkoutOut.of(row, *await _counts(db, row.id))
+    return WorkoutOut.of(row, *await workout_counts(db, row.id))
 
 
 @router.post(
@@ -217,7 +217,7 @@ async def repeat_workout(
             raise _missing()
         if existing.repeated_from_id != source.id:
             raise ApiError(status.HTTP_409_CONFLICT, ErrorCode.INVALID_WORKOUT_REPEAT)
-        return WorkoutOut.of(existing, *await _counts(db, existing.id))
+        return WorkoutOut.of(existing, *await workout_counts(db, existing.id))
     source_items = (
         await db.scalars(
             select(WorkoutExercise)
@@ -256,7 +256,7 @@ async def repeat_workout(
                 raise _missing() from None
             if existing.repeated_from_id != source.id:
                 raise ApiError(status.HTTP_409_CONFLICT, ErrorCode.INVALID_WORKOUT_REPEAT) from None
-            return WorkoutOut.of(existing, *await _counts(db, existing.id))
+            return WorkoutOut.of(existing, *await workout_counts(db, existing.id))
         raise ApiError(status.HTTP_409_CONFLICT, ErrorCode.WORKOUT_ACTIVE) from None
     response.status_code = status.HTTP_201_CREATED
     return WorkoutOut.of(target, len(source_items), 0)

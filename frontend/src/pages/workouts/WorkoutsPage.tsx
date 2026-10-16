@@ -11,6 +11,8 @@ import { formatDateTime, today } from '@/lib/dates'
 import type { ErrorKey } from '@/lib/errors'
 import { uuidv7 } from '@/lib/uuid'
 
+import { WorkoutGroups } from './WorkoutGroups'
+
 export function WorkoutsPage() {
   const { t, i18n } = useTranslation()
   const user = useUser()
@@ -40,6 +42,7 @@ export function WorkoutsPage() {
   return (
     <div className="grid gap-5">
       <h1 className="text-2xl font-semibold">{t('workouts.title')}</h1>
+      <WorkoutGroups />
       <Card>
         <CardHeader>
           <CardTitle>{active ? t('workouts.active') : t('workouts.start')}</CardTitle>

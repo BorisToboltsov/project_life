@@ -109,6 +109,23 @@ async def _exercise_progress(client: AsyncClient, owner: Account) -> Probe:
     return Probe((await _own_exercise(client, owner)).path + "/progress")
 
 
+async def _own_group(client: AsyncClient, owner: Account) -> Probe:
+    from tests.workout_groups import create_group
+
+    path, body = await create_group(client, owner)
+    return Probe(path, body)
+
+
+async def _delete_group(client: AsyncClient, owner: Account) -> Probe:
+    return Probe((await _own_group(client, owner)).path)
+
+
+async def _start_group(client: AsyncClient, owner: Account) -> Probe:
+    from tests.workout_groups import start_body
+
+    return Probe((await _own_group(client, owner)).path + "/start", start_body())
+
+
 async def _own_workout(client: AsyncClient, owner: Account) -> Probe:
     now = datetime.now(UTC)
     body = {"started_at": now.isoformat(), "local_date": now.date().isoformat()}
@@ -261,6 +278,9 @@ OWNERSHIP: dict[Route, OwnershipCase] = {
     ("DELETE", "/api/exercises/{exercise_id}"): _delete_exercise,
     ("PUT", "/api/exercises/{exercise_id}/rest"): _exercise_rest,
     ("GET", "/api/exercises/{exercise_id}/progress"): _exercise_progress,
+    ("PUT", "/api/workout-groups/{group_id}"): _own_group,
+    ("DELETE", "/api/workout-groups/{group_id}"): _delete_group,
+    ("POST", "/api/workout-groups/{group_id}/start"): _start_group,
     ("GET", "/api/workouts/{workout_id}"): _get_workout,
     ("PUT", "/api/workouts/{workout_id}"): _own_workout,
     ("DELETE", "/api/workouts/{workout_id}"): _get_workout,
