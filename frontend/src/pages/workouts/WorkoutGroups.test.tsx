@@ -37,6 +37,8 @@ describe('группы тренировок', () => {
       await screen.findByRole('heading', { name: 'На сегодня · 18/10/2026' }),
     ).toBeInTheDocument()
     const start = (await screen.findAllByRole('button', { name: 'Начать из группы' }))[0]!
+    // Кнопка ждёт списка тренировок: при уже начатой тренировке запускать нечего.
+    await waitFor(() => expect(start).toBeEnabled())
     await userEvent.click(start)
     await waitFor(() => expect(callsTo(calls, 'POST /api/workout-groups/*')).toHaveLength(1))
     await userEvent.click(start)

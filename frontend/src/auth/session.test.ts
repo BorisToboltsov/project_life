@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/api/client'
 import i18n from '@/i18n'
+import { offlineSession } from '@/offline/session'
+import { offlineState } from '@/offline/store'
 import { callsTo, json, mockApi } from '@/test/api'
 import { anna, sessionOf } from '@/test/fixtures'
 
@@ -54,20 +56,50 @@ describe('старт приложения', () => {
     expect(session.getState().status).toBe('offline')
     expect(localStorage.getItem('life.session')).toBe('1')
   })
-})
 
-describe('выход', () => {
-  it('закрывает сессию, даже если сервер не ответил', async () => {
-    session.open(sessionOf(anna))
+  it('без сети открывается на копии того, кто входил на устройстве', async () => {
+    await offlineSession.claim(anna)
+    localStorage.setItem('life.session', '1')
     vi.stubGlobal(
       'fetch',
       vi.fn(() => Promise.reject(new TypeError('Failed to fetch'))),
     )
 
-    await expect(session.logout()).rejects.toThrow('Failed to fetch')
+    await session.bootstrap()
+
+    expect(session.getState()).toEqual({ status: 'authenticated', user: anna })
+    expect(offlineState.get().online).toBe(false)
+  })
+
+  it('вход другого пользователя стирает копию прежнего', async () => {
+    await offlineSession.claim(anna)
+    await offlineSession.claim({ ...anna, id: '0199b7a0-0000-7000-8000-00000000beef' })
+    localStorage.setItem('life.session', '1')
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.reject(new TypeError('Failed to fetch'))),
+    )
+
+    await session.bootstrap()
+
+    expect(session.getState().user?.id).toBe('0199b7a0-0000-7000-8000-00000000beef')
+  })
+})
+
+describe('выход', () => {
+  it('закрывает сессию и стирает копию, даже если сервер не ответил', async () => {
+    session.open(sessionOf(anna))
+    await offlineSession.claim(anna)
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.reject(new TypeError('Failed to fetch'))),
+    )
+
+    await session.logout()
 
     expect(session.getState().status).toBe('anonymous')
     expect(localStorage.getItem('life.session')).toBeNull()
+    expect(await offlineSession.cachedUser()).toBeUndefined()
   })
 
   it('«выйти везде» обращается к своему эндпоинту с токеном', async () => {

@@ -24,6 +24,7 @@ import {
 import { useUser } from '@/auth/useSession'
 import { DateField } from '@/components/form/DateField'
 import { ExerciseFigure } from '@/components/illustrations/exercise/ExerciseFigure'
+import { PendingMark } from '@/components/PendingMark'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -31,6 +32,7 @@ import { Label } from '@/components/ui/label'
 import { formatDateTime, isRealDate, today } from '@/lib/dates'
 import type { ErrorKey } from '@/lib/errors'
 import { uuidv7 } from '@/lib/uuid'
+import { useOfflineState } from '@/offline/store'
 import { useExerciseName } from '@/pages/exercises/exerciseText'
 
 import { RestTimer } from './RestTimer'
@@ -50,6 +52,7 @@ function WorkoutContent({ id }: { id: string }) {
   const navigate = useNavigate()
   const nameOf = useExerciseName()
   const query = useWorkout(id)
+  const { pending } = useOfflineState()
   const exercises = useExercises()
   const workout = query.data
   const [selectedId, setSelectedId] = useState<string>()
@@ -62,7 +65,7 @@ function WorkoutContent({ id }: { id: string }) {
   const [rest, setRest] = useState<string>()
   const [restFor, setRestFor] = useState<string>()
   const [revision, setRevision] = useState(0)
-  const repeatIds = useRef<{ id: string; item_ids: string[] } | null>(null)
+  const repeatIds = useRef<{ id: string; item_ids: string[]; exercise_ids: string[] } | null>(null)
   const pendingItemId = useRef<string | null>(null)
   const items = workout?.exercises ?? []
   const selected = items.find((item) => item.id === selectedId) ?? items[0]
@@ -146,9 +149,12 @@ function WorkoutContent({ id }: { id: string }) {
 
   async function repeat() {
     if (!workout) return
+    const kept = workout.exercises.filter((item) => !item.exercise.archived)
     repeatIds.current ??= {
       id: uuidv7(),
-      item_ids: workout.exercises.filter((item) => !item.exercise.archived).map(() => uuidv7()),
+      item_ids: kept.map(() => uuidv7()),
+      // Повтор, отложенный без сети, не должен лечь на изменившийся состав (ADR 0020).
+      exercise_ids: kept.map((item) => item.exercise.id),
     }
     const result = await repeatWorkout(id, {
       ...repeatIds.current,
@@ -252,6 +258,12 @@ function WorkoutContent({ id }: { id: string }) {
             <div key={value.id} className="flex items-center gap-2 rounded-xl border p-3">
               <span className="min-w-0 flex-1 font-medium">
                 {index + 1}. {setSummary(value, t)}
+                {/* Отметка — за текстом: на узком экране переносится она, а не значение. */}
+                {pending.has(value.id) && (
+                  <span className="ml-1.5 inline-block align-[-2px]">
+                    <PendingMark />
+                  </span>
+                )}
               </span>
               {active && (
                 <>

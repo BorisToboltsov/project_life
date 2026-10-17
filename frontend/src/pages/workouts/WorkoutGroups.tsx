@@ -59,6 +59,7 @@ export function WorkoutGroups({ compact = false }: { compact?: boolean }) {
     const result = await startWorkoutGroup(group.id, {
       id: request.id,
       item_ids: request.item_ids,
+      exercise_ids: group.exercise_ids,
       started_at: new Date().toISOString(),
       local_date: groups.data.date,
     })

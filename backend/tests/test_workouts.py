@@ -221,3 +221,83 @@ async def test_progress_is_computed_from_finished_sets(
     assert len(progress["points"]) == 1
     await client.delete(f"/api/exercises/{exercise_id}", headers=user.headers)
     assert len((await client.get(progress_url, headers=user.headers)).json()["points"]) == 1
+
+
+async def finished_with_set(
+    client: AsyncClient, user: Account, days: int, preset: str, reps: int
+) -> tuple[str, str]:
+    """Завершённая тренировка `days` дней назад с одним подходом; путь тренировки и ключ подхода."""
+    path = await workout(client, user, days)
+    exercise = await item(client, user, path, preset)
+    set_id = str(uuid.uuid7())
+    saved = await client.put(
+        exercise + f"/sets/{set_id}", headers=user.headers, json={"reps": reps}
+    )
+    assert saved.status_code == 201, saved.text
+    started = datetime.now(UTC) + timedelta(days=days)
+    finished = await client.post(
+        path + "/finish",
+        headers=user.headers,
+        json={"finished_at": (started + timedelta(hours=1)).isoformat()},
+    )
+    assert finished.status_code == 200
+    return path, set_id
+
+
+async def test_recent_copy_holds_last_days_active_workout_and_latest_sets(
+    client: AsyncClient, make_user: MakeUser
+) -> None:
+    user, other = await make_user(), await make_user()
+    old, old_set = await finished_with_set(client, user, -20, "pull_up", 6)
+    await finished_with_set(client, user, -20, "push_up", 10)
+    middle, middle_set = await finished_with_set(client, user, -3, "push_up", 15)
+    active = await workout(client, user)
+    await item(client, user, active, "push_up")
+    await finished_with_set(client, other, -1, "push_up", 99)
+
+    copy = await client.get("/api/workouts/recent", headers=user.headers)
+
+    assert copy.status_code == 200
+    body = copy.json()
+    assert [row["id"] for row in body["workouts"]] == [
+        active.rsplit("/", 1)[1],
+        middle.rsplit("/", 1)[1],
+    ]
+    assert body["workouts"][0]["exercises"][0]["previous"][0]["id"] == middle_set
+    assert body["workouts"][1]["exercises"][0]["sets"][0]["reps"] == 15
+    latest = {row["exercise_id"]: row for row in body["latest"]}
+    assert len(latest) == 2
+    by_set = {row["sets"][0]["id"]: row for row in latest.values()}
+    assert by_set[middle_set]["workout_id"] == middle.rsplit("/", 1)[1]
+    assert by_set[old_set]["workout_id"] == old.rsplit("/", 1)[1]
+
+
+async def test_repeat_with_stale_composition_is_rejected(
+    client: AsyncClient, make_user: MakeUser
+) -> None:
+    user = await make_user()
+    source, _ = await finished_with_set(client, user, -1, "pull_up", 5)
+    detail = (await client.get(source, headers=user.headers)).json()
+    exercise_id = detail["exercises"][0]["exercise"]["id"]
+    plank = await client.post(
+        "/api/exercises/presets", headers=user.headers, json={"preset": "plank"}
+    )
+    body = {
+        "id": str(uuid.uuid7()),
+        "item_ids": [str(uuid.uuid7())],
+        "exercise_ids": [plank.json()["id"]],
+        **moment(),
+    }
+
+    stale = await client.post(source + "/repeat", headers=user.headers, json=body)
+    uneven = await client.post(
+        source + "/repeat", headers=user.headers, json={**body, "exercise_ids": []}
+    )
+    fresh = await client.post(
+        source + "/repeat", headers=user.headers, json={**body, "exercise_ids": [exercise_id]}
+    )
+
+    assert stale.status_code == 409
+    assert stale.json() == {"detail": "workout_source_changed"}
+    assert uneven.status_code == 422
+    assert fresh.status_code == 201, fresh.text

@@ -1,7 +1,7 @@
 {
   "name": "project-life-frontend",
   "private": true,
-  "version": "0.9.1",
+  "version": "0.10.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -25,6 +25,7 @@
     "class-variance-authority": "^0.7.1",
     "cn": "^0.4.0",
     "date-fns": "^4.4.0",
+    "dexie": "^4.4.6",
     "echarts": "^6.1.0",
     "i18next": "^26.4.2",
     "lucide-react": "^1.52.0",
@@ -53,6 +54,7 @@
     "@vitejs/plugin-react": "^6.1.1",
     "@vitest/coverage-v8": "^5.0.3",
     "eslint-plugin-i18next": "^6.1.5",
+    "fake-indexeddb": "^6.2.6",
     "jsdom": "^30.1.2",
     "openapi-typescript": "^7.13.0",
     "oxlint": "^1.81.0",

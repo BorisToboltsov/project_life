@@ -3,9 +3,11 @@
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Response, status
-from sqlalchemy import func, select
+from sqlalchemy import exists, func, or_, select
+from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,6 +17,7 @@ from app.errors import ApiError, ErrorCode, error_responses
 from app.exercises import CardioField, ExerciseKind
 from app.models import Exercise, Workout, WorkoutExercise, WorkoutSet
 from app.schemas import (
+    ExerciseLatestOut,
     ExerciseOut,
     RecordId,
     WorkoutDetailOut,
@@ -24,6 +27,7 @@ from app.schemas import (
     WorkoutIn,
     WorkoutListOut,
     WorkoutOut,
+    WorkoutRecentOut,
     WorkoutRepeatIn,
     WorkoutSetIn,
     WorkoutSetOut,
@@ -120,9 +124,67 @@ async def save_workout(
     return WorkoutOut.of(row, *await workout_counts(db, row.id))
 
 
+# Копия журнала для работы без сети: столько дней назад от сегодняшнего (ADR 0020).
+RECENT_DAYS = 14
+
+
+@router.get("/workouts/recent")
+async def recent_workouts(user: CurrentUser, db: SessionDep) -> WorkoutRecentOut:
+    """Тренировки последних дней целиком и последние подходы по каждому упражнению."""
+    since = datetime.now(ZoneInfo(user.timezone)).date() - timedelta(days=RECENT_DAYS - 1)
+    rows = await db.scalars(
+        select(Workout)
+        .where(
+            Workout.user_id == user.id,
+            or_(Workout.local_date >= since, Workout.finished_at.is_(None)),
+        )
+        .order_by(Workout.started_at.desc(), Workout.id.desc())
+    )
+    workouts = [await _detail(db, row, user.id) for row in rows.all()]
+    latest_items = (
+        await db.execute(
+            select(WorkoutExercise.id, WorkoutExercise.exercise_id, Workout.id, Workout.started_at)
+            .join(Workout)
+            .where(
+                Workout.user_id == user.id,
+                Workout.finished_at.is_not(None),
+                exists().where(WorkoutSet.workout_exercise_id == WorkoutExercise.id),
+            )
+            .ext(distinct_on(WorkoutExercise.exercise_id))
+            .order_by(WorkoutExercise.exercise_id, Workout.started_at.desc(), Workout.id.desc())
+        )
+    ).all()
+    latest = [
+        ExerciseLatestOut(
+            exercise_id=exercise_id,
+            workout_id=workout_id,
+            started_at=started_at,
+            sets=[WorkoutSetOut.of(value) for value in await _sets(db, item_id)],
+        )
+        for item_id, exercise_id, workout_id, started_at in latest_items
+    ]
+    return WorkoutRecentOut(workouts=workouts, latest=latest)
+
+
+async def _sets(db: AsyncSession, item_id: UUID) -> list[WorkoutSet]:
+    return list(
+        (
+            await db.scalars(
+                select(WorkoutSet)
+                .where(WorkoutSet.workout_exercise_id == item_id)
+                .order_by(WorkoutSet.created_at, WorkoutSet.id)
+            )
+        ).all()
+    )
+
+
 @router.get("/workouts/{workout_id}", responses=error_responses(404))
 async def get_workout(workout_id: RecordId, user: CurrentUser, db: SessionDep) -> WorkoutDetailOut:
-    row = await _workout(db, workout_id, user.id)
+    return await _detail(db, await _workout(db, workout_id, user.id), user.id)
+
+
+async def _detail(db: AsyncSession, row: Workout, user_id: UUID) -> WorkoutDetailOut:
+    """Тренировка с упражнениями, подходами и тем, что было в прошлый раз."""
     items = (
         await db.scalars(
             select(WorkoutExercise)
@@ -135,19 +197,13 @@ async def get_workout(workout_id: RecordId, user: CurrentUser, db: SessionDep) -
         exercise = await db.get(Exercise, item.exercise_id)
         if exercise is None:
             raise _missing()
-        sets = (
-            await db.scalars(
-                select(WorkoutSet)
-                .where(WorkoutSet.workout_exercise_id == item.id)
-                .order_by(WorkoutSet.created_at, WorkoutSet.id)
-            )
-        ).all()
+        sets = await _sets(db, item.id)
         previous_id = await db.scalar(
             select(WorkoutExercise.id)
             .join(Workout)
             .join(WorkoutSet, WorkoutSet.workout_exercise_id == WorkoutExercise.id)
             .where(
-                Workout.user_id == user.id,
+                Workout.user_id == user_id,
                 Workout.id != row.id,
                 Workout.started_at < row.started_at,
                 Workout.finished_at.is_not(None),
@@ -156,17 +212,7 @@ async def get_workout(workout_id: RecordId, user: CurrentUser, db: SessionDep) -
             .order_by(Workout.started_at.desc())
             .limit(1)
         )
-        previous: list[WorkoutSet] = []
-        if previous_id is not None:
-            previous = list(
-                (
-                    await db.scalars(
-                        select(WorkoutSet)
-                        .where(WorkoutSet.workout_exercise_id == previous_id)
-                        .order_by(WorkoutSet.created_at, WorkoutSet.id)
-                    )
-                ).all()
-            )
+        previous = await _sets(db, previous_id) if previous_id is not None else []
         output.append(
             WorkoutExerciseOut(
                 id=item.id,
@@ -228,6 +274,10 @@ async def repeat_workout(
     ).all()
     if len(source_items) != len(body.item_ids):
         raise ApiError(status.HTTP_422_UNPROCESSABLE_CONTENT, ErrorCode.INVALID_WORKOUT_REPEAT)
+    if body.exercise_ids is not None and body.exercise_ids != [
+        item.exercise_id for item in source_items
+    ]:
+        raise ApiError(status.HTTP_409_CONFLICT, ErrorCode.WORKOUT_SOURCE_CHANGED)
     target = Workout(
         id=body.id,
         user_id=user.id,

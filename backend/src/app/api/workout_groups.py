@@ -163,6 +163,8 @@ async def start_group(
             )
         )
     )
+    if body.exercise_ids is not None and body.exercise_ids != exercise_ids:
+        raise ApiError(status.HTTP_409_CONFLICT, ErrorCode.WORKOUT_SOURCE_CHANGED)
     if (
         not exercise_ids
         or len(available) != len(exercise_ids)

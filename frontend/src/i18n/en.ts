@@ -61,6 +61,27 @@ export const en: Dictionary = {
     ready: 'A new version of the app is available.',
     apply: 'Update',
   },
+  offlineBar: {
+    offline: 'No connection · entries are saved on this phone',
+    offlineQueued: 'No connection · waiting to be sent: {{count}}',
+    sending: 'Sending changes: {{count}}',
+    rejected: 'The server did not accept changes: {{count}}',
+  },
+  unsent: {
+    title: 'Not sent',
+    hint: 'The server did not accept these changes. Everything else has been sent.',
+    empty: 'Everything entered on this phone has reached the server.',
+    queued: 'Waiting to be sent: {{count}}',
+    offline: 'No connection: changes will be sent when it is back.',
+    workout: 'Workout · {{date}}',
+    workoutUnknown: 'Workout',
+    sets: 'Sets: {{count}}',
+    changes: 'Changes: {{count}}',
+    rest: 'Rest between sets',
+    toNewWorkout: 'Move to a new workout',
+    remove: 'Remove',
+    pending: 'Not sent yet',
+  },
   disclaimer: {
     text: 'This app does not give medical advice and is not a substitute for seeing a doctor.',
     accept:
@@ -418,6 +439,9 @@ export const en: Dictionary = {
     sessionTitle: 'Session',
     logout: 'Sign out',
     logoutEverywhere: 'Sign out on all devices',
+    logoutUnsent: 'Changes not sent: {{count}}. Sign out and erase them?',
+    logoutConfirm: 'Yes, sign out',
+    logoutCancel: 'Cancel',
     version: 'Version {{version}}',
   },
   measurements: {
@@ -882,6 +906,8 @@ export const en: Dictionary = {
     workout_finished: 'This workout is finished or the time is invalid.',
     invalid_workout_set: 'Check the fields for this exercise.',
     invalid_workout_repeat: 'The exercise list changed. Open the workout and try again.',
+    workout_source_changed:
+      'While the workout was waiting for a connection, its group or previous workout changed.',
     unknown: 'Something went wrong. Try again.',
     network: 'Cannot reach the server.',
   },

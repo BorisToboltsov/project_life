@@ -30,6 +30,7 @@ class ErrorCode(StrEnum):
     WORKOUT_FINISHED = "workout_finished"
     INVALID_WORKOUT_SET = "invalid_workout_set"
     INVALID_WORKOUT_REPEAT = "invalid_workout_repeat"
+    WORKOUT_SOURCE_CHANGED = "workout_source_changed"
 
 
 class ErrorResponse(BaseModel):
