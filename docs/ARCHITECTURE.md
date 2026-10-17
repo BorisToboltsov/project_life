@@ -12,6 +12,7 @@
 | Фронтенд | TypeScript, React 19, Vite, Tailwind CSS 4, shadcn/ui, TanStack Query и Router, i18next |
 | PWA | vite-plugin-pwa (Workbox): манифест и service worker с предкэшем всей сборки; новая версия включается по согласию |
 | Сканер | `BarcodeDetector` браузера, где он есть; иначе полифилл `barcode-detector` на zxing-wasm |
+| Без сети | Dexie (IndexedDB): копия данных и очередь изменений на устройстве |
 | Веб-сервер | Caddy: HTTPS, статика фронтенда, прокси `/api` на бэкенд |
 | Инструменты | uv, ruff, pyright, pytest · pnpm, oxlint, prettier, vitest, Playwright |
 
@@ -106,7 +107,7 @@
 | Группа | Маршруты |
 |--------|----------|
 | Открытые | `GET /api/health`; `POST /api/auth/…`: `login`, `register`, `refresh`, `logout`, `invite/check`, `password-reset`, `password-reset/check` |
-| Для вошедших | `GET` и `PATCH /api/me`; `POST /api/auth/password`, `POST /api/auth/logout-all`; `GET /api/metrics`, `POST /api/metrics/presets`, `PUT` и `DELETE /api/metrics/{id}`; `GET /api/measurements`, `GET /api/measurements/summary`, `PUT` и `DELETE /api/measurements/{id}`; `GET /api/exercises`, `POST /api/exercises/presets`, `PUT` и `DELETE /api/exercises/{id}`; `GET /api/products`, `GET /api/products/external`, `POST /api/products/lookup`, `GET`, `PUT` и `DELETE /api/products/{id}`; `GET /api/diary`, `GET /api/diary/suggestions`, `PUT` и `DELETE /api/diary/entries/{id}`, `PUT` и `DELETE /api/diary/meals/{id}`, `PUT` и `DELETE /api/diary/water/{id}`, `POST /api/diary/copy`, `GET` и `PUT /api/diary/goal`; `POST /api/errors` |
+| Для вошедших | `GET` и `PATCH /api/me`; `POST /api/auth/password`, `POST /api/auth/logout-all`; `GET /api/metrics`, `POST /api/metrics/presets`, `PUT` и `DELETE /api/metrics/{id}`; `GET /api/measurements`, `GET /api/measurements/summary`, `PUT` и `DELETE /api/measurements/{id}`; `GET /api/exercises`, `POST /api/exercises/presets`, `PUT` и `DELETE /api/exercises/{id}`; журнал тренировок и группы — в разделах ниже; `GET /api/products`, `GET /api/products/external`, `POST /api/products/lookup`, `GET`, `PUT` и `DELETE /api/products/{id}`; `GET /api/diary`, `GET /api/diary/suggestions`, `PUT` и `DELETE /api/diary/entries/{id}`, `PUT` и `DELETE /api/diary/meals/{id}`, `PUT` и `DELETE /api/diary/water/{id}`, `POST /api/diary/copy`, `GET` и `PUT /api/diary/goal`; `POST /api/errors` |
 | Для администратора | `/api/admin/users`, `/api/admin/users/{id}/password-reset`, `/api/admin/invites`, `/api/admin/invites/{id}`, `/api/admin/errors`, `/api/admin/errors/{id}` |
 
 ### Таблицы
@@ -163,6 +164,11 @@
 Решение — в [ADR 0016](adr/0016-workout-journal.md). `GET /api/workouts` возвращает историю;
 `GET`, `PUT` и `DELETE /api/workouts/{id}` читают, создают, правят время и удаляют тренировку.
 `POST /api/workouts/{id}/finish` завершает её, `/repeat` создаёт повтор с пустыми подходами.
+Повтор и запуск группы принимают необязательный `exercise_ids` — упражнения строк, каким их
+видел клиент; если состав с тех пор изменился, ответ — 409 `workout_source_changed` (I17).
+`GET /api/workouts/recent` отдаёт копию журнала для работы без сети: тренировки последних
+14 дней по часовому поясу профиля и незавершённую — целиком, и последние подходы по
+каждому упражнению ([ADR 0020](adr/0020-offline-entry.md)).
 Вложенные `PUT` и `DELETE /api/workouts/{id}/exercises/{item_id}` управляют составом,
 а `…/sets/{set_id}` — подходами. Все эти маршруты требуют входа и проверяют владельца.
 `PUT /api/exercises/{id}/rest` сохраняет отдых; `GET /api/exercises/{id}/progress`
@@ -272,6 +278,12 @@
   размонтирует их при закрытии сессии, не дожидаясь перехода роутера на вход.
 - `src/api/` — сгенерированные типы и клиент; клиент сам подставляет токен и повторяет
   запрос после его обновления.
+- `src/offline/` — запись без сети ([ADR 0020](adr/0020-offline-entry.md)): база Dexie с
+  копией ответов, очередью и отклонёнными изменениями (`db.ts`); запись «сервер, при
+  сбое — очередь» и чтение через копию (`queue.ts`); копия журнала тренировок и её правка
+  теми же изменениями, что делает сервер (`workouts.ts`); проверка связи, отправка очереди
+  и обновление копии (`sync.ts`); владелец копии и её стирание (`session.ts`); состояние
+  для полосы и отметок (`store.ts`).
 - `src/i18n/` — словари и выбор языка: до входа — язык браузера или сохранённый выбор,
   после входа — язык из профиля.
 - `src/lib/` — пересчёт единиц, разбор и формат чисел и дат, линия тренда, генерация
@@ -298,12 +310,13 @@
   воды),
   `products/` (каталог и форма продукта), `measurements/` (ввод, история с графиком,
   правка, добавление вида замера), `exercises/` (список, карточка и форма своего
-  упражнения), `workouts/` (журнал, запись подходов и таймер отдыха), `more/` (разделы,
+  упражнения), `workouts/` (журнал, запись подходов и таймер отдыха), `unsent/` (что сервер
+  не принял из очереди), `more/` (разделы,
   которым не хватило места в нижней панели), `profile/`,
   `admin/`.
 
 Маршруты делятся на гостевые (`/login`, `/invite`, `/reset`) и приложение (`/`,
-`/diary/…`, `/products/…`, `/measurements/…`, `/workouts/…`, `/more`, `/profile`,
+`/diary/…`, `/products/…`, `/measurements/…`, `/workouts/…`, `/unsent`, `/more`, `/profile`,
 `/admin`). Раздел «Тренировки» открывает журнал; `/workouts/$id` — одну тренировку,
 `/workouts/exercises` — список упражнений. Адрес карточки упражнения несёт код штатного
 или ключ своего. Проверка на маршруте — удобство, а данные закрывает бэкенд.
@@ -319,6 +332,13 @@
 
 Кэш запросов (TanStack Query) принадлежит одному пользователю и очищается при смене
 вошедшего.
+
+Журнал тренировок, упражнения и группы читаются через копию на устройстве: ответ сервера
+сохраняется в IndexedDB, без связи экран берёт его оттуда. Изменения журнала уходят через
+очередь: при обрыве связи они встают в неё и сразу вносятся в копию (I20). Рамка
+приложения передаёт копию вошедшему (`useOfflineSync`) и, когда связь вернулась и
+очередь опустела, перечитывает данные экранов с сервера. Без связи при запуске сессия
+открывается на сохранённом пользователе без токена; токен обновится с первым запросом.
 
 ## Дерево каталогов
 

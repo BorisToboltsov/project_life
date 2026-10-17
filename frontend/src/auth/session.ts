@@ -1,5 +1,7 @@
 import { api, configureAuth, type Schemas } from '@/api/client'
 import { setLanguage } from '@/i18n'
+import { offlineSession } from '@/offline/session'
+import { offlineState } from '@/offline/store'
 
 export type User = Schemas['UserOut']
 
@@ -47,6 +49,17 @@ function close(): void {
   setState({ status: 'anonymous', user: null })
 }
 
+async function openOffline(): Promise<void> {
+  const user = await offlineSession.cachedUser()
+  if (!user) {
+    setState({ status: 'offline', user: null })
+    return
+  }
+  offlineState.setOnline(false)
+  void setLanguage(user.language)
+  setState({ status: 'authenticated', user })
+}
+
 async function refreshOnce(): Promise<boolean> {
   const { data, response } = await api.POST('/api/auth/refresh')
   if (data) {
@@ -82,7 +95,11 @@ export const session = {
     return () => listeners.delete(listener)
   },
 
-  /** Старт приложения: восстановить сессию по refresh-cookie, если на устройстве входили. */
+  /**
+   * Старт приложения: восстановить сессию по refresh-cookie, если на устройстве входили. Без
+   * связи приложение открывается на копии того, кто входил (ADR 0001, ADR 0020): токен
+   * обновится, когда сервер снова ответит.
+   */
   async bootstrap(): Promise<void> {
     if (!hint()) {
       accessToken = null
@@ -92,11 +109,9 @@ export const session = {
     setState({ status: 'loading', user: null })
     try {
       // Сервер ответил, но не 200 и не 401 (например, 502): тоже считаем, что его нет.
-      if (!(await refresh()) && state.status === 'loading') {
-        setState({ status: 'offline', user: null })
-      }
+      if (!(await refresh()) && state.status === 'loading') await openOffline()
     } catch {
-      setState({ status: 'offline', user: null })
+      await openOffline()
     }
   },
 
@@ -109,10 +124,14 @@ export const session = {
     setState({ status: 'authenticated', user })
   },
 
+  /** Выход стирает с устройства копию и неотправленные изменения (ADR 0020). */
   async logout(): Promise<void> {
     try {
       await api.POST('/api/auth/logout')
+    } catch {
+      // Без сети сессия на сервере доживёт свой срок, а устройство забудет её сразу.
     } finally {
+      await offlineSession.erase()
       close()
     }
   },
@@ -121,6 +140,7 @@ export const session = {
     try {
       await api.POST('/api/auth/logout-all')
     } finally {
+      await offlineSession.erase()
       close()
     }
   },

@@ -1,6 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 
 import { attempt } from '@/lib/errors'
+import { readThrough } from '@/offline/queue'
+import { WORKOUT_COPY } from '@/offline/workouts'
 
 import { api, type Schemas } from './client'
 
@@ -19,7 +21,10 @@ const NO_EXERCISES: Schemas['ExerciseListOut'] = { exercises: [], catalog: [] }
 export function useExercises() {
   return useQuery({
     queryKey: EXERCISES_KEY,
-    queryFn: async () => (await api.GET('/api/exercises')).data ?? NO_EXERCISES,
+    networkMode: 'always',
+    // Без сети список нужен тренировке: из него добавляют упражнения (ADR 0020).
+    queryFn: async () =>
+      (await readThrough(WORKOUT_COPY.exercises, () => api.GET('/api/exercises'))) ?? NO_EXERCISES,
   })
 }
 

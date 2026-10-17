@@ -5,11 +5,13 @@ import { useTranslation } from 'react-i18next'
 
 import { saveWorkout, useWorkouts, WORKOUTS_KEY } from '@/api/workouts'
 import { useUser } from '@/auth/useSession'
+import { PendingMark } from '@/components/PendingMark'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatDateTime, today } from '@/lib/dates'
 import type { ErrorKey } from '@/lib/errors'
 import { uuidv7 } from '@/lib/uuid'
+import { useOfflineState } from '@/offline/store'
 
 import { WorkoutGroups } from './WorkoutGroups'
 
@@ -18,6 +20,7 @@ export function WorkoutsPage() {
   const user = useUser()
   const navigate = useNavigate()
   const query = useWorkouts()
+  const { pending } = useOfflineState()
   const client = useQueryClient()
   const [failure, setFailure] = useState<ErrorKey>()
   const [busy, setBusy] = useState(false)
@@ -85,8 +88,9 @@ export function WorkoutsPage() {
             params={{ id: workout.id }}
             className="block rounded-xl border p-4 hover:bg-muted/50"
           >
-            <span className="font-medium">
+            <span className="flex items-center gap-2 font-medium">
               {formatDateTime(workout.started_at, i18n.language, user.timezone)}
+              {pending.has(workout.id) && <PendingMark />}
             </span>
             <span className="mt-1 block text-sm text-muted-foreground">
               {t('workouts.exerciseCount', { count: workout.exercise_count })} ·{' '}

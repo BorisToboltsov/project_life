@@ -72,6 +72,7 @@ const screens = {
   workouts: lazyRouteComponent(() => import('@/pages/workouts/WorkoutsPage'), 'WorkoutsPage'),
   workout: lazyRouteComponent(() => import('@/pages/workouts/WorkoutPage'), 'WorkoutPage'),
   more: lazyRouteComponent(() => import('@/pages/more/MorePage'), 'MorePage'),
+  unsent: lazyRouteComponent(() => import('@/pages/unsent/UnsentPage'), 'UnsentPage'),
   profile: lazyRouteComponent(() => import('@/pages/profile/ProfilePage'), 'ProfilePage'),
   admin: lazyRouteComponent(() => import('@/pages/admin/AdminPage'), 'AdminPage'),
 }
@@ -281,6 +282,7 @@ const routeTree = rootRoute.addChildren([
       component: screens.exerciseEdit,
     }),
     createRoute({ getParentRoute: () => appRoute, path: '/more', component: screens.more }),
+    createRoute({ getParentRoute: () => appRoute, path: '/unsent', component: screens.unsent }),
     createRoute({ getParentRoute: () => appRoute, path: '/profile', component: screens.profile }),
     createRoute({
       getParentRoute: () => appRoute,

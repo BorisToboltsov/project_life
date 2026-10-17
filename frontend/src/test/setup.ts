@@ -1,8 +1,11 @@
 import '@testing-library/jest-dom/vitest'
+// IndexedDB для копии и очереди без сети (ADR 0020): в jsdom её нет.
+import 'fake-indexeddb/auto'
 import { cleanup, configure } from '@testing-library/react'
 import { afterEach, beforeEach, vi } from 'vitest'
 
 import i18n from '@/i18n'
+import { offlineSession } from '@/offline/session'
 
 import { resetApp } from './app'
 import { removeCamera } from './camera'
@@ -23,8 +26,9 @@ beforeEach(async () => {
   await i18n.changeLanguage('ru')
 })
 
-afterEach(() => {
+afterEach(async () => {
   cleanup()
+  await offlineSession.erase()
   resetApp()
   vi.unstubAllGlobals()
   removeCamera()

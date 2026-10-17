@@ -903,6 +903,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/workouts/recent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Recent Workouts
+         * @description Тренировки последних дней целиком и последние подходы по каждому упражнению.
+         */
+        get: operations["recent_workouts_api_workouts_recent_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/workouts/{workout_id}": {
         parameters: {
             query?: never;
@@ -1135,7 +1155,7 @@ export interface components {
          * @description Коды ошибок API. Текст для пользователя подбирает фронтенд по коду.
          * @enum {string}
          */
-        ErrorCode: "not_authenticated" | "forbidden" | "not_found" | "invalid_credentials" | "too_many_attempts" | "invite_invalid" | "reset_invalid" | "email_taken" | "wrong_password" | "invalid_recipe" | "product_not_found" | "meal_not_found" | "metric_not_found" | "portion_not_found" | "amount_out_of_range" | "barcode_taken" | "invalid_workout_group" | "workout_active" | "workout_finished" | "invalid_workout_set" | "invalid_workout_repeat";
+        ErrorCode: "not_authenticated" | "forbidden" | "not_found" | "invalid_credentials" | "too_many_attempts" | "invite_invalid" | "reset_invalid" | "email_taken" | "wrong_password" | "invalid_recipe" | "product_not_found" | "meal_not_found" | "metric_not_found" | "portion_not_found" | "amount_out_of_range" | "barcode_taken" | "invalid_workout_group" | "workout_active" | "workout_finished" | "invalid_workout_set" | "invalid_workout_repeat" | "workout_source_changed";
         /** ErrorFrameIn */
         ErrorFrameIn: {
             /** Column */
@@ -1219,6 +1239,29 @@ export interface components {
          * @enum {string}
          */
         ExerciseKind: "weight_reps" | "reps" | "time" | "cardio";
+        /**
+         * ExerciseLatestOut
+         * @description Подходы последней завершённой тренировки с этим упражнением.
+         */
+        ExerciseLatestOut: {
+            /**
+             * Exercise Id
+             * Format: uuid
+             */
+            exercise_id: string;
+            /** Sets */
+            sets: components["schemas"]["WorkoutSetOut"][];
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /**
+             * Workout Id
+             * Format: uuid
+             */
+            workout_id: string;
+        };
         /** ExerciseListOut */
         ExerciseListOut: {
             /** Catalog */
@@ -2300,8 +2343,20 @@ export interface components {
              */
             started_at: string;
         };
+        /**
+         * WorkoutRecentOut
+         * @description Копия журнала для работы без сети (ADR 0020).
+         */
+        WorkoutRecentOut: {
+            /** Latest */
+            latest: components["schemas"]["ExerciseLatestOut"][];
+            /** Workouts */
+            workouts: components["schemas"]["WorkoutDetailOut"][];
+        };
         /** WorkoutRepeatIn */
         WorkoutRepeatIn: {
+            /** Exercise Ids */
+            exercise_ids?: string[] | null;
             /**
              * Id
              * Format: uuid
@@ -5009,6 +5064,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkoutListOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    recent_workouts_api_workouts_recent_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkoutRecentOut"];
                 };
             };
             /** @description Unauthorized */

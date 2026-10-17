@@ -411,11 +411,16 @@ class WorkoutFinishIn(Strict):
 class WorkoutRepeatIn(WorkoutIn):
     id: RecordId
     item_ids: list[RecordId]
+    # Упражнение каждой строки, каким его видел клиент. Запуск, отложенный без сети, не
+    # должен лечь на другой состав: подходы из очереди ссылаются на строки по порядку.
+    exercise_ids: list[UUID] | None = None
 
     @model_validator(mode="after")
     def _distinct_items(self) -> Self:
         if len(set(self.item_ids)) != len(self.item_ids):
             raise ValueError("item ids must be distinct")
+        if self.exercise_ids is not None and len(self.exercise_ids) != len(self.item_ids):
+            raise ValueError("one exercise per item")
         return self
 
 
@@ -514,6 +519,24 @@ class WorkoutDetailOut(WorkoutOut):
 
 class WorkoutListOut(BaseModel):
     workouts: list[WorkoutOut]
+
+
+class ExerciseLatestOut(BaseModel):
+    """Подходы последней завершённой тренировки с этим упражнением."""
+
+    exercise_id: UUID
+    workout_id: UUID
+    started_at: datetime
+    sets: list[WorkoutSetOut]
+
+
+class WorkoutRecentOut(BaseModel):
+    """Копия журнала для работы без сети (ADR 0020)."""
+
+    # Тренировки последних 14 дней по часовому поясу профиля и незавершённая — целиком.
+    workouts: list[WorkoutDetailOut]
+    # «В прошлый раз» для упражнения, которое добавят в тренировку без сети.
+    latest: list[ExerciseLatestOut]
 
 
 class ProgressPoint(BaseModel):
