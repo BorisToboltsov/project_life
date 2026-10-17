@@ -135,6 +135,11 @@ function Summary({ day }: { day: DiaryDay }) {
             goal={goal?.carbs_g ?? undefined}
           />
         </div>
+        <Button asChild variant="ghost" className="h-11 justify-self-start">
+          <Link to="/diary/stats" search={{ date: day.local_date, period: 'week' }}>
+            {t('statistics.open')}
+          </Link>
+        </Button>
       </CardContent>
     </Card>
   )

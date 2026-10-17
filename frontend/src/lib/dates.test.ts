@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import {
   ageOn,
@@ -13,6 +13,17 @@ import {
   shiftDays,
   today,
 } from './dates'
+
+it('сегодня в зоне профиля совпадает с сервером на границе недели', () => {
+  vi.useFakeTimers()
+  try {
+    vi.setSystemTime(new Date('2026-10-18T22:00:00Z'))
+    expect(today('Europe/Moscow')).toBe('2026-10-19')
+    expect(today('America/Los_Angeles')).toBe('2026-10-18')
+  } finally {
+    vi.useRealTimers()
+  }
+})
 
 describe('ageOn', () => {
   it('считает полные годы', () => {

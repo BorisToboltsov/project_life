@@ -387,6 +387,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/diary/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Statistics */
+        get: operations["read_statistics_api_diary_stats_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/diary/suggestions": {
         parameters: {
             query?: never;
@@ -1069,6 +1086,38 @@ export interface components {
             meals: components["schemas"]["DayMealOut"][];
             totals: components["schemas"]["NutrientsOut"];
             water: components["schemas"]["WaterDayOut"];
+        };
+        /** DiaryStatisticsOut */
+        DiaryStatisticsOut: {
+            carbs_g: components["schemas"]["StatisticsAverage"];
+            /** Days */
+            days: components["schemas"]["StatisticsDay"][];
+            /**
+             * End
+             * Format: date
+             */
+            end: string;
+            fat_g: components["schemas"]["StatisticsAverage"];
+            first_weight: components["schemas"]["MeasurementOut"] | null;
+            kcal: components["schemas"]["StatisticsAverage"];
+            last_weight: components["schemas"]["MeasurementOut"] | null;
+            /**
+             * Period
+             * @enum {string}
+             */
+            period: "week" | "month";
+            protein_g: components["schemas"]["StatisticsAverage"];
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /**
+             * Today
+             * Format: date
+             */
+            today: string;
+            water_ml: components["schemas"]["StatisticsAverage"];
         };
         /** DishIn */
         DishIn: {
@@ -1934,6 +1983,31 @@ export interface components {
          * @enum {string}
          */
         Sex: "male" | "female";
+        /** StatisticsAverage */
+        StatisticsAverage: {
+            /** Days */
+            days: number;
+            /** Goal */
+            goal: number | null;
+            /** Goal Days */
+            goal_days: number;
+            /** Value */
+            value: number | null;
+        };
+        /** StatisticsDay */
+        StatisticsDay: {
+            /** Future */
+            future: boolean;
+            goal: components["schemas"]["NutritionGoalOut"] | null;
+            /**
+             * Local Date
+             * Format: date
+             */
+            local_date: string;
+            totals: components["schemas"]["NutrientsOut"] | null;
+            /** Water Ml */
+            water_ml: number | null;
+        };
         /** SuggestionOut */
         SuggestionOut: {
             /** Amount */
@@ -3380,6 +3454,47 @@ export interface operations {
             };
             /** @description Not Found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_statistics_api_diary_stats_get: {
+        parameters: {
+            query: {
+                date: string;
+                period?: "week" | "month";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiaryStatisticsOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

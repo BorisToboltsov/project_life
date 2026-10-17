@@ -45,6 +45,7 @@ const screens = {
     'MeasurementEditPage',
   ),
   diary: lazyRouteComponent(() => import('@/pages/diary/DiaryPage'), 'DiaryPage'),
+  statistics: lazyRouteComponent(() => import('@/pages/diary/StatisticsPage'), 'StatisticsPage'),
   goal: lazyRouteComponent(() => import('@/pages/diary/GoalPage'), 'GoalPage'),
   addFood: lazyRouteComponent(() => import('@/pages/diary/AddFoodPage'), 'AddFoodPage'),
   addFoodNewProduct: lazyRouteComponent(
@@ -213,6 +214,23 @@ const routeTree = rootRoute.addChildren([
       },
     }),
     createRoute({ getParentRoute: () => appRoute, path: '/diary/goal', component: screens.goal }),
+    createRoute({
+      getParentRoute: () => appRoute,
+      path: '/diary/stats',
+      component: screens.statistics,
+      validateSearch: (
+        search: Record<string, unknown>,
+      ): { date: string; period: 'week' | 'month' } => ({
+        date:
+          typeof search.date === 'string' &&
+          isRealDate(search.date) &&
+          search.date >= '1900-01-01' &&
+          search.date <= '9998-12-31'
+            ? search.date
+            : today(session.getState().user?.timezone),
+        period: search.period === 'month' ? 'month' : 'week',
+      }),
+    }),
     diaryDayRoute,
     addFoodRoute,
     addFoodNewProductRoute,

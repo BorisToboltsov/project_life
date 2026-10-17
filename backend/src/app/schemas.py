@@ -1083,3 +1083,37 @@ class WorkoutGroupOut(WorkoutGroupIn):
 class WorkoutGroupListOut(BaseModel):
     date: date
     groups: list[WorkoutGroupOut]
+
+
+StatisticsPeriod = Literal["week", "month"]
+StatisticsDate = Annotated[date, Field(ge=date(1900, 1, 1), le=date(9998, 12, 31))]
+
+
+class StatisticsAverage(BaseModel):
+    value: float | None
+    goal: float | None
+    days: int
+    goal_days: int
+
+
+class StatisticsDay(BaseModel):
+    local_date: date
+    future: bool
+    totals: NutrientsOut | None
+    water_ml: int | None
+    goal: NutritionGoalOut | None
+
+
+class DiaryStatisticsOut(BaseModel):
+    period: StatisticsPeriod
+    start: date
+    end: date
+    today: date
+    days: list[StatisticsDay]
+    kcal: StatisticsAverage
+    protein_g: StatisticsAverage
+    fat_g: StatisticsAverage
+    carbs_g: StatisticsAverage
+    water_ml: StatisticsAverage
+    first_weight: MeasurementOut | None
+    last_weight: MeasurementOut | None

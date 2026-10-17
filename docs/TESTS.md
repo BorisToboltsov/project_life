@@ -185,6 +185,7 @@ EAN-13, собранный без библиотек.
 | I15. Штатное упражнение описано целиком | типы: словарь и набор рисунков покрывают `ExercisePreset` |
 | I16. Подход сохраняет смысл упражнения и состояние тренировки | `tests/guards/test_workout_contract.py` |
 | I17. Группа не меняет записанную тренировку | `tests/guards/test_workout_group_snapshot.py` |
+| I19. Статистика сравнивает одни и те же дни | `tests/guards/test_diary_statistics.py` |
 
 ## CI
 
