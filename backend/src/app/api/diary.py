@@ -73,10 +73,26 @@ async def read_day(
 ) -> DiaryDayOut:
     """День дневника: записи по приёмам пищи, съеденное за приём и за день, выпитая вода,
     цель дня."""
+    return await _day(db, user.id, day)
+
+
+# Столько последних дней дневника телефон держит для работы без сети (ADR 0020).
+RECENT_DAYS = 14
+
+
+@router.get("/recent")
+async def recent_days(user: CurrentUser, db: SessionDep) -> list[DiaryDayOut]:
+    """Последние дни дневника по часовому поясу профиля, от сегодняшнего назад, — копия для
+    работы без сети. Каждый день — такой же, как отдельный ответ `GET /api/diary`."""
+    today = datetime.now(ZoneInfo(user.timezone)).date()
+    return [await _day(db, user.id, today - timedelta(days=back)) for back in range(RECENT_DAYS)]
+
+
+async def _day(db: AsyncSession, user_id: UUID, day: date) -> DiaryDayOut:
     entries = list(
         await db.scalars(
             select(FoodEntry)
-            .where(FoodEntry.user_id == user.id, FoodEntry.local_date == day)
+            .where(FoodEntry.user_id == user_id, FoodEntry.local_date == day)
             .order_by(*_IN_ORDER)
         )
     )
@@ -84,11 +100,11 @@ async def read_day(
     for entry in entries:
         by_meal[entry.meal_id].append(entry)
     meals = await db.scalars(
-        select(Meal).where(Meal.user_id == user.id).order_by(Meal.position, Meal.id)
+        select(Meal).where(Meal.user_id == user_id).order_by(Meal.position, Meal.id)
     )
     water = await db.scalars(
         select(WaterIntake)
-        .where(WaterIntake.user_id == user.id, WaterIntake.local_date == day)
+        .where(WaterIntake.user_id == user_id, WaterIntake.local_date == day)
         .order_by(WaterIntake.created_at, WaterIntake.id)
     )
     return DiaryDayOut(
@@ -105,7 +121,7 @@ async def read_day(
         ],
         totals=NutrientsOut.of(total(entry.eaten for entry in entries)),
         water=WaterDayOut.of(list(water)),
-        goal=_shown(await _goal_on(db, user.id, day)),
+        goal=_shown(await _goal_on(db, user_id, day)),
     )
 
 

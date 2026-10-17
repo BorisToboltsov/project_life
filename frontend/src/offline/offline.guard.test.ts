@@ -15,7 +15,13 @@ const sources = import.meta.glob<string>('/src/api/*.ts', {
 const OFFLINE_MODULES = ['/src/api/workouts.ts']
 
 /** Отдельные функции других модулей, которые тоже работают без сети. */
-const OFFLINE_FUNCTIONS: [string, string][] = [['/src/api/workoutGroups.ts', 'startWorkoutGroup']]
+const OFFLINE_FUNCTIONS: [string, string][] = [
+  ['/src/api/workoutGroups.ts', 'startWorkoutGroup'],
+  ['/src/api/nutrition.ts', 'saveEntry'],
+  ['/src/api/nutrition.ts', 'deleteEntry'],
+  ['/src/api/nutrition.ts', 'saveWater'],
+  ['/src/api/nutrition.ts', 'deleteWater'],
+]
 
 /** Тело экспортированной функции: от её объявления до следующего объявления. */
 function body(code: string, name: string): string {
@@ -32,14 +38,14 @@ describe('запись без сети', () => {
   it.each(OFFLINE_MODULES)('%s пишет только через очередь', (path) => {
     const code = sources[path] ?? ''
 
-    expect(code).toMatch(/\bwrite</)
+    expect(code).toMatch(/\bwrite[<(]/)
     expect(code.match(direct)?.[0] ?? null).toBeNull()
   })
 
   it.each(OFFLINE_FUNCTIONS)('%s: %s пишет через очередь', (path, name) => {
     const text = body(sources[path] ?? '', name)
 
-    expect(text).toMatch(/\bwrite</)
+    expect(text).toMatch(/\bwrite[<(]/)
     expect(text.match(direct)?.[0] ?? null).toBeNull()
   })
 

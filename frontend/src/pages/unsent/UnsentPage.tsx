@@ -1,17 +1,20 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from '@tanstack/react-router'
-import { Dumbbell, Timer } from 'lucide-react'
+import { Link, useNavigate } from '@tanstack/react-router'
+import { Dumbbell, GlassWater, Timer, Utensils } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { useDiaryDay } from '@/api/nutrition'
 import { WORKOUTS_KEY } from '@/api/workouts'
 import { useUser } from '@/auth/useSession'
 import { Button } from '@/components/ui/button'
-import { formatDateTime } from '@/lib/dates'
+import { formatDateTime, isoToDisplay } from '@/lib/dates'
 import type { ErrorKey } from '@/lib/errors'
 import type { Rejected } from '@/offline/db'
 import { forget } from '@/offline/queue'
 import { useOfflineState } from '@/offline/store'
+import { useMealName } from '@/pages/diary/mealName'
+import { useQuantityText } from '@/pages/diary/quantityText'
 
 import { moveToNewWorkout, rejectedSets } from './rescue'
 
@@ -58,6 +61,100 @@ export function UnsentPage() {
 }
 
 function RejectedRow({ changes }: { changes: Rejected[] }) {
+  const kind = changes[0]!.context.kind
+  if (kind === 'entry' || kind === 'entryRemove') return <FoodRow change={changes[0]!} />
+  if (kind === 'water' || kind === 'waterRemove') return <WaterRow change={changes[0]!} />
+  return <WorkoutRow changes={changes} />
+}
+
+/** Строка отказа: иконка, что это, подробности, причина и действия. */
+function Row({
+  icon: Icon,
+  title,
+  detail,
+  change,
+  children,
+}: {
+  icon: typeof Dumbbell
+  title: string
+  detail?: string
+  change: Rejected
+  children?: React.ReactNode
+}) {
+  const { t } = useTranslation()
+  return (
+    <section className="grid gap-2 rounded-xl border p-4" aria-label={title}>
+      <div className="flex items-start gap-2">
+        <Icon className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
+        <div className="grid gap-0.5">
+          <h2 className="font-medium">{title}</h2>
+          {detail && <p className="text-sm text-muted-foreground">{detail}</p>}
+          <p className="text-sm text-destructive">{t(change.failure)}</p>
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {children}
+        <Button variant="ghost" className="h-11" onClick={() => void forget([change.seq])}>
+          {t('unsent.remove')}
+        </Button>
+      </div>
+    </section>
+  )
+}
+
+/** Запись дневника. Продукт удалили, пока она ждала, — её заменяет запись с другим. */
+function FoodRow({ change }: { change: Rejected }) {
+  const { t } = useTranslation()
+  const quantityText = useQuantityText()
+  const mealName = useMealName()
+  const { food, localDate } = change.context
+  const day = useDiaryDay(localDate ?? '')
+  const meal = day.data?.meals.find((item) => item.id === food?.mealId)
+  const detail = food
+    ? t('unsent.entryLine', {
+        quantity: quantityText(food),
+        meal: meal ? mealName(meal) : '',
+        date: localDate ? isoToDisplay(localDate) : '',
+      })
+    : undefined
+  const pick =
+    change.failure === 'errors.product_not_found' && food?.mealId && localDate ? (
+      <Button asChild variant="outline" className="h-11">
+        <Link
+          to="/diary/$date/add/$meal"
+          params={{ date: localDate, meal: food.mealId }}
+          search={{ replaces: change.seq }}
+        >
+          {t('unsent.pickProduct')}
+        </Link>
+      </Button>
+    ) : undefined
+  return (
+    <Row
+      icon={Utensils}
+      title={food?.productName ?? t('unsent.changes', { count: 1 })}
+      detail={detail}
+      change={change}
+    >
+      {pick}
+    </Row>
+  )
+}
+
+function WaterRow({ change }: { change: Rejected }) {
+  const { t } = useTranslation()
+  const { waterMl, localDate } = change.context
+  return (
+    <Row
+      icon={GlassWater}
+      title={waterMl ? t('unsent.water', { amount: waterMl }) : t('unsent.changes', { count: 1 })}
+      detail={localDate ? isoToDisplay(localDate) : undefined}
+      change={change}
+    />
+  )
+}
+
+function WorkoutRow({ changes }: { changes: Rejected[] }) {
   const { t, i18n } = useTranslation()
   const user = useUser()
   const navigate = useNavigate()

@@ -277,7 +277,7 @@ describe('добавление в приём пищи', () => {
 
     // Сохранённый продукт ждёт количества, как созданный по пути.
     const list = await screen.findByRole('list', { name: 'Только что создан' })
-    expect(within(list).getByLabelText('Сколько, мл')).toHaveValue('100')
+    expect(await within(list).findByLabelText('Сколько, мл')).toHaveValue('100')
     expect(callsTo(calls, 'PUT /api/products/*')[0].body).toMatchObject({
       name: 'Чай чёрный',
       unit: 'ml',
@@ -551,7 +551,8 @@ describe('новый продукт по пути в приём пищи', () =>
     expect(callsTo(calls, `GET /api/products/${id}`)).toHaveLength(1)
 
     // Форма граммов уже открыта: осталось ввести и добавить.
-    expect(within(list).getByLabelText('Сколько, г')).toHaveValue('100')
+    // Количество ждёт истории продукта: что вносили в прошлый раз.
+    expect(await within(list).findByLabelText('Сколько, г')).toHaveValue('100')
     await userEvent.click(within(list).getByRole('button', { name: 'Добавить' }))
     expect(await screen.findByRole('status')).toHaveTextContent('Добавлено: Овсяные хлопья, 100 г')
     // Внесённый продукт переехал в «недавние» и отдельно больше не показывается.

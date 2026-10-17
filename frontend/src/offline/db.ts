@@ -1,5 +1,6 @@
 import Dexie, { type EntityTable } from 'dexie'
 
+import type { Schemas } from '@/api/client'
 import type { ErrorKey } from '@/lib/errors'
 
 /** Что меняет изменение — по этому строится строка на экране «Не отправлено». */
@@ -14,6 +15,10 @@ export type ChangeKind =
   | 'set'
   | 'setRemove'
   | 'rest'
+  | 'entry'
+  | 'entryRemove'
+  | 'water'
+  | 'waterRemove'
 
 /** Чего не узнать из самого запроса: к какой тренировке и упражнению он относится. */
 export interface ChangeContext {
@@ -22,6 +27,15 @@ export interface ChangeContext {
   startedAt?: string
   localDate?: string
   exerciseId?: string
+  /** Запись дневника: что, сколько и в какой приём пищи — для строки «Не отправлено». */
+  food?: {
+    productName: string
+    amount: number
+    unit: Schemas['ProductUnit']
+    portion: Schemas['PortionOut'] | null
+    mealId: string
+  }
+  waterMl?: number
 }
 
 /** Изменение для сервера, отложенное до связи (ADR 0020). */

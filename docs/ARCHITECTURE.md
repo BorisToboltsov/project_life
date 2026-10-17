@@ -107,7 +107,7 @@
 | Группа | Маршруты |
 |--------|----------|
 | Открытые | `GET /api/health`; `POST /api/auth/…`: `login`, `register`, `refresh`, `logout`, `invite/check`, `password-reset`, `password-reset/check` |
-| Для вошедших | `GET` и `PATCH /api/me`; `POST /api/auth/password`, `POST /api/auth/logout-all`; `GET /api/metrics`, `POST /api/metrics/presets`, `PUT` и `DELETE /api/metrics/{id}`; `GET /api/measurements`, `GET /api/measurements/summary`, `PUT` и `DELETE /api/measurements/{id}`; `GET /api/exercises`, `POST /api/exercises/presets`, `PUT` и `DELETE /api/exercises/{id}`; журнал тренировок и группы — в разделах ниже; `GET /api/products`, `GET /api/products/external`, `POST /api/products/lookup`, `GET`, `PUT` и `DELETE /api/products/{id}`; `GET /api/diary`, `GET /api/diary/suggestions`, `PUT` и `DELETE /api/diary/entries/{id}`, `PUT` и `DELETE /api/diary/meals/{id}`, `PUT` и `DELETE /api/diary/water/{id}`, `POST /api/diary/copy`, `GET` и `PUT /api/diary/goal`; `POST /api/errors` |
+| Для вошедших | `GET` и `PATCH /api/me`; `POST /api/auth/password`, `POST /api/auth/logout-all`; `GET /api/metrics`, `POST /api/metrics/presets`, `PUT` и `DELETE /api/metrics/{id}`; `GET /api/measurements`, `GET /api/measurements/summary`, `PUT` и `DELETE /api/measurements/{id}`; `GET /api/exercises`, `POST /api/exercises/presets`, `PUT` и `DELETE /api/exercises/{id}`; журнал тренировок и группы — в разделах ниже; `GET /api/products`, `GET /api/products/external`, `POST /api/products/lookup`, `GET`, `PUT` и `DELETE /api/products/{id}`, `GET /api/products/catalog`; `GET /api/diary`, `GET /api/diary/recent`, `GET /api/diary/suggestions`, `PUT` и `DELETE /api/diary/entries/{id}`, `PUT` и `DELETE /api/diary/meals/{id}`, `PUT` и `DELETE /api/diary/water/{id}`, `POST /api/diary/copy`, `GET` и `PUT /api/diary/goal`; `POST /api/errors` |
 | Для администратора | `/api/admin/users`, `/api/admin/users/{id}/password-reset`, `/api/admin/invites`, `/api/admin/invites/{id}`, `/api/admin/errors`, `/api/admin/errors/{id}` |
 
 ### Таблицы
@@ -184,6 +184,11 @@
 в часовом поясе профиля. Решение — в [ADR 0017](adr/0017-workout-groups.md).
 
 ### Питание
+
+`GET /api/products/catalog` отдаёт каталог целиком для копии без сети, с меткой `ETag`:
+неизменный каталог — ответ 304 без тела; в метку входит и тот, кто спрашивает, — от него
+зависит `editable`. `GET /api/diary/recent` — 14 последних дней дневника по часовому
+поясу профиля, каждый такой же, как отдельный `GET /api/diary` ([ADR 0020](adr/0020-offline-entry.md)).
 
 `GET /api/diary/stats?period=week|month&date=YYYY-MM-DD` возвращает календарный период,
 дневные суммы и цели, средние и крайние замеры веса. `app.services.diary_statistics`
@@ -281,7 +286,8 @@
 - `src/offline/` — запись без сети ([ADR 0020](adr/0020-offline-entry.md)): база Dexie с
   копией ответов, очередью и отклонёнными изменениями (`db.ts`); запись «сервер, при
   сбое — очередь» и чтение через копию (`queue.ts`); копия журнала тренировок и её правка
-  теми же изменениями, что делает сервер (`workouts.ts`); проверка связи, отправка очереди
+  теми же изменениями, что делает сервер (`workouts.ts`); копия дневника — каталог, дни,
+  цель, подсказки, — поиск по каталогу и итоги дня по правилам сервера (`diary.ts`); проверка связи, отправка очереди
   и обновление копии (`sync.ts`); владелец копии и её стирание (`session.ts`); состояние
   для полосы и отметок (`store.ts`).
 - `src/i18n/` — словари и выбор языка: до входа — язык браузера или сохранённый выбор,
@@ -333,9 +339,11 @@
 Кэш запросов (TanStack Query) принадлежит одному пользователю и очищается при смене
 вошедшего.
 
-Журнал тренировок, упражнения и группы читаются через копию на устройстве: ответ сервера
-сохраняется в IndexedDB, без связи экран берёт его оттуда. Изменения журнала уходят через
-очередь: при обрыве связи они встают в неё и сразу вносятся в копию (I20). Рамка
+Журнал тренировок, упражнения, группы, дни дневника, цель и подсказки читаются через
+копию на устройстве: ответ сервера сохраняется в IndexedDB, без связи экран берёт его
+оттуда. Поиск по каталогу, продукт и его история в копию не кладутся: без связи они
+собираются из каталога и дней копии. Изменения журнала, записей дневника и воды уходят
+через очередь: при обрыве связи они встают в неё и сразу вносятся в копию (I20). Рамка
 приложения передаёт копию вошедшему (`useOfflineSync`) и, когда связь вернулась и
 очередь опустела, перечитывает данные экранов с сервера. Без связи при запуске сессия
 открывается на сохранённом пользователе без токена; токен обновится с первым запросом.

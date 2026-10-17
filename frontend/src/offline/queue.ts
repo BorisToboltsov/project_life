@@ -143,6 +143,26 @@ export async function readThrough<T>(
   return copy.get<T>(key)
 }
 
+/**
+ * Чтение, которое в копию не кладётся — поиск, один продукт, история продукта: с сервера, а
+ * без связи — из `local`, собранного по копии. `undefined` — ответа нет ни там, ни там.
+ */
+export async function readOr<T>(
+  load: () => Promise<{ data?: T; response: Response }>,
+  local: () => Promise<T | undefined>,
+): Promise<T | undefined> {
+  if (!offlineState.get().online) return local()
+  try {
+    const { data, response } = await inTime(load())
+    if (data !== undefined) return data
+    if (!unreachable(response.status)) return undefined
+  } catch {
+    // Сеть не ответила вовремя — собираем ответ из копии.
+  }
+  offlineState.setOnline(false)
+  return local()
+}
+
 let draining: Promise<boolean> | null = null
 
 /** Отправляет очередь по порядку. `true` — очередь опустела. */

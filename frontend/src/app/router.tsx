@@ -136,12 +136,14 @@ const addFoodRoute = createRoute({
   params: { parse: ({ date, meal }) => ({ date: dateParam(date), meal }) },
   // Ключ продукта, с которым сюда пришли, — он показывается первым: `product` — созданный
   // по пути, `scanned` — найденный по штрихкоду, `picked` — выбранный в Open Food Facts.
+  // `replaces` — отклонённая запись из «Не отправлено», которую заменит внесённая здесь.
   validateSearch: (
     search: Record<string, unknown>,
-  ): { product?: string; scanned?: string; picked?: string } => ({
+  ): { product?: string; scanned?: string; picked?: string; replaces?: number } => ({
     ...(typeof search.product === 'string' && { product: search.product }),
     ...(typeof search.scanned === 'string' && { scanned: search.scanned }),
     ...(typeof search.picked === 'string' && { picked: search.picked }),
+    ...(typeof search.replaces === 'number' && { replaces: search.replaces }),
   }),
   component: screens.addFood,
 })

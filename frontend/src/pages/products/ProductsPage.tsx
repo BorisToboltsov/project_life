@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { useProductSearch } from '@/api/nutrition'
 import { TextField } from '@/components/form/fields'
 import { Button } from '@/components/ui/button'
+import { useOfflineState } from '@/offline/store'
 
 import { DishForm } from './DishForm'
 
@@ -25,6 +26,7 @@ export function ProductsPage() {
   const [missing, setMissing] = useState<Missing>()
   const q = query.trim()
   const products = useProductSearch(q, true, kind)
+  const { online } = useOfflineState()
 
   if (dish) return <DishForm onSaved={() => setDish(false)} onCancel={() => setDish(false)} />
 
@@ -45,12 +47,17 @@ export function ProductsPage() {
   return (
     <div className="grid gap-4">
       <h1 className="text-2xl font-semibold">{t('products.title')}</h1>
-      <Button asChild className="h-11 justify-self-start">
-        <Link to="/products/new">{t('products.create')}</Link>
-      </Button>
-      <Button variant="outline" onClick={() => setDish(true)}>
-        {t('dishes.create')}
-      </Button>
+      {/* Завести продукт и спросить Open Food Facts можно только при связи (ADR 0020). */}
+      {online && (
+        <>
+          <Button asChild className="h-11 justify-self-start">
+            <Link to="/products/new">{t('products.create')}</Link>
+          </Button>
+          <Button variant="outline" onClick={() => setDish(true)}>
+            {t('dishes.create')}
+          </Button>
+        </>
+      )}
       <div className="flex gap-2">
         {kinds.map((value) => (
           <Button
@@ -104,11 +111,13 @@ export function ProductsPage() {
           </Button>
         )}
       </section>
-      <ExternalSearch
-        q={q}
-        onFound={(product) => navigate({ to: '/products/$id', params: { id: product.id } })}
-        onMissing={setMissing}
-      />
+      {online && (
+        <ExternalSearch
+          q={q}
+          onFound={(product) => navigate({ to: '/products/$id', params: { id: product.id } })}
+          onMissing={setMissing}
+        />
+      )}
     </div>
   )
 }

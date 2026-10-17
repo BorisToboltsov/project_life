@@ -29,6 +29,8 @@ import type { Missing } from '@/pages/products/lookup'
 import { MissingProduct } from '@/pages/products/MissingProduct'
 import { ProductForm } from '@/pages/products/ProductForm'
 import { ProductLine } from '@/pages/products/ProductLine'
+import { forget } from '@/offline/queue'
+import { useOfflineState } from '@/offline/store'
 
 import { useMealName } from './mealName'
 import { MealNotFound } from './MealNotFound'
@@ -182,7 +184,14 @@ function AddFood({ date, meal }: { date: string; meal: Meal }) {
     product: createdId,
     scanned: scannedId,
     picked: pickedId,
-  } = route.useSearch() as { product?: string; scanned?: string; picked?: string }
+    replaces,
+  } = route.useSearch() as {
+    product?: string
+    scanned?: string
+    picked?: string
+    replaces?: number
+  }
+  const { online } = useOfflineState()
   const navigate = useNavigate()
   const mealName = useMealName()
   const [dish, setDish] = useState(false)
@@ -226,6 +235,8 @@ function AddFood({ date, meal }: { date: string; meal: Meal }) {
     setAdded({ product, quantity })
     setOpened('')
     setQuery('')
+    // Пришли с «Не отправлено»: новая запись заменяет отклонённую (ADR 0020).
+    if (replaces !== undefined) void forget([replaces])
     // Продукт, с которым пришли, внесён: при возврате на экран он снова не всплывёт.
     if (broughtId) void navigate({ ...here, search: {}, replace: true })
   }
@@ -321,7 +332,7 @@ function AddFood({ date, meal }: { date: string; meal: Meal }) {
               {t('search.more')}
             </Button>
           )}
-          <ExternalSearch q={q} onFound={onPicked} onMissing={setMissing} />
+          {online && <ExternalSearch q={q} onFound={onPicked} onMissing={setMissing} />}
         </>
       ) : (
         <>
@@ -356,20 +367,25 @@ function AddFood({ date, meal }: { date: string; meal: Meal }) {
           {nothingToSuggest && <p className="text-sm text-muted-foreground">{t('addFood.hint')}</p>}
         </>
       )}
-      <Button variant="outline" onClick={() => setDish(true)}>
-        {t('dishes.create')}
-      </Button>
+      {/* Завести продукт или блюдо можно только при связи (ADR 0020). */}
+      {online && (
+        <Button variant="outline" onClick={() => setDish(true)}>
+          {t('dishes.create')}
+        </Button>
+      )}
       <div className="flex flex-wrap gap-3">
         <Button asChild className="h-11">
           <Link to="/diary/$date" params={{ date }}>
             {t('addFood.done')}
           </Link>
         </Button>
-        <Button asChild variant="outline" className="h-11">
-          <Link to="/diary/$date/add/$meal/new" params={{ date, meal: meal.id }}>
-            {t('addFood.createProduct')}
-          </Link>
-        </Button>
+        {online && (
+          <Button asChild variant="outline" className="h-11">
+            <Link to="/diary/$date/add/$meal/new" params={{ date, meal: meal.id }}>
+              {t('addFood.createProduct')}
+            </Link>
+          </Button>
+        )}
       </div>
     </div>
   )

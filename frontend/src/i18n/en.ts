@@ -81,6 +81,9 @@ export const en: Dictionary = {
     toNewWorkout: 'Move to a new workout',
     remove: 'Remove',
     pending: 'Not sent yet',
+    entryLine: '{{quantity}} · {{meal}} · {{date}}',
+    water: 'Water · {{amount}} ml',
+    pickProduct: 'Choose a product',
   },
   disclaimer: {
     text: 'This app does not give medical advice and is not a substitute for seeing a doctor.',
@@ -120,6 +123,8 @@ export const en: Dictionary = {
     greeting: 'Hello, {{name}}!',
   },
   statistics: {
+    offline:
+      'Statistics are calculated by the server — they will open when the connection is back.',
     open: 'Statistics',
     title: 'Nutrition statistics',
     week: 'Week',
@@ -156,6 +161,9 @@ export const en: Dictionary = {
     singleWeight: 'Only one measurement in this period.',
   },
   diary: {
+    notSaved: 'This day is not saved on this phone',
+    notSavedHint:
+      'Without a connection the last 14 days and future days are available. This day will open when the connection is back.',
     title: 'Food',
     todayTitle: 'Food today',
     open: 'Open diary',

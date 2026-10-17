@@ -144,8 +144,13 @@ describe('правка записи дневника', () => {
       expect(
         screen.getAllByRole('radio').map((radio) => radio.closest('label')?.textContent),
       ).toEqual(['г', 'упаковка · 600 г'])
-      // Продукта в каталоге нет — спрашивать о нём нечего.
-      expect(calls.filter((call) => call.path.startsWith('/api/products'))).toEqual([])
+      // Продукта в каталоге нет — спрашивать о нём нечего. Копия каталога для работы без
+      // сети обновляется сама по себе, к экрану она не относится.
+      expect(
+        calls.filter(
+          (call) => call.path.startsWith('/api/products') && call.path !== '/api/products/catalog',
+        ),
+      ).toEqual([])
     })
   })
 
