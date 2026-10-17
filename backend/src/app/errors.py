@@ -18,6 +18,7 @@ class ErrorCode(StrEnum):
     RESET_INVALID = "reset_invalid"
     EMAIL_TAKEN = "email_taken"
     WRONG_PASSWORD = "wrong_password"  # noqa: S105
+    INVALID_RECIPE = "invalid_recipe"
     PRODUCT_NOT_FOUND = "product_not_found"
     MEAL_NOT_FOUND = "meal_not_found"
     METRIC_NOT_FOUND = "metric_not_found"

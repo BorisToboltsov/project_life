@@ -6,19 +6,27 @@ import { useProductSearch } from '@/api/nutrition'
 import { TextField } from '@/components/form/fields'
 import { Button } from '@/components/ui/button'
 
+import { DishForm } from './DishForm'
+
 import { ExternalSearch } from './ExternalSearch'
 import type { Missing } from './lookup'
 import { MissingProduct } from './MissingProduct'
 import { ProductLine } from './ProductLine'
 
+const kinds = ['all', 'products', 'dishes'] as const
+
 export function ProductsPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const [dish, setDish] = useState(false)
+  const [kind, setKind] = useState<'all' | 'products' | 'dishes'>('all')
   const [query, setQuery] = useState('')
   // Продукт из Open Food Facts, состав которого нужно дополнить: вместо каталога — форма.
   const [missing, setMissing] = useState<Missing>()
   const q = query.trim()
-  const products = useProductSearch(q)
+  const products = useProductSearch(q, true, kind)
+
+  if (dish) return <DishForm onSaved={() => setDish(false)} onCancel={() => setDish(false)} />
 
   if (missing) {
     return (
@@ -40,6 +48,21 @@ export function ProductsPage() {
       <Button asChild className="h-11 justify-self-start">
         <Link to="/products/new">{t('products.create')}</Link>
       </Button>
+      <Button variant="outline" onClick={() => setDish(true)}>
+        {t('dishes.create')}
+      </Button>
+      <div className="flex gap-2">
+        {kinds.map((value) => (
+          <Button
+            key={value}
+            variant={kind === value ? 'default' : 'outline'}
+            aria-pressed={kind === value}
+            onClick={() => setKind(value)}
+          >
+            {t(`dishes.${value}`)}
+          </Button>
+        ))}
+      </div>
       <TextField
         label={t('products.search')}
         type="search"

@@ -1070,12 +1070,23 @@ export interface components {
             totals: components["schemas"]["NutrientsOut"];
             water: components["schemas"]["WaterDayOut"];
         };
+        /** DishIn */
+        DishIn: {
+            /** Ingredients */
+            ingredients: components["schemas"]["IngredientIn"][];
+            /** Name */
+            name: string;
+            /** Output G */
+            output_g: number | string;
+            /** Serving Size */
+            serving_size?: number | string | null;
+        };
         /**
          * ErrorCode
          * @description Коды ошибок API. Текст для пользователя подбирает фронтенд по коду.
          * @enum {string}
          */
-        ErrorCode: "not_authenticated" | "forbidden" | "not_found" | "invalid_credentials" | "too_many_attempts" | "invite_invalid" | "reset_invalid" | "email_taken" | "wrong_password" | "product_not_found" | "meal_not_found" | "metric_not_found" | "portion_not_found" | "amount_out_of_range" | "barcode_taken" | "invalid_workout_group" | "workout_active" | "workout_finished" | "invalid_workout_set" | "invalid_workout_repeat";
+        ErrorCode: "not_authenticated" | "forbidden" | "not_found" | "invalid_credentials" | "too_many_attempts" | "invite_invalid" | "reset_invalid" | "email_taken" | "wrong_password" | "invalid_recipe" | "product_not_found" | "meal_not_found" | "metric_not_found" | "portion_not_found" | "amount_out_of_range" | "barcode_taken" | "invalid_workout_group" | "workout_active" | "workout_finished" | "invalid_workout_set" | "invalid_workout_repeat";
         /** ErrorFrameIn */
         ErrorFrameIn: {
             /** Column */
@@ -1333,6 +1344,31 @@ export interface components {
             status: "ok";
             /** Version */
             version: string;
+        };
+        /** IngredientIn */
+        IngredientIn: {
+            /** Amount */
+            amount: number | string;
+            /** Mass G */
+            mass_g?: number | string | null;
+            /**
+             * Product Id
+             * Format: uuid
+             */
+            product_id: string;
+        };
+        /** IngredientOut */
+        IngredientOut: {
+            /** Amount */
+            amount: string;
+            /** Mass G */
+            mass_g?: string | null;
+            /**
+             * Product Id
+             * Format: uuid
+             */
+            product_id: string;
+            snapshot: components["schemas"]["ProductIn-Output"];
         };
         /** InviteCreateIn */
         InviteCreateIn: {
@@ -1710,7 +1746,7 @@ export interface components {
             unit: components["schemas"]["ProductUnit"];
         };
         /** ProductIn */
-        ProductIn: {
+        "ProductIn-Input": {
             /** Barcode */
             barcode?: string | null;
             /** Carbs G */
@@ -1735,6 +1771,34 @@ export interface components {
             serving_size?: number | string | null;
             /** Sugars G */
             sugars_g?: number | string | null;
+            unit: components["schemas"]["ProductUnit"];
+        };
+        /** ProductIn */
+        "ProductIn-Output": {
+            /** Barcode */
+            barcode?: string | null;
+            /** Carbs G */
+            carbs_g: string;
+            /** Fat G */
+            fat_g: string;
+            /** Fiber G */
+            fiber_g?: string | null;
+            /** Kcal */
+            kcal: string;
+            /** Name */
+            name: string;
+            /** Package Size */
+            package_size?: string | null;
+            /** Protein G */
+            protein_g: string;
+            /** Salt G */
+            salt_g?: string | null;
+            /** Saturated Fat G */
+            saturated_fat_g?: string | null;
+            /** Serving Size */
+            serving_size?: string | null;
+            /** Sugars G */
+            sugars_g?: string | null;
             unit: components["schemas"]["ProductUnit"];
         };
         /** ProductOut */
@@ -1762,6 +1826,7 @@ export interface components {
             package_size: number | null;
             /** Protein G */
             protein_g: number;
+            recipe?: components["schemas"]["RecipeOut"] | null;
             /** Salt G */
             salt_g: number | null;
             /** Saturated Fat G */
@@ -1822,6 +1887,13 @@ export interface components {
          * @enum {string}
          */
         Quantity: "mass" | "length" | "percent";
+        /** RecipeOut */
+        RecipeOut: {
+            /** Ingredients */
+            ingredients: components["schemas"]["IngredientOut"][];
+            /** Output G */
+            output_g: number;
+        };
         /** RegisterIn */
         RegisterIn: {
             /**
@@ -1890,6 +1962,7 @@ export interface components {
             portion: components["schemas"]["PortionOut"] | null;
             /** Protein G */
             protein_g: number;
+            recipe?: components["schemas"]["RecipeOut"] | null;
             /** Salt G */
             salt_g: number | null;
             /** Saturated Fat G */
@@ -4260,6 +4333,7 @@ export interface operations {
             query?: {
                 q?: string;
                 offset?: number;
+                kind?: "all" | "products" | "dishes";
             };
             header?: never;
             path?: never;
@@ -4459,7 +4533,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ProductIn"];
+                "application/json": components["schemas"]["ProductIn-Input"] | components["schemas"]["DishIn"];
             };
         };
         responses: {

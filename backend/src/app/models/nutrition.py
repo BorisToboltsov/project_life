@@ -1,8 +1,10 @@
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Any
 from uuid import UUID, uuid7
 
 from sqlalchemy import CheckConstraint, ForeignKey, Index, Numeric, String, func, text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
@@ -42,6 +44,7 @@ class Product(Base):
 
     # Ключ приходит от клиента (UUIDv7): повтор запроса не создаёт второй продукт (ADR 0002).
     id: Mapped[UUID] = mapped_column(primary_key=True)
+    recipe: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     name: Mapped[str] = mapped_column(PRODUCT_NAME)
     # В чём измеряется продукт: состав ниже — на 100 таких единиц.
     unit: Mapped[ProductUnit] = mapped_column(choice(ProductUnit))

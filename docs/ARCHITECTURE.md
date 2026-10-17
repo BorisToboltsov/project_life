@@ -341,3 +341,9 @@ docs/                 документация (карта — в CLAUDE.md)
 compose.dev.yaml      база для разработки
 Makefile              единая точка входа
 ```
+
+### Рецепты
+
+`Product.recipe` — JSONB со снимками ингредиентов и выходом блюда. `services/recipes.py`
+вычисляет состав и проверяет граф вложений. `PUT /api/products/{product_id}` принимает
+продукт либо рецепт; поиск принимает `kind=all|products|dishes`. Форма — `DishForm.tsx`.
