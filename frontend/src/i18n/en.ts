@@ -1,6 +1,24 @@
 import type { Dictionary } from './ru'
 
 export const en: Dictionary = {
+  dishes: {
+    create: 'Create dish',
+    title: 'Dish',
+    ingredients: 'Ingredients',
+    add: 'Add ingredient',
+    output: 'Finished weight, g',
+    serving: 'Serving, g',
+    mass: 'Ingredient mass, g',
+    amount: 'Amount, {{unit}}',
+    removed: 'Product deleted: saved composition',
+    remove: 'Remove',
+    all: 'All',
+    products: 'Products',
+    dishes: 'Dishes',
+    invalid: 'Check ingredients and finished weight',
+    preview: 'Per 100 g: {{kcal}} kcal · P {{protein}} · F {{fat}} · C {{carbs}}',
+    name: 'Name',
+  },
   app: {
     tagline: 'Nutrition, training and health',
   },
@@ -806,6 +824,7 @@ export const en: Dictionary = {
     frontend: 'App',
   },
   errors: {
+    invalid_recipe: 'Check recipe composition, finished weight and nested dishes',
     invalid_workout_group:
       'The group changed or contains an unavailable exercise. Update its list and try again.',
     not_authenticated: 'Your session has expired. Sign in again.',

@@ -10,6 +10,8 @@ import type { ErrorKey } from '@/lib/errors'
 import { formatNumber } from '@/lib/numbers'
 import { PORTION_KINDS, sizesOf } from '@/lib/portions'
 
+import { DishForm } from './DishForm'
+
 import { ProductForm } from './ProductForm'
 import { ProductLine } from './ProductLine'
 
@@ -164,6 +166,17 @@ export function ProductEditPage() {
       </div>
     )
   }
+  if (product.data.recipe)
+    return (
+      <div className="grid gap-4">
+        <DishForm
+          product={product.data}
+          onSaved={() => navigate({ to: '/products' })}
+          onCancel={() => void navigate({ to: '/products' })}
+        />
+        {product.data.editable && <DeleteProduct product={product.data} />}
+      </div>
+    )
   if (!product.data.editable) {
     return (
       <div className="grid gap-4">

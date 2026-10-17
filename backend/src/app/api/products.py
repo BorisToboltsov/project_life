@@ -1,10 +1,10 @@
 from datetime import UTC, datetime, timedelta
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import uuid7
 
 from fastapi import APIRouter, Query, Response, status
 from pydantic import ValidationError
-from sqlalchemy import delete, exists, func, select
+from sqlalchemy import delete, exists, func, select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +17,7 @@ from app.nutrition import ProductSource
 from app.schemas import (
     BarcodeLookupIn,
     BarcodeLookupOut,
+    DishIn,
     ExternalProductOut,
     ExternalSearchOut,
     ExternalSearchStatus,
@@ -72,6 +73,7 @@ async def search_products(
     response: Response,
     q: Annotated[str, Query(max_length=120)] = "",
     offset: Annotated[int, Query(ge=0, le=100_000)] = 0,
+    kind: Literal["all", "products", "dishes"] = "all",
 ) -> list[ProductOut]:
     """Страница каталога по алфавиту; `q` — слова, которые есть в названии, в любом порядке,
     `offset` — сколько продуктов уже показано.
@@ -86,6 +88,10 @@ async def search_products(
         .offset(offset)
         .limit(PAGE_SIZE + 1)
     )
+    if kind != "all":
+        query = query.where(
+            Product.recipe.is_not(None) if kind == "dishes" else Product.recipe.is_(None)
+        )
     for word in q.split():
         query = query.where(Product.name.icontains(word, autoescape=True))
     products = list(await db.scalars(query))
@@ -257,7 +263,7 @@ async def read_product(product_id: RecordId, user: CurrentUser, db: SessionDep) 
 )
 async def save_product(
     product_id: RecordId,
-    body: ProductIn,
+    body: ProductIn | DishIn,
     user: CurrentUser,
     response: Response,
     db: SessionDep,
@@ -267,8 +273,20 @@ async def save_product(
     Записи дневника хранят снимок состава — правка продукта их не меняет (инвариант I10).
     Штрихкод, который уже носит другой продукт, — отказ 409.
     """
-    fields = body.model_dump()
+    # Сериализуем изменения каталога: два параллельных рецепта не создадут цикл.
+    await db.execute(text("SELECT pg_advisory_xact_lock(909000)"))
     product = await db.get(Product, product_id, with_for_update=True)
+    if product is not None and not _may_edit(product, user):
+        raise ApiError(status.HTTP_403_FORBIDDEN, ErrorCode.FORBIDDEN)
+    if isinstance(body, DishIn):
+        from app.services.recipes import build_recipe
+
+        fields = await build_recipe(db, product_id, body, product)
+    else:
+        if product is not None and product.recipe is not None:
+            raise ApiError(status.HTTP_422_UNPROCESSABLE_CONTENT, ErrorCode.INVALID_RECIPE)
+        fields = body.model_dump()
+
     if product is None:
         product = Product(id=product_id, created_by=user.id, **fields)
         db.add(product)

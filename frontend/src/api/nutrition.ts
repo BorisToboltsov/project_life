@@ -80,15 +80,19 @@ function distinct<T>(items: T[], key: (item: T) => string): T[] {
  * Поиск по каталогу, страница за страницей; пустой запрос — каталог по алфавиту. Пока идёт
  * новый запрос, остаётся прежний список: строки не мигают при наборе.
  */
-export function useProductSearch(q: string, enabled = true) {
+export function useProductSearch(
+  q: string,
+  enabled = true,
+  kind: 'all' | 'products' | 'dishes' = 'all',
+) {
   return useInfiniteQuery({
-    queryKey: [...PRODUCTS_KEY, 'search', q],
+    queryKey: [...PRODUCTS_KEY, 'search', q, kind],
     enabled,
     placeholderData: keepPreviousData,
     initialPageParam: 0,
     queryFn: async ({ pageParam }) => {
       const { data, response } = await api.GET('/api/products', {
-        params: { query: { q, offset: pageParam } },
+        params: { query: { q, offset: pageParam, ...(kind !== 'all' ? { kind } : {}) } },
       })
       const next = Number(response.headers.get(NEXT_OFFSET))
       return { items: data ?? [], next: next > 0 ? next : undefined }
@@ -146,7 +150,7 @@ export function useProduct(id: string | undefined) {
   })
 }
 
-export function saveProduct(id: string, body: Schemas['ProductIn']) {
+export function saveProduct(id: string, body: Schemas['ProductIn-Input'] | Schemas['DishIn']) {
   return attempt(() =>
     api.PUT('/api/products/{product_id}', { params: { path: { product_id: id } }, body }),
   )

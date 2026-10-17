@@ -51,6 +51,7 @@ async def test_product_of_the_catalog_is_found_without_asking_outside(
         "status": "found",
         "barcode": EAN_13,
         "product": {
+            "recipe": None,
             **COTTAGE_CHEESE,
             **NO_LABEL,
             **NO_PORTIONS,
@@ -114,6 +115,7 @@ async def test_complete_product_goes_straight_into_the_catalog(
     found = response.json()["product"]
     assert response.json()["status"] == "found"
     assert found == {
+        "recipe": None,
         **COTTAGE_CHEESE,
         **NO_LABEL,
         **NO_PORTIONS,

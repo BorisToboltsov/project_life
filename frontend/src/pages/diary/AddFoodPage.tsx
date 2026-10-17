@@ -23,6 +23,7 @@ import { isoToDisplay } from '@/lib/dates'
 import type { ErrorKey } from '@/lib/errors'
 import { sizesOf } from '@/lib/portions'
 import { uuidv7 } from '@/lib/uuid'
+import { DishForm } from '@/pages/products/DishForm'
 import { ExternalSearch } from '@/pages/products/ExternalSearch'
 import type { Missing } from '@/pages/products/lookup'
 import { MissingProduct } from '@/pages/products/MissingProduct'
@@ -184,6 +185,7 @@ function AddFood({ date, meal }: { date: string; meal: Meal }) {
   } = route.useSearch() as { product?: string; scanned?: string; picked?: string }
   const navigate = useNavigate()
   const mealName = useMealName()
+  const [dish, setDish] = useState(false)
   const [query, setQuery] = useState('')
   const [opened, setOpened] = useState<string>()
   const [added, setAdded] = useState<{ product: Product; quantity: Entered }>()
@@ -235,6 +237,16 @@ function AddFood({ date, meal }: { date: string; meal: Meal }) {
     await navigate({ ...here, search: { picked: product.id }, replace: true })
   }
 
+  if (dish)
+    return (
+      <DishForm
+        onSaved={async (id) => {
+          setDish(false)
+          await navigate({ ...here, search: { product: id }, replace: true })
+        }}
+        onCancel={() => setDish(false)}
+      />
+    )
   if (missing) {
     return (
       <MissingProduct
@@ -344,6 +356,9 @@ function AddFood({ date, meal }: { date: string; meal: Meal }) {
           {nothingToSuggest && <p className="text-sm text-muted-foreground">{t('addFood.hint')}</p>}
         </>
       )}
+      <Button variant="outline" onClick={() => setDish(true)}>
+        {t('dishes.create')}
+      </Button>
       <div className="flex flex-wrap gap-3">
         <Button asChild className="h-11">
           <Link to="/diary/$date" params={{ date }}>

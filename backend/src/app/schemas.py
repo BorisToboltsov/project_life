@@ -653,7 +653,30 @@ class ProductIn(Strict):
         return self
 
 
+class IngredientIn(Strict):
+    product_id: RecordId
+    amount: Amount
+    mass_g: Amount | None = None
+
+
+class DishIn(Strict):
+    name: ProductName
+    ingredients: Annotated[list[IngredientIn], Field(min_length=1, max_length=100)]
+    output_g: Amount
+    serving_size: Amount | None = None
+
+
+class IngredientOut(IngredientIn):
+    snapshot: ProductIn
+
+
+class RecipeOut(BaseModel):
+    output_g: float
+    ingredients: list[IngredientOut]
+
+
 class ProductOut(BaseModel):
+    recipe: RecipeOut | None = None
     id: UUID
     name: str
     unit: ProductUnit
@@ -675,6 +698,7 @@ class ProductOut(BaseModel):
     @classmethod
     def of(cls, product: Product, viewer: User) -> Self:
         return cls(
+            recipe=RecipeOut.model_validate(product.recipe) if product.recipe else None,
             id=product.id,
             name=product.name,
             unit=product.unit,

@@ -36,7 +36,7 @@ NO_PORTIONS = {"serving_size": None, "package_size": None}
 # Яйцо: штука — порция, десяток — упаковка.
 PORTIONS = {"serving_size": 60, "package_size": 600}
 # Чем API дополняет продукт, который человек завёл без штрихкода, этикетки и порций.
-BY_HAND = {**NO_LABEL, **NO_PORTIONS, "barcode": None, "source": "user"}
+BY_HAND = {"recipe": None, **NO_LABEL, **NO_PORTIONS, "barcode": None, "source": "user"}
 PRESETS = ("breakfast", "lunch", "dinner", "snack")
 
 # Штрихкоды с верной контрольной цифрой.
