@@ -18,6 +18,7 @@ import {
   useMeasurementHistory,
   useMetrics,
 } from '@/api/measurements'
+import { DIARY_KEY } from '@/api/nutrition'
 import { useUser } from '@/auth/useSession'
 import { Chart } from '@/components/chart/Chart'
 import { FormError, SelectField, TextField } from '@/components/form/fields'
@@ -85,6 +86,7 @@ function HistoryRow({ item, unit }: { item: Measurement; unit: Unit }) {
     const result = await deleteMeasurement(item.id)
     if (result.failure) setFailure(result.failure)
     await queryClient.invalidateQueries({ queryKey: MEASUREMENTS_KEY })
+    await queryClient.invalidateQueries({ queryKey: DIARY_KEY })
   }
 
   return (

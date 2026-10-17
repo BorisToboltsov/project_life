@@ -2,6 +2,7 @@ import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 
+import { DIARY_KEY } from '@/api/nutrition'
 import { localDateToIso, today } from '@/lib/dates'
 import { callsTo, json, mockApi, sequence } from '@/test/api'
 import { renderApp } from '@/test/app'
@@ -27,13 +28,16 @@ const idOf = (path: string) => path.split('/').at(-1)!
 describe('новый замер', () => {
   it('сохраняет только заполненные показатели и возвращает на главную', async () => {
     const calls = mockApi({ ...base, [SAVE]: json(201, measurement(today(), 72.4)) })
-    await renderApp('/measurements/new', anna)
+    const { queryClient } = await renderApp('/measurements/new', anna)
+    const statsKey = [...DIARY_KEY, 'stats', 'week', today()]
+    queryClient.setQueryData(statsKey, {})
 
     await userEvent.type(await screen.findByLabelText('Вес'), '72,4')
     await userEvent.type(screen.getByLabelText('Талия'), '86')
     await save()
 
     expect(await screen.findByRole('heading', { name: 'Здравствуйте, Анна!' })).toBeInTheDocument()
+    expect(queryClient.getQueryState(statsKey)?.isInvalidated).toBe(true)
     const saved = callsTo(calls, SAVE)
     expect(saved.map((call) => call.body)).toEqual([
       expect.objectContaining({

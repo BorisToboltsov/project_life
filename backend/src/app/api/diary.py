@@ -4,6 +4,7 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Annotated, Any
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Query, Response, status
 from sqlalchemy import ColumnElement, Row, Subquery, func, select
@@ -21,6 +22,7 @@ from app.schemas import (
     DiaryCopyIn,
     DiaryDate,
     DiaryDayOut,
+    DiaryStatisticsOut,
     FoodEntryIn,
     FoodEntryOut,
     MealIn,
@@ -31,12 +33,15 @@ from app.schemas import (
     PortionOut,
     ProductOut,
     RecordId,
+    StatisticsDate,
+    StatisticsPeriod,
     SuggestionOut,
     SuggestionsOut,
     WaterDayOut,
     WaterIntakeIn,
     WaterIntakeOut,
 )
+from app.services.diary_statistics import statistics
 
 router = APIRouter(prefix="/diary", tags=["nutrition"])
 
@@ -572,3 +577,13 @@ async def save_goal(
     await db.execute(statement)
     await db.commit()
     return NutritionGoalOut(effective_from=body.local_date, **targets).if_set()
+
+
+@router.get("/stats")
+async def read_statistics(
+    user: CurrentUser,
+    db: SessionDep,
+    day: Annotated[StatisticsDate, Query(alias="date")],
+    period: StatisticsPeriod = "week",
+) -> DiaryStatisticsOut:
+    return await statistics(db, user.id, day, period, datetime.now(ZoneInfo(user.timezone)).date())

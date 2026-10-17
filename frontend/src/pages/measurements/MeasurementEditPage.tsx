@@ -13,6 +13,7 @@ import {
   useMeasurementHistory,
   useMetrics,
 } from '@/api/measurements'
+import { DIARY_KEY } from '@/api/nutrition'
 import { useUser } from '@/auth/useSession'
 import { DateField } from '@/components/form/DateField'
 import { FormError, TextField } from '@/components/form/fields'
@@ -61,6 +62,7 @@ function EditForm({
       return
     }
     await queryClient.invalidateQueries({ queryKey: MEASUREMENTS_KEY })
+    await queryClient.invalidateQueries({ queryKey: DIARY_KEY })
     await navigate({ to: '/measurements/$metric', params: { metric: metric.id } })
   }
 

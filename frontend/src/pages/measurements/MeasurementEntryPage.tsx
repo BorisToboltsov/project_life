@@ -12,6 +12,7 @@ import {
   saveMeasurement,
   useMetrics,
 } from '@/api/measurements'
+import { DIARY_KEY } from '@/api/nutrition'
 import { useUser } from '@/auth/useSession'
 import { DateField } from '@/components/form/DateField'
 import { FormError, TextField } from '@/components/form/fields'
@@ -70,6 +71,7 @@ function EntryForm({ metrics, system }: { metrics: Metric[]; system: UnitSystem 
       }),
     )
     await queryClient.invalidateQueries({ queryKey: MEASUREMENTS_KEY })
+    await queryClient.invalidateQueries({ queryKey: DIARY_KEY })
     const failed = results.find((result) => result.failure)
     if (failed?.failure) setFailure(failed.failure)
     else await navigate({ to: '/' })

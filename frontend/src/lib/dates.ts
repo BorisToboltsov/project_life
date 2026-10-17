@@ -82,7 +82,17 @@ export function localDateToIso(date: Date): string {
 }
 
 /** Сегодняшняя дата пользователя в виде `ГГГГ-ММ-ДД`. */
-export function today(): string {
+export function today(timeZone?: string): string {
+  if (timeZone) {
+    const parts = new Intl.DateTimeFormat('en', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(new Date())
+    const part = (type: string) => parts.find((item) => item.type === type)!.value
+    return `${part('year')}-${part('month')}-${part('day')}`
+  }
   return localDateToIso(new Date())
 }
 

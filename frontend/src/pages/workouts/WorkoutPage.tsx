@@ -1,5 +1,6 @@
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
 import { useQueryClient } from '@tanstack/react-query'
+import type { TFunction } from 'i18next'
 import { useRef, useState, type TouchEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -370,7 +371,7 @@ function WorkoutContent({ id }: { id: string }) {
   )
 }
 
-function setSummary(value: WorkoutSet, t: ReturnType<typeof useTranslation>['t']): string {
+function setSummary(value: WorkoutSet, t: TFunction): string {
   if (value.kind === 'weight_reps')
     return `${value.weight_value} ${t(value.weight_unit === 'lb' ? 'unitNames.lb' : 'unitNames.kg')} × ${value.reps}`
   if (value.kind === 'reps') return `${value.reps} ${t('workouts.reps').toLowerCase()}`
