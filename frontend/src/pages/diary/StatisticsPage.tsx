@@ -17,6 +17,7 @@ import { isoToDisplay } from '@/lib/dates'
 import { formatMl, share } from '@/lib/nutrition'
 import { formatDelta, formatNumber } from '@/lib/numbers'
 import { displayUnit, measuredIn } from '@/lib/units'
+import { useOfflineState } from '@/offline/store'
 
 import { Measure } from './Measure'
 import { periodStart, shiftPeriod } from './statisticsPeriod'
@@ -230,6 +231,7 @@ export function StatisticsPage() {
   const { t } = useTranslation()
   const { date, period } = route.useSearch()
   const query = useDiaryStatistics(date, period)
+  const { online } = useOfflineState()
   const data = query.data?.data
   const failure = query.data?.failure ?? (query.isError ? 'errors.network' : undefined)
   const start = periodStart(date, period)
@@ -303,7 +305,8 @@ export function StatisticsPage() {
         </Link>
       )}
       {query.isPending && <p role="status">{t('common.loading')}</p>}
-      {failure && (
+      {failure && !online && <p className="text-muted-foreground">{t('statistics.offline')}</p>}
+      {failure && online && (
         <div>
           <FormError failure={failure} />
           <Button className="mt-2 h-11" variant="outline" onClick={() => void query.refetch()}>

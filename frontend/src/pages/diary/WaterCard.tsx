@@ -10,11 +10,13 @@ import { deleteWater, DIARY_KEY, type DiaryDay, saveWater } from '@/api/nutritio
 import { FormError, TextField } from '@/components/form/fields'
 import { numberOf } from '@/components/form/validation'
 import { WaterGlass } from '@/components/illustrations/WaterGlass'
+import { PendingMark } from '@/components/PendingMark'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import type { ErrorKey } from '@/lib/errors'
 import { formatMl, share } from '@/lib/nutrition'
 import { uuidv7 } from '@/lib/uuid'
+import { useOfflineState } from '@/offline/store'
 
 import { waterSchema, type WaterValues } from './values'
 
@@ -79,6 +81,7 @@ export function WaterCard({
 }) {
   const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
+  const { pending } = useOfflineState()
   const [custom, setCustom] = useState(false)
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState<ErrorKey>()
@@ -197,6 +200,11 @@ export function WaterCard({
                   className="flex items-center gap-0.5 rounded-full border pl-2.5 text-sm"
                 >
                   {t('water.amount', { value: ml(intake.amount_ml) })}
+                  {pending.has(intake.id) && (
+                    <span className="ml-1 inline-flex">
+                      <PendingMark />
+                    </span>
+                  )}
                   <Button
                     variant="ghost"
                     size="icon"

@@ -1,27 +1,6 @@
-import { expect, type Page, test } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 
-import { adminInviteLink, register } from './steps.ts'
-
-/**
- * Заводит продукт. Калории `null` — их не вводят: поле считается по белкам, жирам и
- * углеводам, и в нём ждём `expected`.
- */
-async function createProduct(
-  page: Page,
-  name: string,
-  [kcal, protein, fat, carbs]: [string | null, string, string, string],
-  { unit, expected }: { unit?: string; expected?: string } = {},
-) {
-  await page.getByRole('link', { name: 'Создать продукт' }).click()
-  await page.getByLabel('Название').fill(name)
-  if (unit) await page.getByLabel('В чём измеряется').selectOption({ label: unit })
-  if (kcal !== null) await page.getByLabel('Калории, ккал').fill(kcal)
-  await page.getByLabel('Белки, г').fill(protein)
-  await page.getByLabel('Жиры, г', { exact: true }).fill(fat)
-  await page.getByLabel('Углеводы, г').fill(carbs)
-  if (expected) await expect(page.getByLabel('Калории, ккал')).toHaveValue(expected)
-  await page.getByRole('button', { name: 'Сохранить' }).click()
-}
+import { adminInviteLink, createProduct, register } from './steps.ts'
 
 test('дневник питания: день внесён целиком, правка продукта не меняет прошлые дни', async ({
   page,

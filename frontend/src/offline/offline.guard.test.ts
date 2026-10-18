@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { json, mockApi } from '@/test/api'
 
 import { type Change, db } from './db'
+import { deferredBarcodes, resolveDeferred } from './deferred'
 import { enqueue, flush, forget } from './queue'
 
 const sources = import.meta.glob<string>('/src/api/*.ts', {
@@ -15,7 +16,13 @@ const sources = import.meta.glob<string>('/src/api/*.ts', {
 const OFFLINE_MODULES = ['/src/api/workouts.ts']
 
 /** Отдельные функции других модулей, которые тоже работают без сети. */
-const OFFLINE_FUNCTIONS: [string, string][] = [['/src/api/workoutGroups.ts', 'startWorkoutGroup']]
+const OFFLINE_FUNCTIONS: [string, string][] = [
+  ['/src/api/workoutGroups.ts', 'startWorkoutGroup'],
+  ['/src/api/nutrition.ts', 'saveEntry'],
+  ['/src/api/nutrition.ts', 'deleteEntry'],
+  ['/src/api/nutrition.ts', 'saveWater'],
+  ['/src/api/nutrition.ts', 'deleteWater'],
+]
 
 /** Тело экспортированной функции: от её объявления до следующего объявления. */
 function body(code: string, name: string): string {
@@ -32,14 +39,14 @@ describe('запись без сети', () => {
   it.each(OFFLINE_MODULES)('%s пишет только через очередь', (path) => {
     const code = sources[path] ?? ''
 
-    expect(code).toMatch(/\bwrite</)
+    expect(code).toMatch(/\bwrite[<(]/)
     expect(code.match(direct)?.[0] ?? null).toBeNull()
   })
 
   it.each(OFFLINE_FUNCTIONS)('%s: %s пишет через очередь', (path, name) => {
     const text = body(sources[path] ?? '', name)
 
-    expect(text).toMatch(/\bwrite</)
+    expect(text).toMatch(/\bwrite[<(]/)
     expect(text.match(direct)?.[0] ?? null).toBeNull()
   })
 
@@ -79,4 +86,26 @@ describe('запись без сети', () => {
     await forget([rejected!.seq])
     expect(await db.rejected.count()).toBe(0)
   })
+})
+
+describe('отложенный штрихкод', () => {
+  it.each(['not_found', 'draft', 'unavailable'])(
+    'поиск с исходом %s не стирает запись: она ждёт решения или следующей попытки',
+    async (status) => {
+      await deferredBarcodes.add({
+        id: '0199b7a0-0000-7000-8000-0000000000f1',
+        barcode: '4601000000012',
+        localDate: '2026-10-18',
+        mealId: '0199b7a0-0000-7000-8000-0000000000a2',
+        amount: { packages: 1 },
+      })
+      mockApi({
+        'POST /api/products/lookup': json(200, { status, barcode: '4601000000012' }),
+      })
+
+      await resolveDeferred()
+
+      expect(await db.deferred.count()).toBe(1)
+    },
+  )
 })

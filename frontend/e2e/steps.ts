@@ -43,3 +43,24 @@ export async function logout(page: Page) {
   await page.getByRole('button', { name: 'Выйти', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Вход' })).toBeVisible()
 }
+
+/**
+ * Заводит продукт. Калории `null` — их не вводят: поле считается по белкам, жирам и
+ * углеводам, и в нём ждём `expected`.
+ */
+export async function createProduct(
+  page: Page,
+  name: string,
+  [kcal, protein, fat, carbs]: [string | null, string, string, string],
+  { unit, expected }: { unit?: string; expected?: string } = {},
+) {
+  await page.getByRole('link', { name: 'Создать продукт' }).click()
+  await page.getByLabel('Название').fill(name)
+  if (unit) await page.getByLabel('В чём измеряется').selectOption({ label: unit })
+  if (kcal !== null) await page.getByLabel('Калории, ккал').fill(kcal)
+  await page.getByLabel('Белки, г').fill(protein)
+  await page.getByLabel('Жиры, г', { exact: true }).fill(fat)
+  await page.getByLabel('Углеводы, г').fill(carbs)
+  if (expected) await expect(page.getByLabel('Калории, ккал')).toHaveValue(expected)
+  await page.getByRole('button', { name: 'Сохранить' }).click()
+}

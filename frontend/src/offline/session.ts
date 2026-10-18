@@ -45,11 +45,16 @@ export const offlineSession = {
     return user && user.id === owner ? user : undefined
   },
 
-  /** Стирает с устройства копию, очередь и отказы. */
+  /** Стирает с устройства копию, очередь, отказы и отложенные штрихкоды. */
   async erase(): Promise<void> {
     erasures++
-    await db.transaction('rw', db.copy, db.queue, db.rejected, async () => {
-      await Promise.all([db.copy.clear(), db.queue.clear(), db.rejected.clear()])
+    await db.transaction('rw', db.copy, db.queue, db.rejected, db.deferred, async () => {
+      await Promise.all([
+        db.copy.clear(),
+        db.queue.clear(),
+        db.rejected.clear(),
+        db.deferred.clear(),
+      ])
     })
     offlineState.reset()
   },

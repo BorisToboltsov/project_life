@@ -1,6 +1,23 @@
 import { keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-query'
 
+import { today } from '@/lib/dates'
 import { attempt, type ErrorKey } from '@/lib/errors'
+import { portionsAmount, sizesOf } from '@/lib/portions'
+import type { ChangeContext } from '@/offline/db'
+import {
+  DIARY_COPY,
+  dayOffline,
+  diaryCopy,
+  entryFromCopy,
+  forgetProduct,
+  historyOffline,
+  productByBarcode,
+  productFromCopy,
+  rememberProduct,
+  searchCatalog,
+} from '@/offline/diary'
+import { readOr, readThrough, write } from '@/offline/queue'
+import { offlineState } from '@/offline/store'
 
 import { api, type Schemas } from './client'
 
@@ -39,8 +56,14 @@ export const PRODUCTS_KEY = ['products'] as const
 export function useDiaryDay(date: string) {
   return useQuery({
     queryKey: [...DIARY_KEY, 'day', date],
+    networkMode: 'always',
+    // Без сети — день из копии, будущий — пустым; старый день вне копии — `null` (ADR 0020).
     queryFn: async () =>
-      (await api.GET('/api/diary', { params: { query: { date } } })).data ?? null,
+      (await readThrough(DIARY_COPY.day(date), () =>
+        api.GET('/api/diary', { params: { query: { date } } }),
+      )) ??
+      (offlineState.get().online ? undefined : await dayOffline(date)) ??
+      null,
   })
 }
 
@@ -51,12 +74,18 @@ export function useDiaryDay(date: string) {
 export function useSuggestions(mealId: string, productId?: string) {
   return useQuery({
     queryKey: [...DIARY_KEY, 'suggestions', mealId, productId],
-    queryFn: async () =>
-      (
-        await api.GET('/api/diary/suggestions', {
+    networkMode: 'always',
+    queryFn: async () => {
+      const load = () =>
+        api.GET('/api/diary/suggestions', {
           params: { query: { meal_id: mealId, product_id: productId } },
         })
-      ).data ?? null,
+      // Подсказки приёма пищи — последние ответы сервера; история продукта — по копии.
+      const found = productId
+        ? await readOr(load, () => historyOffline(productId, mealId))
+        : await readThrough(DIARY_COPY.suggestions(mealId), load)
+      return found ?? null
+    },
   })
 }
 
@@ -64,7 +93,9 @@ export function useSuggestions(mealId: string, productId?: string) {
 export function useNutritionGoal() {
   return useQuery({
     queryKey: [...DIARY_KEY, 'goal'],
-    queryFn: async () => (await api.GET('/api/diary/goal')).data ?? null,
+    networkMode: 'always',
+    queryFn: async () =>
+      (await readThrough(DIARY_COPY.goal, () => api.GET('/api/diary/goal'))) ?? null,
   })
 }
 
@@ -88,14 +119,22 @@ export function useProductSearch(
   return useInfiniteQuery({
     queryKey: [...PRODUCTS_KEY, 'search', q, kind],
     enabled,
+    networkMode: 'always',
     placeholderData: keepPreviousData,
     initialPageParam: 0,
+    // Без сети ищет по каталогу на телефоне так же, как сервер (ADR 0020).
     queryFn: async ({ pageParam }) => {
-      const { data, response } = await api.GET('/api/products', {
-        params: { query: { q, offset: pageParam, ...(kind !== 'all' ? { kind } : {}) } },
-      })
-      const next = Number(response.headers.get(NEXT_OFFSET))
-      return { items: data ?? [], next: next > 0 ? next : undefined }
+      const page = await readOr(
+        async () => {
+          const { data, response } = await api.GET('/api/products', {
+            params: { query: { q, offset: pageParam, ...(kind !== 'all' ? { kind } : {}) } },
+          })
+          const next = Number(response.headers.get(NEXT_OFFSET))
+          return { data: data && { items: data, next: next > 0 ? next : undefined }, response }
+        },
+        () => searchCatalog(q, pageParam, kind),
+      )
+      return page ?? { items: [], next: undefined }
     },
     getNextPageParam: (last) => last.next,
     select: (data) =>
@@ -144,41 +183,118 @@ export function useProduct(id: string | undefined) {
   return useQuery({
     queryKey: productKey(id),
     enabled: id !== undefined,
+    networkMode: 'always',
     queryFn: async () =>
-      (await api.GET('/api/products/{product_id}', { params: { path: { product_id: id! } } }))
-        .data ?? null,
+      (await readOr(
+        () => api.GET('/api/products/{product_id}', { params: { path: { product_id: id! } } }),
+        () => productFromCopy(id),
+      )) ?? null,
   })
 }
 
-export function saveProduct(id: string, body: Schemas['ProductIn-Input'] | Schemas['DishIn']) {
-  return attempt(() =>
+/** Продукт заводят и правят только при связи; сохранённый сразу попадает и в копию. */
+export async function saveProduct(
+  id: string,
+  body: Schemas['ProductIn-Input'] | Schemas['DishIn'],
+) {
+  const result = await attempt(() =>
     api.PUT('/api/products/{product_id}', { params: { path: { product_id: id } }, body }),
   )
+  if (result.data) await rememberProduct(result.data)
+  return result
 }
 
 /**
  * Продукт по штрихкоду: свой каталог, затем Open Food Facts. Найденный там полный продукт
  * сервер сам кладёт в каталог.
  */
-export function lookupBarcode(barcode: string) {
-  return attempt(() => api.POST('/api/products/lookup', { body: { barcode } }))
+export async function lookupBarcode(barcode: string) {
+  const fromCopy = async () => {
+    // Без сети знакомый продукт находится в каталоге на телефоне (ADR 0020).
+    const product = await productByBarcode(barcode)
+    return product
+      ? { data: { status: 'found' as const, barcode, product, draft: null } }
+      : { failure: 'errors.network' as const }
+  }
+  if (!offlineState.get().online) return fromCopy()
+  const result = await attempt(() => api.POST('/api/products/lookup', { body: { barcode } }))
+  if (result.failure === 'errors.network') {
+    offlineState.setOnline(false)
+    return fromCopy()
+  }
+  if (result.data?.product) await rememberProduct(result.data.product)
+  return result
 }
 
-export function deleteProduct(id: string) {
-  return attempt(() =>
+export async function deleteProduct(id: string) {
+  const result = await attempt(() =>
     api.DELETE('/api/products/{product_id}', { params: { path: { product_id: id } } }),
   )
+  if (!result.failure) await forgetProduct(id)
+  return result
 }
 
-export function saveEntry(id: string, body: Schemas['FoodEntryIn']) {
-  return attempt(() =>
-    api.PUT('/api/diary/entries/{entry_id}', { params: { path: { entry_id: id } }, body }),
+/** Сколько внесли — в единицах продукта и, если порциями, какими. */
+function quantityOf(
+  body: Schemas['FoodEntryIn'] | undefined,
+  product: Product | undefined,
+  old: FoodEntry | undefined,
+): { amount: number; portion: Schemas['PortionOut'] | null } {
+  if (!body) return { amount: old?.amount ?? 0, portion: old?.portion ?? null }
+  if (!body.portion) return { amount: Number(body.amount), portion: null }
+  const count = Number(body.portion.count)
+  const size = product ? sizesOf(product)[body.portion.kind] : undefined
+  return size === undefined
+    ? { amount: 0, portion: null }
+    : { amount: portionsAmount(count, size), portion: { kind: body.portion.kind, size, count } }
+}
+
+/** Что и сколько — для строки «Не отправлено»: из копии, как запись видна на телефоне. */
+async function aboutEntry(
+  kind: 'entry' | 'entryRemove',
+  id: string,
+  body?: Schemas['FoodEntryIn'],
+): Promise<ChangeContext> {
+  const date = body?.local_date
+  const old = await entryFromCopy(id)
+  const product = await productFromCopy(body?.product_id ?? old?.product_id)
+  const name = product?.name ?? old?.product_name
+  return {
+    kind,
+    localDate: date ?? old?.local_date,
+    ...(name && {
+      food: {
+        productName: name,
+        ...quantityOf(body, product, old),
+        unit: product?.unit ?? old?.unit ?? 'g',
+        mealId: body?.meal_id ?? old?.meal_id ?? '',
+      },
+    }),
+  }
+}
+
+export async function saveEntry(id: string, body: Schemas['FoodEntryIn']) {
+  return write<FoodEntry>(
+    {
+      method: 'PUT',
+      path: '/api/diary/entries/{entry_id}',
+      params: { entry_id: id },
+      body,
+      context: await aboutEntry('entry', id, body),
+    },
+    () => diaryCopy.saveEntry(id, body),
   )
 }
 
-export function deleteEntry(id: string) {
-  return attempt(() =>
-    api.DELETE('/api/diary/entries/{entry_id}', { params: { path: { entry_id: id } } }),
+export async function deleteEntry(id: string) {
+  return write(
+    {
+      method: 'DELETE',
+      path: '/api/diary/entries/{entry_id}',
+      params: { entry_id: id },
+      context: await aboutEntry('entryRemove', id),
+    },
+    () => diaryCopy.deleteEntry(id),
   )
 }
 
@@ -194,15 +310,28 @@ export function deleteMeal(id: string) {
   )
 }
 
-export function saveWater(id: string, body: Schemas['WaterIntakeIn']) {
-  return attempt(() =>
-    api.PUT('/api/diary/water/{intake_id}', { params: { path: { intake_id: id } }, body }),
+export async function saveWater(id: string, body: Schemas['WaterIntakeIn']) {
+  return write<WaterIntake>(
+    {
+      method: 'PUT',
+      path: '/api/diary/water/{intake_id}',
+      params: { intake_id: id },
+      body,
+      context: { kind: 'water', localDate: body.local_date, waterMl: body.amount_ml },
+    },
+    () => diaryCopy.saveWater(id, body),
   )
 }
 
-export function deleteWater(id: string) {
-  return attempt(() =>
-    api.DELETE('/api/diary/water/{intake_id}', { params: { path: { intake_id: id } } }),
+export async function deleteWater(id: string) {
+  return write(
+    {
+      method: 'DELETE',
+      path: '/api/diary/water/{intake_id}',
+      params: { intake_id: id },
+      context: { kind: 'waterRemove', localDate: today() },
+    },
+    () => diaryCopy.deleteWater(id),
   )
 }
 

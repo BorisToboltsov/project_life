@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { getRouteApi, Link, useNavigate } from '@tanstack/react-router'
-import { ChevronLeft, ChevronRight, Pencil, Plus, Trash2 } from 'lucide-react'
+import { CalendarOff, ChevronLeft, ChevronRight, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -15,6 +15,7 @@ import {
 } from '@/api/nutrition'
 import { DateField } from '@/components/form/DateField'
 import { FormError } from '@/components/form/fields'
+import { PendingMark } from '@/components/PendingMark'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -27,9 +28,11 @@ import {
 import { isRealDate, shiftDays, today } from '@/lib/dates'
 import type { ErrorKey } from '@/lib/errors'
 import { formatKcal } from '@/lib/nutrition'
+import { useOfflineState } from '@/offline/store'
 
 import { useMealName } from './mealName'
 import { Measure } from './Measure'
+import { DeferredRow } from './DeferredRow'
 import { useQuantityText } from './quantityText'
 import { DATE_MIN } from './values'
 import { WaterCard } from './WaterCard'
@@ -151,6 +154,7 @@ function EntryRow({ entry }: { entry: FoodEntry }) {
   const queryClient = useQueryClient()
   const [confirming, setConfirming] = useState(false)
   const [failure, setFailure] = useState<ErrorKey>()
+  const { pending } = useOfflineState()
 
   async function remove() {
     const result = await deleteEntry(entry.id)
@@ -162,7 +166,14 @@ function EntryRow({ entry }: { entry: FoodEntry }) {
     <li className="grid gap-2 rounded-lg border p-3">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="font-medium break-words">{entry.product_name}</p>
+          <p className="font-medium break-words">
+            {entry.product_name}
+            {pending.has(entry.id) && (
+              <span className="ml-1.5 inline-block align-[-2px]">
+                <PendingMark />
+              </span>
+            )}
+          </p>
           <p className="text-sm text-muted-foreground">
             {t('diary.entryLine', {
               quantity: quantityText(entry),
@@ -255,6 +266,10 @@ function MealActions({ date, meal, name }: { date: string; meal: DayMeal; name: 
 function MealCard({ date, meal }: { date: string; meal: DayMeal }) {
   const { t, i18n } = useTranslation()
   const name = useMealName()(meal)
+  // Записи по штрихкодам, которые ждут продукта или согласия, — на своих местах (ADR 0020).
+  const deferred = useOfflineState().deferred.filter(
+    (item) => item.localDate === date && item.mealId === meal.id && item.status !== 'missing',
+  )
 
   return (
     <Card>
@@ -278,14 +293,22 @@ function MealCard({ date, meal }: { date: string; meal: DayMeal }) {
         )}
       </CardHeader>
       <CardContent className="grid gap-3">
-        {meal.entries.length === 0 ? (
+        {meal.entries.length === 0 && deferred.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t('diary.emptyMeal')}</p>
         ) : (
           <ul aria-label={name} className="grid gap-2">
             {meal.entries.map((entry) => (
               <EntryRow key={entry.id} entry={entry} />
             ))}
+            {deferred.map((item) => (
+              <DeferredRow key={item.id} item={item} />
+            ))}
           </ul>
+        )}
+        {deferred.length > 0 && (
+          <p className="text-sm text-muted-foreground">
+            {t('deferred.notCounted', { count: deferred.length })}
+          </p>
         )}
         {/* Убранный из списка приём остаётся в дне ради своих записей: новое в него не вносят. */}
         {meal.archived ? (
@@ -304,6 +327,7 @@ export function DiaryPage() {
   const { t } = useTranslation()
   const { date } = route.useParams() as { date: string }
   const day = useDiaryDay(date)
+  const { online } = useOfflineState()
 
   return (
     <div className="grid gap-4">
@@ -338,9 +362,25 @@ export function DiaryPage() {
             </Button>
           </div>
         </>
+      ) : day.data === null && !online ? (
+        <NotSaved />
       ) : (
         <p className="text-muted-foreground">{t('common.loading')}</p>
       )}
     </div>
+  )
+}
+
+/** Старый день без сети: его нет в копии, а записи в нём могут быть (ADR 0020). */
+function NotSaved() {
+  const { t } = useTranslation()
+  return (
+    <Card>
+      <CardContent className="grid justify-items-center gap-2 py-6 text-center">
+        <CalendarOff className="size-6 text-muted-foreground" aria-hidden="true" />
+        <p className="font-medium">{t('diary.notSaved')}</p>
+        <p className="text-sm text-muted-foreground">{t('diary.notSavedHint')}</p>
+      </CardContent>
+    </Card>
   )
 }

@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 
-import { adminInviteLink, register } from './steps.ts'
+import { freshBarcode } from './barcode.ts'
+import { adminInviteLink, createProduct, register } from './steps.ts'
 
 // ADR 0020: приложение открывается без сети на копии, тренировка записывается в очередь и
 // сама уходит на сервер, когда связь вернулась.
@@ -44,4 +45,94 @@ test('тренировка в режиме полёта уходит на сер
   await page.reload()
   await expect(page.getByText('1. 50 кг × 8')).toBeVisible()
   await expect(page.getByText('Идёт тренировка')).toBeVisible()
+})
+
+test('дневник в режиме полёта: запись из каталога и вода уходят, когда связь вернулась', async ({
+  page,
+  context,
+}, testInfo) => {
+  const suffix = `${testInfo.project.name}-${Date.now()}`
+  const buckwheat = `Гречка ${suffix}`
+  await register(page, adminInviteLink(), 'Борис', `offline-diary-${suffix}@example.com`)
+  await page.getByRole('link', { name: 'Открыть дневник' }).click()
+  await page.getByRole('link', { name: 'Добавить: Завтрак' }).click()
+  await createProduct(page, buckwheat, ['110', '4,2', '1,1', '21,3'])
+  await expect(page.getByLabel('Сколько, г')).toBeVisible()
+  await page.getByRole('link', { name: 'Готово' }).click()
+  // Со связью копия обновляется при запуске: каталог, дни, подсказки.
+  await page.evaluate(() => navigator.serviceWorker.ready)
+  await page.reload()
+  await page.waitForLoadState('networkidle')
+
+  await context.setOffline(true)
+  await page.reload()
+  await expect(page.getByText('Нет сети · записи сохраняются на телефоне')).toBeVisible()
+  await page.getByRole('link', { name: 'Добавить: Обед' }).click()
+  await expect(page.getByRole('link', { name: 'Создать продукт' })).toHaveCount(0)
+  await page.getByLabel('Поиск продукта').fill(buckwheat)
+  await page.getByRole('button', { name: new RegExp(buckwheat) }).click()
+  await page.getByLabel('Сколько, г').fill('200')
+  await page.getByRole('button', { name: 'Добавить', exact: true }).click()
+  await expect(page.getByText(`Добавлено: ${buckwheat}, 200 г`)).toBeVisible()
+  await page.getByRole('link', { name: 'Готово' }).click()
+  await page
+    .getByRole('button', { name: /^Добавить \d+ мл$/ })
+    .first()
+    .click()
+  await expect(page.getByRole('img', { name: 'Ещё не отправлено' })).toHaveCount(2)
+  await expect(page.getByText('Нет сети · ждут отправки: 2')).toBeVisible()
+
+  await context.setOffline(false)
+  await page.evaluate(() => window.dispatchEvent(new Event('online')))
+  await expect(page.getByRole('img', { name: 'Ещё не отправлено' })).toHaveCount(0)
+
+  await page.reload()
+  await expect(page.getByRole('list', { name: 'Обед' })).toContainText(buckwheat)
+  await expect(
+    page.getByRole('list', { name: 'Порции за день' }).getByRole('listitem'),
+  ).toHaveCount(1)
+})
+
+test('штрихкод без сети: записан с количеством, найден со связью и внесён после согласия', async ({
+  page,
+  context,
+}, testInfo) => {
+  // Камера не нужна: штрихкод вводится цифрами.
+  await page.addInitScript(() => {
+    navigator.mediaDevices.getUserMedia = () =>
+      Promise.reject(new DOMException('Permission denied', 'NotAllowedError'))
+  })
+  const suffix = `${testInfo.project.name}-${Date.now()}`
+  // Подменный Open Food Facts стенда находит 4601… — йогурт с упаковкой в 350 г.
+  const barcode = freshBarcode('4601')
+  await register(page, adminInviteLink(), 'Борис', `offline-scan-${suffix}@example.com`)
+  await page.getByRole('link', { name: 'Открыть дневник' }).click()
+  await page.evaluate(() => navigator.serviceWorker.ready)
+  await page.reload()
+  await page.waitForLoadState('networkidle')
+
+  await context.setOffline(true)
+  await page.getByRole('link', { name: 'Добавить: Обед' }).click()
+  await page.getByRole('link', { name: 'Сканировать штрихкод' }).click()
+  await page.getByLabel('Штрихкод цифрами').fill(barcode)
+  await page.getByRole('button', { name: 'Найти' }).click()
+  await expect(
+    page.getByText(`Штрихкода ${barcode} на телефоне нет.`, { exact: false }),
+  ).toBeVisible()
+  await page.getByRole('button', { name: 'Записать до сети' }).click()
+  const lunch = page.getByRole('list', { name: 'Обед' })
+  await expect(lunch).toContainText(barcode)
+  await expect(page.getByText('Нет сети · ждут отправки: 1')).toBeVisible()
+
+  await context.setOffline(false)
+  await page.evaluate(() => window.dispatchEvent(new Event('online')))
+  const offer = lunch.getByRole('listitem', { name: 'Найден по штрихкоду' })
+  await expect(offer).toContainText('Йогурт натуральный')
+  await expect(offer).toContainText('350 г')
+  await offer.getByRole('button', { name: 'Внести' }).click()
+  await expect(offer).toHaveCount(0)
+
+  await page.reload()
+  await expect(lunch).toContainText('Йогурт натуральный')
+  await expect(lunch).not.toContainText(barcode)
 })

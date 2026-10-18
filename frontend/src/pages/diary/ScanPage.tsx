@@ -13,6 +13,7 @@ import type { ErrorKey } from '@/lib/errors'
 import { lookUp, type Missing } from '@/pages/products/lookup'
 import { MissingProduct } from '@/pages/products/MissingProduct'
 
+import { DeferForm } from './DeferForm'
 import { barcodeSchema, type BarcodeValues } from './values'
 
 type Step =
@@ -20,6 +21,8 @@ type Step =
   | { at: 'lookup'; barcode: string }
   | { at: 'failed'; barcode: string; failure: ErrorKey }
   | { at: 'create'; missing: Missing }
+  // Продукта нет на телефоне, а сети нет — штрихкод записывается на потом (ADR 0020).
+  | { at: 'defer'; barcode: string }
 
 /** Штрихкод цифрами — для стёртой упаковки и для устройства без камеры. */
 function ManualEntry({ onEntered }: { onEntered: (barcode: string) => void }) {
@@ -84,7 +87,11 @@ export function ScanPage() {
     const looked = await lookUp(queryClient, barcode)
     if (!shown.current) return
     if ('failure' in looked) {
-      setStep({ at: 'failed', barcode, failure: looked.failure })
+      setStep(
+        looked.failure === 'errors.network'
+          ? { at: 'defer', barcode }
+          : { at: 'failed', barcode, failure: looked.failure },
+      )
       return
     }
     if ('missing' in looked) {
@@ -101,10 +108,13 @@ export function ScanPage() {
     </Button>
   )
 
+  const toDay = () => navigate({ to: '/diary/$date', params: { date }, replace: true })
+
   if (step.at === 'create') {
+    const { missing } = step
     return (
       <MissingProduct
-        missing={step.missing}
+        missing={missing}
         onSaved={(product) => navigate({ ...toMeal, search: { product }, replace: true })}
         cancel={
           <Button asChild variant="ghost" className="h-11">
@@ -112,7 +122,19 @@ export function ScanPage() {
           </Button>
         }
       >
-        <div>{again}</div>
+        <div className="flex flex-wrap gap-3">
+          {/* Open Food Facts не ответил — штрихкод можно записать и найти позже. */}
+          {missing.status === 'unavailable' && (
+            <Button
+              variant="outline"
+              className="h-11"
+              onClick={() => setStep({ at: 'defer', barcode: missing.barcode })}
+            >
+              {t('deferred.later')}
+            </Button>
+          )}
+          {again}
+        </div>
       </MissingProduct>
     )
   }
@@ -124,6 +146,15 @@ export function ScanPage() {
         <>
           <BarcodeScanner onDetected={(barcode) => void find(barcode)} />
           <ManualEntry onEntered={(barcode) => void find(barcode)} />
+        </>
+      )}
+      {step.at === 'defer' && (
+        <>
+          <p role="status" className="text-sm text-muted-foreground">
+            {t('deferred.offline', { barcode: step.barcode })}
+          </p>
+          <DeferForm barcode={step.barcode} date={date} meal={meal} onSaved={toDay} />
+          <div>{again}</div>
         </>
       )}
       {step.at === 'lookup' && (

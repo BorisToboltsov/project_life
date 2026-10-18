@@ -47,8 +47,8 @@ export function ProfilePage() {
  */
 function SessionActions() {
   const { t } = useTranslation()
-  const { queued, rejected } = useOfflineState()
-  const unsent = queued + rejected.length
+  const { queued, rejected, deferred } = useOfflineState()
+  const unsent = queued + rejected.length + deferred.length
   const [asking, setAsking] = useState<'logout' | 'everywhere' | null>(null)
   const leave = (how: 'logout' | 'everywhere') =>
     void (how === 'logout' ? session.logout() : session.logoutEverywhere())

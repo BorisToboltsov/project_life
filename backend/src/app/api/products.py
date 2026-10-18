@@ -1,8 +1,10 @@
+import hashlib
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Literal
 from uuid import uuid7
 
-from fastapi import APIRouter, Query, Response, status
+from fastapi import APIRouter, Header, Query, Response, status
+from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 from sqlalchemy import delete, exists, func, select, text
 from sqlalchemy.dialects.postgresql import insert
@@ -246,6 +248,35 @@ async def search_open_food_facts(
         ExternalSearchStatus.OK,
         [ExternalProductOut.of(listing) for code, listing in listed.items() if code not in known],
         page + 1 if found.has_more else None,
+    )
+
+
+@router.get(
+    "/catalog",
+    response_model=list[ProductOut],
+    responses={304: {"description": "Каталог не изменился с прошлого ответа"}},
+)
+async def whole_catalog(
+    user: CurrentUser,
+    db: SessionDep,
+    if_none_match: Annotated[str | None, Header()] = None,
+) -> list[ProductOut] | Response:
+    """Каталог целиком — копия для работы без сети (ADR 0020). Метка `ETag` меняется, когда
+    продукт добавили, исправили или удалили; с прежней меткой в `If-None-Match` ответ — 304
+    без тела. В метку входит и тот, кто спрашивает: от него зависит `editable`."""
+    products = list(
+        await db.scalars(select(Product).order_by(func.lower(Product.name), Product.id))
+    )
+    digest = hashlib.sha256(f"{user.id}:{user.role}".encode())
+    for product in products:
+        digest.update(f"|{product.id}:{product.updated_at.isoformat()}".encode())
+    etag = f'"{digest.hexdigest()[:32]}"'
+    headers = {"ETag": etag, "Cache-Control": "no-cache"}
+    if if_none_match == etag:
+        return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers=headers)
+    return JSONResponse(
+        [ProductOut.of(product, user).model_dump(mode="json") for product in products],
+        headers=headers,
     )
 
 
