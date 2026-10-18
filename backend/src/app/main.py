@@ -7,6 +7,7 @@ from app.api import (
     diary,
     error_reports,
     exercises,
+    fitness,
     health,
     me,
     measurements,
@@ -45,6 +46,7 @@ def create_app() -> FastAPI:
     private.include_router(exercises.router)
     private.include_router(workouts.router)
     private.include_router(workout_groups.router)
+    private.include_router(fitness.router)
     private.include_router(products.router)
     private.include_router(diary.router)
     private.include_router(error_reports.router)

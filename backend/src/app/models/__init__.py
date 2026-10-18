@@ -3,6 +3,7 @@
 from app.models.auth import Invite, LoginFailure, PasswordReset, RefreshToken
 from app.models.error_report import ErrorReport, ErrorSource
 from app.models.exercise import Exercise
+from app.models.fitness import FitnessResult
 from app.models.measurement import Measurement, Metric, preset_metrics
 from app.models.nutrition import (
     BarcodeMiss,
@@ -22,6 +23,7 @@ __all__ = [
     "ErrorReport",
     "ErrorSource",
     "Exercise",
+    "FitnessResult",
     "FoodEntry",
     "Invite",
     "Language",

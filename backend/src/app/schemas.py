@@ -20,6 +20,14 @@ from pydantic import (
 
 from app import barcodes
 from app.exercises import CardioField, ExerciseKind, ExercisePreset, ExerciseType, Muscle
+from app.fitness import (
+    COOPER_MAX_M,
+    COOPER_MIN_M,
+    REPS_MAX,
+    FitnessTest,
+    PushUpVariant,
+    to_meters,
+)
 from app.metrics import MetricPreset, Quantity, Unit, to_canonical
 from app.models import (
     ErrorSource,
@@ -205,6 +213,18 @@ def _version_7(value: UUID) -> UUID:
 RecordId = Annotated[UUID, AfterValidator(_version_7)]
 
 
+def _check_moment(moment: datetime, local_date: date) -> None:
+    """Момент записи и местная дата правдоподобны: не из будущего и согласуются друг с
+    другом."""
+    if moment > datetime.now(UTC) + timedelta(days=1):
+        raise ValueError("moment from the future")
+    if local_date < date(1900, 1, 1):
+        raise ValueError("date out of range")
+    # Местная дата расходится с датой по UTC не больше чем на сутки — в любом поясе.
+    if abs((local_date - moment.astimezone(UTC).date()).days) > 1:
+        raise ValueError("local date does not match the moment")
+
+
 MetricName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=40)]
 
 
@@ -272,14 +292,7 @@ class MeasurementIn(Strict):
 
     @model_validator(mode="after")
     def _plausible_time(self) -> Self:
-        now = datetime.now(UTC)
-        if self.measured_at > now + timedelta(days=1):
-            raise ValueError("measurement from the future")
-        if self.local_date < date(1900, 1, 1):
-            raise ValueError("date out of range")
-        # Местная дата расходится с датой по UTC не больше чем на сутки — в любом поясе.
-        if abs((self.local_date - self.measured_at.astimezone(UTC).date()).days) > 1:
-            raise ValueError("local date does not match the moment of measurement")
+        _check_moment(self.measured_at, self.local_date)
         return self
 
 
@@ -303,6 +316,58 @@ class MetricSummary(BaseModel):
     metric_id: UUID
     latest: MeasurementOut | None
     previous: MeasurementOut | None
+
+
+class FitnessResultIn(Strict):
+    """Результат теста — как его записал человек (ADR 0021). Тест и вариант отжиманий
+    задаются при создании и потом не меняются (инвариант I21)."""
+
+    test: FitnessTest
+    tested_at: AwareDatetime
+    local_date: date
+    # Отжимания и подтягивания.
+    reps: Annotated[int, Field(ge=1, le=REPS_MAX)] | None = None
+    # Тест Купера: дистанция и единица — как ввёл пользователь.
+    distance_value: Annotated[Decimal, Field(gt=0, max_digits=9, decimal_places=3)] | None = None
+    distance_unit: Literal["m", "mi"] | None = None
+    # Только у отжиманий, и у них обязателен.
+    variant: PushUpVariant | None = None
+
+    @property
+    def distance_m(self) -> Decimal | None:
+        if self.distance_value is None or self.distance_unit is None:
+            return None
+        return to_meters(self.distance_value, self.distance_unit)
+
+    @model_validator(mode="after")
+    def _fits_the_test(self) -> Self:
+        _check_moment(self.tested_at, self.local_date)
+        if (self.distance_value is None) != (self.distance_unit is None):
+            raise ValueError("distance and unit must be provided together")
+        cooper = self.test == FitnessTest.COOPER
+        if cooper != (self.distance_value is not None) or cooper == (self.reps is not None):
+            raise ValueError("cooper test records distance, the others record reps")
+        if (self.test == FitnessTest.PUSH_UPS) != (self.variant is not None):
+            raise ValueError("only push-ups have a variant, and they must")
+        distance = self.distance_m
+        if distance is not None and not COOPER_MIN_M <= distance <= COOPER_MAX_M:
+            raise ValueError("distance out of range")
+        return self
+
+
+class FitnessResultOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    test: FitnessTest
+    tested_at: datetime
+    local_date: date
+    reps: int | None
+    # В метрах; исходное значение и единица — как ввёл пользователь.
+    distance_m: float | None
+    distance_value: float | None
+    distance_unit: Literal["m", "mi"] | None
+    variant: PushUpVariant | None
 
 
 ExerciseName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=60)]
