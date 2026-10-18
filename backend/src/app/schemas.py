@@ -19,7 +19,14 @@ from pydantic import (
 )
 
 from app import barcodes
-from app.exercises import CardioField, ExerciseKind, ExercisePreset, ExerciseType, Muscle
+from app.exercises import (
+    CardioField,
+    ExerciseKind,
+    ExercisePreset,
+    ExerciseType,
+    Muscle,
+    PaceUnit,
+)
 from app.fitness import (
     COOPER_MAX_M,
     COOPER_MIN_M,
@@ -610,6 +617,17 @@ class ProgressPoint(BaseModel):
     value: float
 
 
+class CardioPoint(BaseModel):
+    """Лучшее в одной тренировке по кардио: дистанция, время и темп — каждое отдельно."""
+
+    workout_id: UUID
+    local_date: date
+    distance_km: float | None
+    duration_seconds: int | None
+    # Секунды на километр по подходам от 1 км; меньше — быстрее.
+    pace_seconds_per_km: float | None
+
+
 class ExerciseProgressOut(BaseModel):
     exercise_id: UUID
     kind: ExerciseKind
@@ -620,6 +638,10 @@ class ExerciseProgressOut(BaseModel):
     max_reps: int | None
     max_duration_seconds: int | None
     max_distance_km: float | None
+    # Только у кардио: в чём показывать темп, лучший темп и точки графиков по тренировкам.
+    pace_unit: PaceUnit | None
+    best_pace_seconds_per_km: float | None
+    cardio: list[CardioPoint]
 
 
 # Отчёт об ошибке с клиента (инвариант I9). У каждого поля жёсткая форма: свободный текст —

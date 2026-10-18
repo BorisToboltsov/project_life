@@ -27,6 +27,18 @@ class CardioField(StrEnum):
     LEVEL = "level"
 
 
+class PaceUnit(StrEnum):
+    """Как показывать темп кардио — так, как принято на тренажёре. Считается он из времени
+    и дистанции подхода и отдельно не хранится."""
+
+    # Минуты на километр; по профилю — на милю.
+    PER_KM = "per_km"
+    # Километры в час; по профилю — мили в час.
+    SPEED = "speed"
+    # Время на 500 м, как на гребном тренажёре.
+    PER_500M = "per_500m"
+
+
 class Muscle(StrEnum):
     CHEST = "chest"
     DELTS = "delts"
@@ -96,8 +108,9 @@ class ExerciseType:
     # Мышцы, которые делают основную работу, и те, что помогают.
     muscles: tuple[Muscle, ...] = ()
     secondary: tuple[Muscle, ...] = ()
-    # Только у кардио: что, кроме времени, показывает тренажёр.
+    # Только у кардио: что, кроме времени, показывает тренажёр, и в чём он считает темп.
     cardio_fields: tuple[CardioField, ...] = ()
+    pace: PaceUnit | None = None
 
 
 _W, _R, _T, _C = (
@@ -115,12 +128,36 @@ CATALOG: dict[ExercisePreset, ExerciseType] = {
     exercise.code: exercise
     for exercise in (
         ExerciseType(
-            _P.ELLIPTICAL, _C, (_M.QUADS, _M.GLUTES), (_M.HAMSTRINGS, _M.CALVES), _WITH_LEVEL
+            _P.ELLIPTICAL,
+            _C,
+            (_M.QUADS, _M.GLUTES),
+            (_M.HAMSTRINGS, _M.CALVES),
+            _WITH_LEVEL,
+            PaceUnit.SPEED,
         ),
-        ExerciseType(_P.TREADMILL_WALK, _C, (_M.QUADS, _M.GLUTES), (_M.CALVES,), _WITH_INCLINE),
-        ExerciseType(_P.EXERCISE_BIKE, _C, (_M.QUADS,), (_M.GLUTES, _M.CALVES), _WITH_LEVEL),
         ExerciseType(
-            _P.ROWING_MACHINE, _C, (_M.LATS, _M.QUADS), (_M.BICEPS, _M.LOWER_BACK), _WITH_LEVEL
+            _P.TREADMILL_WALK,
+            _C,
+            (_M.QUADS, _M.GLUTES),
+            (_M.CALVES,),
+            _WITH_INCLINE,
+            PaceUnit.PER_KM,
+        ),
+        ExerciseType(
+            _P.EXERCISE_BIKE,
+            _C,
+            (_M.QUADS,),
+            (_M.GLUTES, _M.CALVES),
+            _WITH_LEVEL,
+            PaceUnit.SPEED,
+        ),
+        ExerciseType(
+            _P.ROWING_MACHINE,
+            _C,
+            (_M.LATS, _M.QUADS),
+            (_M.BICEPS, _M.LOWER_BACK),
+            _WITH_LEVEL,
+            PaceUnit.PER_500M,
         ),
         ExerciseType(_P.LAT_PULLDOWN, _W, (_M.LATS,), (_M.BICEPS, _M.DELTS)),
         ExerciseType(_P.DUMBBELL_BENCH_PRESS, _W, (_M.CHEST,), (_M.TRICEPS, _M.DELTS)),
@@ -178,3 +215,11 @@ def cardio_fields(preset: ExercisePreset | None, kind: ExerciseKind) -> tuple[Ca
     if kind != ExerciseKind.CARDIO:
         return ()
     return tuple(CardioField) if preset is None else CATALOG[preset].cardio_fields
+
+
+def pace_unit(preset: ExercisePreset | None, kind: ExerciseKind) -> PaceUnit | None:
+    """В чём показывать темп. Что за тренажёр у своего кардио, приложение не знает — темп
+    у него в минутах на километр, как у бега."""
+    if kind != ExerciseKind.CARDIO:
+        return None
+    return PaceUnit.PER_KM if preset is None else CATALOG[preset].pace
