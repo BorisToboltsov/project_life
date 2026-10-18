@@ -52,24 +52,18 @@ interface Band {
 type Table = Record<Sex, readonly Band[]>
 
 /**
- * Дистанция за 12 минут, м: Cooper K. H. A means of assessing maximal oxygen intake.
- * JAMA, 1968; таблица в том виде, как её приводит Topend Sports. С 20 лет у женщин —
- * следующая строка, а не 17–20, как в источнике: иначе 20 лет попадали бы в две.
+ * Дистанция за 12 минут, м, для взрослых: Cooper K. H. A means of assessing maximal oxygen
+ * uptake. JAMA, 1968; таблица — как её приводит Topend Sports («Cooper 12-minute Run Test
+ * Norms»). Строки для подростков в разных пересказах расходятся — их нет (ADR 0021).
  */
 const COOPER: Table = {
   male: [
-    { from: 13, to: 14, mins: [2100, 2200, 2400, 2700] },
-    { from: 15, to: 16, mins: [2200, 2300, 2500, 2800] },
-    { from: 17, to: 19, mins: [2300, 2500, 2700, 3000] },
     { from: 20, to: 29, mins: [1600, 2200, 2400, 2800] },
     { from: 30, to: 39, mins: [1500, 1900, 2300, 2700] },
     { from: 40, to: 49, mins: [1400, 1700, 2100, 2500] },
     { from: 50, to: null, mins: [1300, 1600, 2000, 2400] },
   ],
   female: [
-    { from: 13, to: 14, mins: [1500, 1600, 1900, 2000] },
-    { from: 15, to: 16, mins: [1600, 1700, 2000, 2100] },
-    { from: 17, to: 19, mins: [1700, 1800, 2100, 2300] },
     { from: 20, to: 29, mins: [1500, 1800, 2200, 2700] },
     { from: 30, to: 39, mins: [1400, 1700, 2000, 2500] },
     { from: 40, to: 49, mins: [1200, 1500, 1900, 2300] },
@@ -78,12 +72,12 @@ const COOPER: Table = {
 }
 
 /**
- * Отжимания до отказа: Canadian Physical Activity, Fitness & Lifestyle Approach (CSEP,
- * 3-е изд., 2003), их же приводит ACSM. У мужчин — классические, у женщин — с колен.
+ * Отжимания до отказа для взрослых: Canadian Physical Activity, Fitness & Lifestyle
+ * Approach (CSEP, 3-е изд., 2003) в пересказе ACSM's Guidelines for Exercise Testing and
+ * Prescription, 11-е изд. У мужчин — классические, у женщин — с колен.
  */
 const CPAFLA_PUSH_UPS: Table = {
   male: [
-    { from: 15, to: 19, mins: [18, 23, 29, 39] },
     { from: 20, to: 29, mins: [17, 22, 29, 36] },
     { from: 30, to: 39, mins: [12, 17, 22, 30] },
     { from: 40, to: 49, mins: [10, 13, 17, 25] },
@@ -91,7 +85,6 @@ const CPAFLA_PUSH_UPS: Table = {
     { from: 60, to: 69, mins: [5, 8, 11, 18] },
   ],
   female: [
-    { from: 15, to: 19, mins: [12, 18, 25, 33] },
     { from: 20, to: 29, mins: [10, 15, 21, 30] },
     { from: 30, to: 39, mins: [8, 13, 20, 27] },
     { from: 40, to: 49, mins: [5, 11, 15, 24] },

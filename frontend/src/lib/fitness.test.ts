@@ -63,10 +63,11 @@ describe('оценка теста Купера', () => {
     expect(rate(cooper(2000), old)).toMatchObject({ rating: { ages: { from: 50, to: null } } })
   })
 
-  it('младше 13 лет — норм нет', () => {
-    const child = { sex: 'female' as const, birth_date: '2016-01-01' }
+  it('младше 20 лет — норм нет: строки для подростков в источниках расходятся', () => {
+    const teen = { sex: 'female' as const, birth_date: '2008-01-01' }
 
-    expect(rate(cooper(2000), child)).toEqual({ missing: 'age' })
+    expect(rate(cooper(2000), teen)).toEqual({ missing: 'age' })
+    expect(rate(pushUps(20, 'knee'), teen)).toEqual({ missing: 'age' })
   })
 })
 
