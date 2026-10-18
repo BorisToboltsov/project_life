@@ -85,6 +85,7 @@ export const en: Dictionary = {
     pending: 'Not sent yet',
     entryLine: '{{quantity}} · {{meal}} · {{date}}',
     water: 'Water · {{amount}} ml',
+    measurement: '{{name}} · {{value}}',
     pickProduct: 'Choose a product',
   },
   deferred: {
@@ -532,6 +533,8 @@ export const en: Dictionary = {
     removeYes: 'Yes, remove',
     notFound: 'No such measurement in the list.',
     listEmpty: 'There are no measurements in the list.',
+    offline:
+      'The list of measurements changes online — this screen opens once the connection is back.',
   },
   metrics: {
     weight: 'Weight',

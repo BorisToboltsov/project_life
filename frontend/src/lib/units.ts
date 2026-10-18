@@ -22,6 +22,15 @@ const CANONICAL_PER_UNIT: Record<Unit, number> = {
   percent: 1,
 }
 
+/** Каноническая единица той же величины, что и данная. */
+const CANONICAL_UNIT: Record<Unit, Unit> = {
+  kg: 'kg',
+  lb: 'kg',
+  cm: 'cm',
+  in: 'cm',
+  percent: 'percent',
+}
+
 const DISPLAY_UNITS: Record<UnitSystem, Record<Quantity, Unit>> = {
   metric: { mass: 'kg', length: 'cm', percent: 'percent' },
   imperial: { mass: 'lb', length: 'in', percent: 'percent' },
@@ -40,6 +49,11 @@ function round(value: number, digits: number): number {
 /** Значение в единице `unit` → в канонической единице той же величины. */
 export function toCanonical(value: number, unit: Unit): number {
   return round(value * CANONICAL_PER_UNIT[unit], 3)
+}
+
+/** В какой единице хранится значение, введённое в `unit`. */
+export function canonicalUnit(unit: Unit): Unit {
+  return CANONICAL_UNIT[unit]
 }
 
 /** Каноническое значение → в единице `unit`, с точностью до десятой. */

@@ -3,6 +3,7 @@ import { api } from '@/api/client'
 import { copy } from './copy'
 import { resolveDeferred } from './deferred'
 import { type CatalogCopy, DIARY_COPY, diaryCopy } from './diary'
+import { MEASUREMENT_COPY, type MeasurementsCopy, measurementsCopy } from './measurements'
 import { flush } from './queue'
 import { offlineState } from './store'
 import { WORKOUT_COPY, workoutCopy } from './workouts'
@@ -21,8 +22,8 @@ async function reachable(): Promise<boolean> {
 }
 
 /**
- * Обновляет копию журнала тренировок — только при связи и пустой очереди: иначе ответ
- * сервера стёр бы изменения, которых он ещё не видел.
+ * Обновляет копию — журнал тренировок, дневник и замеры — только при связи и пустой
+ * очереди: иначе ответ сервера стёр бы изменения, которых он ещё не видел.
  */
 export async function refreshCopy(): Promise<void> {
   const ready = () => offlineState.get().online && offlineState.get().queued === 0
@@ -44,6 +45,7 @@ export async function refreshCopy(): Promise<void> {
     if (recent.data && Array.isArray(recent.data.workouts) && Array.isArray(recent.data.latest))
       await workoutCopy.replace(recent.data)
     await refreshDiary(ready)
+    await refreshMeasurements(ready)
   } catch {
     // Сеть пропала посреди обновления — копия остаётся прежней.
   }
@@ -82,6 +84,21 @@ async function refreshDiary(ready: () => boolean): Promise<void> {
   for (const { meal, lists } of suggestions) {
     if (Array.isArray(lists?.recent)) await copy.put(DIARY_COPY.suggestions(meal), lists)
   }
+}
+
+/** Копия замеров: свой список видов и все замеры — заново, только если они изменились. */
+async function refreshMeasurements(ready: () => boolean): Promise<void> {
+  const known = await copy.get<MeasurementsCopy>(MEASUREMENT_COPY.all)
+  const [metrics, all] = await Promise.all([
+    api.GET('/api/metrics'),
+    api.GET('/api/measurements/all', {
+      headers: known?.etag ? { 'If-None-Match': known.etag } : {},
+    }),
+  ])
+  if (!ready()) return
+  if (Array.isArray(metrics.data?.metrics)) await copy.put(MEASUREMENT_COPY.metrics, metrics.data)
+  if (Array.isArray(all.data))
+    await measurementsCopy.replace({ etag: all.response.headers.get('ETag'), items: all.data })
 }
 
 /**

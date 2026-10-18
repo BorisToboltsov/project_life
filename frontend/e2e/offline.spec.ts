@@ -136,3 +136,47 @@ test('штрихкод без сети: записан с количеством
   await expect(lunch).toContainText('Йогурт натуральный')
   await expect(lunch).not.toContainText(barcode)
 })
+
+test('замеры в режиме полёта: вес внесён, история и график — по копии с телефона', async ({
+  page,
+  context,
+}, testInfo) => {
+  const suffix = `${testInfo.project.name}-${Date.now()}`
+  await register(page, adminInviteLink(), 'Борис', `offline-body-${suffix}@example.com`)
+  await page.getByRole('link', { name: 'Внести замер' }).click()
+  await page.getByLabel('Вес').fill('74')
+  await page.getByRole('button', { name: 'Сохранить' }).click()
+  const weight = page.getByRole('link', { name: /Вес/ })
+  await expect(weight).toContainText('74 кг')
+  // Со связью копия обновляется при запуске: виды замеров и все замеры.
+  await page.evaluate(() => navigator.serviceWorker.ready)
+  await page.reload()
+  await page.waitForLoadState('networkidle')
+
+  await context.setOffline(true)
+  await page.reload()
+  await expect(page.getByText('Нет сети · записи сохраняются на телефоне')).toBeVisible()
+  await expect(weight).toContainText('74 кг')
+  await expect(page.getByRole('link', { name: 'Свой замер' })).toHaveCount(0)
+  await page.getByRole('link', { name: 'Внести замер' }).click()
+  await page.getByLabel('Вес').fill('73,2')
+  await page.getByRole('button', { name: 'Сохранить' }).click()
+  await expect(weight).toContainText('73,2 кг')
+  await expect(weight).toContainText('-0,8 кг')
+  await expect(weight.getByRole('img', { name: 'Ещё не отправлено' })).toBeVisible()
+
+  await weight.click()
+  const history = page.getByRole('list', { name: 'История' }).getByRole('listitem')
+  await expect(history).toHaveCount(2)
+  await expect(history.first().getByRole('img', { name: 'Ещё не отправлено' })).toBeVisible()
+  await expect(page.getByRole('img', { name: 'График: Вес' }).locator('canvas')).toBeVisible()
+  await expect(page.getByText('Нет сети · ждут отправки: 1')).toBeVisible()
+
+  await context.setOffline(false)
+  await page.evaluate(() => window.dispatchEvent(new Event('online')))
+  await expect(page.getByRole('img', { name: 'Ещё не отправлено' })).toHaveCount(0)
+
+  await page.reload()
+  await expect(history).toHaveCount(2)
+  await expect(history.first()).toContainText('73,2 кг')
+})

@@ -1,4 +1,5 @@
-"""Копия для работы без сети (ADR 0020): каталог целиком и последние дни дневника."""
+"""Копия для работы без сети (ADR 0020): каталог целиком, последние дни дневника и все
+замеры."""
 
 import uuid
 from datetime import datetime, timedelta
@@ -8,11 +9,13 @@ import pytest
 from httpx import AsyncClient
 
 from tests.conftest import MakeUser
+from tests.measurements import days_ago, history, metric_id, put_measurement, reading
 from tests.nutrition import COTTAGE_CHEESE, OATMEAL, add_entry, add_product, put_product
 
 pytestmark = pytest.mark.anyio
 
 CATALOG = "/api/products/catalog"
+MEASUREMENTS = "/api/measurements/all"
 
 
 async def test_catalog_comes_whole_and_answers_304_until_it_changes(
@@ -83,3 +86,59 @@ async def test_recent_days_hold_two_weeks_of_own_diary(
     assert days[0]["totals"]["kcal"] == 121
     assert days[0]["water"]["total_ml"] == 250
     assert days[13]["totals"]["kcal"] == 242
+
+
+async def test_all_measurements_come_whole_newest_first(
+    client: AsyncClient, make_user: MakeUser
+) -> None:
+    user, other = await make_user(), await make_user()
+    weight, waist = await metric_id(client, user), await metric_id(client, user, "waist")
+    await put_measurement(client, user, reading(weight, value=74.0, **days_ago(800)))
+    await put_measurement(client, user, reading(weight, value=72.4))
+    await put_measurement(client, user, reading(waist, value=86, unit="cm", **days_ago(1)))
+    await put_measurement(client, other, reading(await metric_id(client, other), value=90))
+
+    response = await client.get(MEASUREMENTS, headers=user.headers)
+
+    assert response.status_code == 200
+    rows = response.json()
+    assert [row["value"] for row in rows] == [72.4, 86.0, 74.0]
+    # Каждый замер — такой же, как в истории своего вида.
+    assert [row for row in rows if row["metric_id"] == weight] == await history(
+        client, user, weight
+    )
+
+
+async def test_all_measurements_answer_304_until_they_change(
+    client: AsyncClient, make_user: MakeUser
+) -> None:
+    user, other = await make_user(), await make_user()
+    weight = await metric_id(client, user)
+    record_id = str(uuid.uuid7())
+    await put_measurement(client, user, reading(weight), record_id)
+
+    first = await client.get(MEASUREMENTS, headers=user.headers)
+    etag = first.headers["etag"]
+    same = await client.get(MEASUREMENTS, headers={**user.headers, "If-None-Match": etag})
+    foreign = await client.get(MEASUREMENTS, headers={**other.headers, "If-None-Match": etag})
+
+    assert same.status_code == 304
+    assert same.content == b""
+    assert same.headers["etag"] == etag
+    # Метка своя у каждого: чужой ответ не выдать за свой.
+    assert (foreign.status_code, foreign.json()) == (200, [])
+
+    async def changed(previous: str) -> str:
+        response = await client.get(
+            MEASUREMENTS, headers={**user.headers, "If-None-Match": previous}
+        )
+        assert response.status_code == 200
+        return response.headers["etag"]
+
+    await put_measurement(client, user, reading(weight, value=71.9), record_id)
+    after_edit = await changed(etag)
+    await put_measurement(client, user, reading(weight, value=73.1, **days_ago(2)))
+    after_add = await changed(after_edit)
+    deleted = await client.delete(f"/api/measurements/{record_id}", headers=user.headers)
+    assert deleted.status_code == 204
+    await changed(after_add)

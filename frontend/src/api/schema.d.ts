@@ -648,6 +648,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/measurements/all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * All Measurements
+         * @description Все замеры пользователя, новые первыми, — копия для работы без сети (ADR 0020).
+         *     Метка `ETag` меняется, когда замер внесли, исправили или удалили; с прежней меткой в
+         *     `If-None-Match` ответ — 304 без тела.
+         */
+        get: operations["all_measurements_api_measurements_all_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/measurements/summary": {
         parameters: {
             query?: never;
@@ -4231,6 +4253,53 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["MeasurementOut"][];
                 };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    all_measurements_api_measurements_all_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "if-none-match"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeasurementOut"][];
+                };
+            };
+            /** @description Замеры не изменились с прошлого ответа */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Unauthorized */
             401: {

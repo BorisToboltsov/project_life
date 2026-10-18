@@ -1,9 +1,11 @@
+import hashlib
 from datetime import UTC, date, datetime
 from typing import Annotated
 from uuid import UUID, uuid7
 
-from fastapi import APIRouter, Query, Response, status
+from fastapi import APIRouter, Header, Query, Response, status
 from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
@@ -175,6 +177,39 @@ async def list_measurements(
         query = query.where(Measurement.local_date <= date_to)
     rows = await db.scalars(query.order_by(*_NEWEST_FIRST))
     return [MeasurementOut.model_validate(row) for row in rows]
+
+
+@router.get(
+    "/measurements/all",
+    response_model=list[MeasurementOut],
+    responses={304: {"description": "Замеры не изменились с прошлого ответа"}},
+)
+async def all_measurements(
+    user: CurrentUser,
+    db: SessionDep,
+    if_none_match: Annotated[str | None, Header()] = None,
+) -> list[MeasurementOut] | Response:
+    """Все замеры пользователя, новые первыми, — копия для работы без сети (ADR 0020).
+    Метка `ETag` меняется, когда замер внесли, исправили или удалили; с прежней меткой в
+    `If-None-Match` ответ — 304 без тела."""
+    rows = list(
+        await db.scalars(
+            select(Measurement)
+            .where(Measurement.user_id == user.id)
+            .order_by(*_NEWEST_FIRST, Measurement.id)
+        )
+    )
+    digest = hashlib.sha256(str(user.id).encode())
+    for row in rows:
+        digest.update(f"|{row.id}:{row.updated_at.isoformat()}".encode())
+    etag = f'"{digest.hexdigest()[:32]}"'
+    headers = {"ETag": etag, "Cache-Control": "no-cache"}
+    if if_none_match == etag:
+        return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers=headers)
+    return JSONResponse(
+        [MeasurementOut.model_validate(row).model_dump(mode="json") for row in rows],
+        headers=headers,
+    )
 
 
 @router.get("/measurements/summary")

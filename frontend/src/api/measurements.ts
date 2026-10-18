@@ -1,6 +1,16 @@
 import { useQuery } from '@tanstack/react-query'
 
 import { attempt } from '@/lib/errors'
+import type { ChangeContext } from '@/offline/db'
+import {
+  MEASUREMENT_COPY,
+  measurementFromCopy,
+  measurementHistoryOffline,
+  measurementsCopy,
+  measurementSummaryOffline,
+} from '@/offline/measurements'
+import { readOr, readThrough, write } from '@/offline/queue'
+import { offlineState } from '@/offline/store'
 
 import { api, type Schemas } from './client'
 
@@ -23,7 +33,9 @@ const NO_METRICS: Schemas['MetricListOut'] = { metrics: [], available: [] }
 export function useMetrics() {
   return useQuery({
     queryKey: METRICS_KEY,
-    queryFn: async () => (await api.GET('/api/metrics')).data ?? NO_METRICS,
+    networkMode: 'always',
+    queryFn: async () =>
+      (await readThrough(MEASUREMENT_COPY.metrics, () => api.GET('/api/metrics'))) ?? NO_METRICS,
   })
 }
 
@@ -51,10 +63,27 @@ export function deleteMetric(id: string) {
   )
 }
 
+/**
+ * Чтение замеров: с сервера, а без сети и пока очередь не пуста — по копии, где все замеры
+ * лежат целиком вместе с теми, которых сервер ещё не видел (ADR 0020).
+ */
+async function readMeasurements<T>(
+  load: () => Promise<{ data?: T; response: Response }>,
+  local: () => Promise<T>,
+): Promise<T | undefined> {
+  const { online, queued } = offlineState.get()
+  return online && queued === 0 ? readOr(load, local) : local()
+}
+
 export function useMeasurementSummary() {
   return useQuery({
     queryKey: [...MEASUREMENTS_KEY, 'summary'],
-    queryFn: async () => (await api.GET('/api/measurements/summary')).data ?? [],
+    networkMode: 'always',
+    queryFn: async () =>
+      (await readMeasurements(
+        () => api.GET('/api/measurements/summary'),
+        measurementSummaryOffline,
+      )) ?? [],
   })
 }
 
@@ -62,26 +91,60 @@ export function useMeasurementSummary() {
 export function useMeasurementHistory(metricId: string, from?: string) {
   return useQuery({
     queryKey: [...MEASUREMENTS_KEY, 'history', metricId, from ?? 'all'],
+    networkMode: 'always',
     queryFn: async () => {
       const query = from ? { metric_id: metricId, from } : { metric_id: metricId }
-      return (await api.GET('/api/measurements', { params: { query } })).data ?? []
+      return (
+        (await readMeasurements(
+          () => api.GET('/api/measurements', { params: { query } }),
+          () => measurementHistoryOffline(metricId, from),
+        )) ?? []
+      )
     },
   })
 }
 
-export function saveMeasurement(id: string, body: Schemas['MeasurementIn']) {
-  return attempt(() =>
-    api.PUT('/api/measurements/{measurement_id}', {
-      params: { path: { measurement_id: id } },
+export async function saveMeasurement(id: string, body: Schemas['MeasurementIn']) {
+  return write<Measurement>(
+    {
+      method: 'PUT',
+      path: '/api/measurements/{measurement_id}',
+      params: { measurement_id: id },
       body,
-    }),
+      context: {
+        kind: 'measurement',
+        localDate: body.local_date,
+        measurement: { metricId: body.metric_id, value: Number(body.value), unit: body.unit },
+      },
+    },
+    () => measurementsCopy.save(id, body),
   )
 }
 
-export function deleteMeasurement(id: string) {
-  return attempt(() =>
-    api.DELETE('/api/measurements/{measurement_id}', {
-      params: { path: { measurement_id: id } },
+/** Что удаляли — для строки «Не отправлено»: из копии, как замер виден на телефоне. */
+async function aboutRemoval(id: string): Promise<ChangeContext> {
+  const item = await measurementFromCopy(id)
+  return {
+    kind: 'measurementRemove',
+    ...(item && {
+      localDate: item.local_date,
+      measurement: {
+        metricId: item.metric_id,
+        value: item.original_value,
+        unit: item.original_unit,
+      },
     }),
+  }
+}
+
+export async function deleteMeasurement(id: string) {
+  return write(
+    {
+      method: 'DELETE',
+      path: '/api/measurements/{measurement_id}',
+      params: { measurement_id: id },
+      context: await aboutRemoval(id),
+    },
+    () => measurementsCopy.remove(id),
   )
 }

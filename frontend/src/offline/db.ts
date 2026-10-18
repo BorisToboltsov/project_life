@@ -19,6 +19,8 @@ export type ChangeKind =
   | 'entryRemove'
   | 'water'
   | 'waterRemove'
+  | 'measurement'
+  | 'measurementRemove'
 
 /** Чего не узнать из самого запроса: к какой тренировке и упражнению он относится. */
 export interface ChangeContext {
@@ -36,6 +38,8 @@ export interface ChangeContext {
     mealId: string
   }
   waterMl?: number
+  /** Замер: какой вид и что внесли — для строки «Не отправлено». */
+  measurement?: { metricId: string; value: number; unit: Schemas['Unit'] }
 }
 
 /** Изменение для сервера, отложенное до связи (ADR 0020). */

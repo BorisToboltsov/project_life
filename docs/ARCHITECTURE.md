@@ -107,7 +107,7 @@
 | Группа | Маршруты |
 |--------|----------|
 | Открытые | `GET /api/health`; `POST /api/auth/…`: `login`, `register`, `refresh`, `logout`, `invite/check`, `password-reset`, `password-reset/check` |
-| Для вошедших | `GET` и `PATCH /api/me`; `POST /api/auth/password`, `POST /api/auth/logout-all`; `GET /api/metrics`, `POST /api/metrics/presets`, `PUT` и `DELETE /api/metrics/{id}`; `GET /api/measurements`, `GET /api/measurements/summary`, `PUT` и `DELETE /api/measurements/{id}`; `GET /api/exercises`, `POST /api/exercises/presets`, `PUT` и `DELETE /api/exercises/{id}`; журнал тренировок и группы — в разделах ниже; `GET /api/products`, `GET /api/products/external`, `POST /api/products/lookup`, `GET`, `PUT` и `DELETE /api/products/{id}`, `GET /api/products/catalog`; `GET /api/diary`, `GET /api/diary/recent`, `GET /api/diary/suggestions`, `PUT` и `DELETE /api/diary/entries/{id}`, `PUT` и `DELETE /api/diary/meals/{id}`, `PUT` и `DELETE /api/diary/water/{id}`, `POST /api/diary/copy`, `GET` и `PUT /api/diary/goal`; `POST /api/errors` |
+| Для вошедших | `GET` и `PATCH /api/me`; `POST /api/auth/password`, `POST /api/auth/logout-all`; `GET /api/metrics`, `POST /api/metrics/presets`, `PUT` и `DELETE /api/metrics/{id}`; `GET /api/measurements`, `GET /api/measurements/summary`, `GET /api/measurements/all`, `PUT` и `DELETE /api/measurements/{id}`; `GET /api/exercises`, `POST /api/exercises/presets`, `PUT` и `DELETE /api/exercises/{id}`; журнал тренировок и группы — в разделах ниже; `GET /api/products`, `GET /api/products/external`, `POST /api/products/lookup`, `GET`, `PUT` и `DELETE /api/products/{id}`, `GET /api/products/catalog`; `GET /api/diary`, `GET /api/diary/recent`, `GET /api/diary/suggestions`, `PUT` и `DELETE /api/diary/entries/{id}`, `PUT` и `DELETE /api/diary/meals/{id}`, `PUT` и `DELETE /api/diary/water/{id}`, `POST /api/diary/copy`, `GET` и `PUT /api/diary/goal`; `POST /api/errors` |
 | Для администратора | `/api/admin/users`, `/api/admin/users/{id}/password-reset`, `/api/admin/invites`, `/api/admin/invites/{id}`, `/api/admin/errors`, `/api/admin/errors/{id}` |
 
 ### Таблицы
@@ -147,6 +147,9 @@
 каноническую единицу и хранит оба значения ([ADR 0004](adr/0004-units.md)). Ключ записи
 выбирает клиент ([ADR 0002](adr/0002-record-ids.md)), местную дату — тоже
 ([ADR 0003](adr/0003-time.md)).
+
+`GET /api/measurements/all` отдаёт все замеры пользователя для копии без сети, новыми
+первыми, с меткой `ETag`: неизменные — ответ 304 без тела ([ADR 0020](adr/0020-offline-entry.md)).
 
 ### Упражнения
 
@@ -287,7 +290,9 @@
   копией ответов, очередью и отклонёнными изменениями (`db.ts`); запись «сервер, при
   сбое — очередь» и чтение через копию (`queue.ts`); копия журнала тренировок и её правка
   теми же изменениями, что делает сервер (`workouts.ts`); копия дневника — каталог, дни,
-  цель, подсказки, — поиск по каталогу и итоги дня по правилам сервера (`diary.ts`); проверка связи, отправка очереди
+  цель, подсказки, — поиск по каталогу и итоги дня по правилам сервера (`diary.ts`); копия
+  замеров — список видов и все замеры, — история и сводка по ней (`measurements.ts`);
+  проверка связи, отправка очереди
   и обновление копии (`sync.ts`); записи по незнакомым штрихкодам — отдельная таблица,
   поиск, когда вернулась связь, и тело записи для найденного продукта (`deferred.ts`);
   владелец копии и её стирание (`session.ts`); состояние для полосы и отметок

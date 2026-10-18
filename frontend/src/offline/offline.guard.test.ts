@@ -22,6 +22,8 @@ const OFFLINE_FUNCTIONS: [string, string][] = [
   ['/src/api/nutrition.ts', 'deleteEntry'],
   ['/src/api/nutrition.ts', 'saveWater'],
   ['/src/api/nutrition.ts', 'deleteWater'],
+  ['/src/api/measurements.ts', 'saveMeasurement'],
+  ['/src/api/measurements.ts', 'deleteMeasurement'],
 ]
 
 /** Тело экспортированной функции: от её объявления до следующего объявления. */

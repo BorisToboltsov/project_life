@@ -86,6 +86,7 @@ export const ru = {
     pending: 'Ещё не отправлено',
     entryLine: '{{quantity}} · {{meal}} · {{date}}',
     water: 'Вода · {{amount}} мл',
+    measurement: '{{name}} · {{value}}',
     pickProduct: 'Выбрать продукт',
   },
   deferred: {
@@ -532,6 +533,7 @@ export const ru = {
     removeYes: 'Да, убрать',
     notFound: 'Такого замера в списке нет.',
     listEmpty: 'В списке нет ни одного замера.',
+    offline: 'Список замеров меняется при связи — экран откроется, когда она вернётся.',
   },
   metrics: {
     weight: 'Вес',
