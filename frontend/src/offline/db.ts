@@ -55,6 +55,28 @@ export interface Rejected extends Change {
   failure: ErrorKey
 }
 
+/** Сколько внесли по незнакомому штрихкоду: единица и размер упаковки ещё неизвестны. */
+export type DeferredAmount = { packages: number } | { units: number }
+
+/**
+ * Запись по штрихкоду, которого нет на телефоне (ADR 0020): ждёт, пока приложение найдёт
+ * продукт, а затем — согласия человека. Сервер о ней не знает, поэтому в очередь она не
+ * идёт. Ключ становится ключом записи дневника, когда продукт внесут.
+ */
+export interface Deferred {
+  id: string
+  barcode: string
+  localDate: string
+  mealId: string
+  amount: DeferredAmount
+  /** Ждёт поиска, найден и ждёт согласия или не найден. */
+  status: 'waiting' | 'found' | 'missing'
+  productId?: string
+  /** Чем кончился поиск ненайденного и что о продукте известно. */
+  missing?: { status: 'not_found' | 'draft'; draft: Schemas['ProductDraftOut'] | null }
+  createdAt: number
+}
+
 interface CopyRow {
   key: string
   value: unknown
@@ -64,10 +86,12 @@ class OfflineDatabase extends Dexie {
   copy!: EntityTable<CopyRow, 'key'>
   queue!: EntityTable<Change, 'seq'>
   rejected!: EntityTable<Rejected, 'seq'>
+  deferred!: EntityTable<Deferred, 'id'>
 
   constructor() {
     super('life-offline')
     this.version(1).stores({ copy: 'key', queue: '++seq', rejected: 'seq' })
+    this.version(2).stores({ deferred: 'id' })
   }
 }
 

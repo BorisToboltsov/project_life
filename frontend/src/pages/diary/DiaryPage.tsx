@@ -32,6 +32,7 @@ import { useOfflineState } from '@/offline/store'
 
 import { useMealName } from './mealName'
 import { Measure } from './Measure'
+import { DeferredRow } from './DeferredRow'
 import { useQuantityText } from './quantityText'
 import { DATE_MIN } from './values'
 import { WaterCard } from './WaterCard'
@@ -265,6 +266,10 @@ function MealActions({ date, meal, name }: { date: string; meal: DayMeal; name: 
 function MealCard({ date, meal }: { date: string; meal: DayMeal }) {
   const { t, i18n } = useTranslation()
   const name = useMealName()(meal)
+  // Записи по штрихкодам, которые ждут продукта или согласия, — на своих местах (ADR 0020).
+  const deferred = useOfflineState().deferred.filter(
+    (item) => item.localDate === date && item.mealId === meal.id && item.status !== 'missing',
+  )
 
   return (
     <Card>
@@ -288,14 +293,22 @@ function MealCard({ date, meal }: { date: string; meal: DayMeal }) {
         )}
       </CardHeader>
       <CardContent className="grid gap-3">
-        {meal.entries.length === 0 ? (
+        {meal.entries.length === 0 && deferred.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t('diary.emptyMeal')}</p>
         ) : (
           <ul aria-label={name} className="grid gap-2">
             {meal.entries.map((entry) => (
               <EntryRow key={entry.id} entry={entry} />
             ))}
+            {deferred.map((item) => (
+              <DeferredRow key={item.id} item={item} />
+            ))}
           </ul>
+        )}
+        {deferred.length > 0 && (
+          <p className="text-sm text-muted-foreground">
+            {t('deferred.notCounted', { count: deferred.length })}
+          </p>
         )}
         {/* Убранный из списка приём остаётся в дне ради своих записей: новое в него не вносят. */}
         {meal.archived ? (

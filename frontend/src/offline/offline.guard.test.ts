@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { json, mockApi } from '@/test/api'
 
 import { type Change, db } from './db'
+import { deferredBarcodes, resolveDeferred } from './deferred'
 import { enqueue, flush, forget } from './queue'
 
 const sources = import.meta.glob<string>('/src/api/*.ts', {
@@ -85,4 +86,26 @@ describe('запись без сети', () => {
     await forget([rejected!.seq])
     expect(await db.rejected.count()).toBe(0)
   })
+})
+
+describe('отложенный штрихкод', () => {
+  it.each(['not_found', 'draft', 'unavailable'])(
+    'поиск с исходом %s не стирает запись: она ждёт решения или следующей попытки',
+    async (status) => {
+      await deferredBarcodes.add({
+        id: '0199b7a0-0000-7000-8000-0000000000f1',
+        barcode: '4601000000012',
+        localDate: '2026-10-18',
+        mealId: '0199b7a0-0000-7000-8000-0000000000a2',
+        amount: { packages: 1 },
+      })
+      mockApi({
+        'POST /api/products/lookup': json(200, { status, barcode: '4601000000012' }),
+      })
+
+      await resolveDeferred()
+
+      expect(await db.deferred.count()).toBe(1)
+    },
+  )
 })

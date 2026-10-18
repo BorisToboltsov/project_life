@@ -353,5 +353,14 @@ export function GoalPage() {
   // Вес берётся и тогда, когда его убрали из списка замеров: замеры остаются.
   const weightId = metrics.data?.metrics.find((metric) => metric.preset === 'weight')?.id
   const weight = summary.data?.find((item) => item.metric_id === weightId)?.latest ?? null
-  return <GoalForm goal={goal.data ?? null} body={bodyOf(user, weight?.value)} weight={weight} />
+  // Сводка из кэша могла прийти без только что внесённого веса: свежий замер заново
+  // заполняет форму — иначе подсказка цели по воде осталась бы пустой.
+  return (
+    <GoalForm
+      key={weight?.id ?? 'no-weight'}
+      goal={goal.data ?? null}
+      body={bodyOf(user, weight?.value)}
+      weight={weight}
+    />
+  )
 }

@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 
+import { freshBarcode } from './barcode.ts'
 import { adminInviteLink, createProduct, register } from './steps.ts'
 
 // ADR 0020: приложение открывается без сети на копии, тренировка записывается в очередь и
@@ -90,4 +91,48 @@ test('дневник в режиме полёта: запись из катал�
   await expect(
     page.getByRole('list', { name: 'Порции за день' }).getByRole('listitem'),
   ).toHaveCount(1)
+})
+
+test('штрихкод без сети: записан с количеством, найден со связью и внесён после согласия', async ({
+  page,
+  context,
+}, testInfo) => {
+  // Камера не нужна: штрихкод вводится цифрами.
+  await page.addInitScript(() => {
+    navigator.mediaDevices.getUserMedia = () =>
+      Promise.reject(new DOMException('Permission denied', 'NotAllowedError'))
+  })
+  const suffix = `${testInfo.project.name}-${Date.now()}`
+  // Подменный Open Food Facts стенда находит 4601… — йогурт с упаковкой в 350 г.
+  const barcode = freshBarcode('4601')
+  await register(page, adminInviteLink(), 'Борис', `offline-scan-${suffix}@example.com`)
+  await page.getByRole('link', { name: 'Открыть дневник' }).click()
+  await page.evaluate(() => navigator.serviceWorker.ready)
+  await page.reload()
+  await page.waitForLoadState('networkidle')
+
+  await context.setOffline(true)
+  await page.getByRole('link', { name: 'Добавить: Обед' }).click()
+  await page.getByRole('link', { name: 'Сканировать штрихкод' }).click()
+  await page.getByLabel('Штрихкод цифрами').fill(barcode)
+  await page.getByRole('button', { name: 'Найти' }).click()
+  await expect(
+    page.getByText(`Штрихкода ${barcode} на телефоне нет.`, { exact: false }),
+  ).toBeVisible()
+  await page.getByRole('button', { name: 'Записать до сети' }).click()
+  const lunch = page.getByRole('list', { name: 'Обед' })
+  await expect(lunch).toContainText(barcode)
+  await expect(page.getByText('Нет сети · ждут отправки: 1')).toBeVisible()
+
+  await context.setOffline(false)
+  await page.evaluate(() => window.dispatchEvent(new Event('online')))
+  const offer = lunch.getByRole('listitem', { name: 'Найден по штрихкоду' })
+  await expect(offer).toContainText('Йогурт натуральный')
+  await expect(offer).toContainText('350 г')
+  await offer.getByRole('button', { name: 'Внести' }).click()
+  await expect(offer).toHaveCount(0)
+
+  await page.reload()
+  await expect(lunch).toContainText('Йогурт натуральный')
+  await expect(lunch).not.toContainText(barcode)
 })

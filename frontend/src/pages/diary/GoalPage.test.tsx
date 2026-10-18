@@ -1,9 +1,9 @@
-import { screen, waitFor } from '@testing-library/react'
+import { act, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 
 import { today } from '@/lib/dates'
-import { callsTo, json, mockApi } from '@/test/api'
+import { callsTo, json, mockApi, sequence } from '@/test/api'
 import { renderApp } from '@/test/app'
 import {
   anna,
@@ -282,6 +282,21 @@ describe('цель на день', () => {
 
     await waitFor(() => expect(callsTo(calls, SAVE)).toHaveLength(1))
     expect(callsTo(calls, SAVE)[0].body).toMatchObject({ kcal: 2100, water_ml: 2400 })
+  })
+
+  it('вес, внесённый только что, подставляет расчёт и в уже открытую форму', async () => {
+    // Сводка из кэша — ещё без веса; свежая приходит следом.
+    mockApi({
+      [GOAL]: json(200, { ...dailyGoal, water_ml: null }),
+      [SUMMARY]: sequence(json(200, summaryOf({})), json(200, weight)),
+      [METRICS]: json(200, metricList()),
+    })
+    const { queryClient } = await renderApp('/diary/goal', anna)
+    expect((await waitFor(fields)).water).toHaveValue('')
+
+    await act(() => queryClient.invalidateQueries({ queryKey: ['measurements'] }))
+
+    await waitFor(() => expect(fields().water).toHaveValue('2400'))
   })
 
   it('заданную цель по воде не затирает и возвращает расчёт кнопкой', async () => {

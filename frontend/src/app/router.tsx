@@ -53,6 +53,7 @@ const screens = {
     'AddFoodNewProductPage',
   ),
   scan: lazyRouteComponent(() => import('@/pages/diary/ScanPage'), 'ScanPage'),
+  barcode: lazyRouteComponent(() => import('@/pages/diary/BarcodePage'), 'BarcodePage'),
   mealNew: lazyRouteComponent(() => import('@/pages/diary/MealNewPage'), 'MealNewPage'),
   copy: lazyRouteComponent(() => import('@/pages/diary/CopyPage'), 'CopyPage'),
   entryEdit: lazyRouteComponent(() => import('@/pages/diary/EntryEditPage'), 'EntryEditPage'),
@@ -136,14 +137,22 @@ const addFoodRoute = createRoute({
   params: { parse: ({ date, meal }) => ({ date: dateParam(date), meal }) },
   // Ключ продукта, с которым сюда пришли, — он показывается первым: `product` — созданный
   // по пути, `scanned` — найденный по штрихкоду, `picked` — выбранный в Open Food Facts.
-  // `replaces` — отклонённая запись из «Не отправлено», которую заменит внесённая здесь.
+  // `replaces` — отклонённая запись из «Не отправлено», `deferred` — отложенная запись по
+  // штрихкоду: внесённое здесь заменяет их.
   validateSearch: (
     search: Record<string, unknown>,
-  ): { product?: string; scanned?: string; picked?: string; replaces?: number } => ({
+  ): {
+    product?: string
+    scanned?: string
+    picked?: string
+    replaces?: number
+    deferred?: string
+  } => ({
     ...(typeof search.product === 'string' && { product: search.product }),
     ...(typeof search.scanned === 'string' && { scanned: search.scanned }),
     ...(typeof search.picked === 'string' && { picked: search.picked }),
     ...(typeof search.replaces === 'number' && { replaces: search.replaces }),
+    ...(typeof search.deferred === 'string' && { deferred: search.deferred }),
   }),
   component: screens.addFood,
 })
@@ -160,6 +169,14 @@ const scanRoute = createRoute({
   path: '/diary/$date/add/$meal/scan',
   params: { parse: ({ date, meal }) => ({ date: dateParam(date), meal }) },
   component: screens.scan,
+})
+
+// Запись по штрихкоду (ADR 0020): исправить найденный продукт или заполнить ненайденный.
+const barcodeRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/diary/$date/barcode/$id',
+  params: { parse: ({ date, id }) => ({ date: dateParam(date), id }) },
+  component: screens.barcode,
 })
 
 const mealNewRoute = createRoute({
@@ -238,6 +255,7 @@ const routeTree = rootRoute.addChildren([
     addFoodRoute,
     addFoodNewProductRoute,
     scanRoute,
+    barcodeRoute,
     mealNewRoute,
     copyRoute,
     entryEditRoute,

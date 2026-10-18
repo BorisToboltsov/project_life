@@ -29,6 +29,7 @@ import type { Missing } from '@/pages/products/lookup'
 import { MissingProduct } from '@/pages/products/MissingProduct'
 import { ProductForm } from '@/pages/products/ProductForm'
 import { ProductLine } from '@/pages/products/ProductLine'
+import { deferredBarcodes } from '@/offline/deferred'
 import { forget } from '@/offline/queue'
 import { useOfflineState } from '@/offline/store'
 
@@ -185,11 +186,13 @@ function AddFood({ date, meal }: { date: string; meal: Meal }) {
     scanned: scannedId,
     picked: pickedId,
     replaces,
+    deferred,
   } = route.useSearch() as {
     product?: string
     scanned?: string
     picked?: string
     replaces?: number
+    deferred?: string
   }
   const { online } = useOfflineState()
   const navigate = useNavigate()
@@ -237,6 +240,8 @@ function AddFood({ date, meal }: { date: string; meal: Meal }) {
     setQuery('')
     // Пришли с «Не отправлено»: новая запись заменяет отклонённую (ADR 0020).
     if (replaces !== undefined) void forget([replaces])
+    // Пришли из предложения по штрихкоду: внесённое заменяет отложенную запись.
+    if (deferred !== undefined) void deferredBarcodes.remove(deferred)
     // Продукт, с которым пришли, внесён: при возврате на экран он снова не всплывёт.
     if (broughtId) void navigate({ ...here, search: {}, replace: true })
   }

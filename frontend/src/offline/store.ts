@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 
-import { db, type Rejected } from './db'
+import { db, type Deferred, type Rejected } from './db'
 
 export interface OfflineState {
   /** Сервер отвечает. `false` — записи идут сразу в очередь (ADR 0020). */
@@ -12,6 +12,8 @@ export interface OfflineState {
   /** Ключи записей, изменения которых ещё не дошли до сервера. */
   pending: ReadonlySet<string>
   rejected: readonly Rejected[]
+  /** Записи по незнакомым штрихкодам — в порядке внесения. */
+  deferred: readonly Deferred[]
 }
 
 const initial: OfflineState = {
@@ -20,6 +22,7 @@ const initial: OfflineState = {
   queued: 0,
   pending: new Set(),
   rejected: [],
+  deferred: [],
 }
 
 let state = initial
@@ -49,9 +52,10 @@ export const offlineState = {
 
   /** Перечитывает очередь и отказы из базы после любого их изменения. */
   async reload(): Promise<void> {
-    const [queue, rejected] = await Promise.all([
+    const [queue, rejected, deferred] = await Promise.all([
       db.queue.orderBy('seq').toArray(),
       db.rejected.orderBy('seq').toArray(),
+      db.deferred.toArray(),
     ])
     set({
       queued: queue.length,
@@ -62,6 +66,7 @@ export const offlineState = {
         ]),
       ),
       rejected,
+      deferred: deferred.sort((a, b) => a.createdAt - b.createdAt),
     })
   },
 

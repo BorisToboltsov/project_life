@@ -1,13 +1,16 @@
 import { api } from '@/api/client'
 
 import { copy } from './copy'
+import { resolveDeferred } from './deferred'
 import { type CatalogCopy, DIARY_COPY, diaryCopy } from './diary'
 import { flush } from './queue'
 import { offlineState } from './store'
 import { WORKOUT_COPY, workoutCopy } from './workouts'
 
-/** Как часто проверять связь, пока её нет или очередь не пуста. */
+/** Как часто проверять связь, пока её нет, очередь не пуста или штрихкоды ждут поиска. */
 const PROBE_MS = 30_000
+
+const waiting = () => offlineState.get().deferred.filter((item) => item.status === 'waiting').length
 
 async function reachable(): Promise<boolean> {
   try {
@@ -101,7 +104,9 @@ export function startSync(onSynced: () => void): () => void {
       }
       const hadQueue = offlineState.get().queued > 0
       if (hadQueue && !(await flush())) return
-      if ((wasOffline || hadQueue) && !stopped) {
+      // Незнакомые штрихкоды ищутся, когда очередь ушла: найденное ляжет поверх отправленного.
+      const found = waiting() > 0 && !stopped && (await resolveDeferred())
+      if ((wasOffline || hadQueue || found) && !stopped) {
         onSynced()
         await refreshCopy()
       }
@@ -118,7 +123,7 @@ export function startSync(onSynced: () => void): () => void {
   document.addEventListener('visibilitychange', onVisible)
   const timer = setInterval(() => {
     const { online, queued } = offlineState.get()
-    if (!online || queued > 0) tick()
+    if (!online || queued > 0 || waiting() > 0) tick()
   }, PROBE_MS)
   tick()
   void refreshCopy()
