@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { getRouteApi, Link } from '@tanstack/react-router'
-import { Pencil, Trash2 } from 'lucide-react'
+import { ChevronDown, Pencil, Trash2 } from 'lucide-react'
 import { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -230,7 +230,9 @@ function History({ test, items }: { test: FitnessTest; items: FitnessResult[] })
     () => items.map((item) => ({ date: item.local_date, value: headline(item) })).reverse(),
     [items],
   )
-  const values = useMemo(() => ({ name, points }), [name, points])
+  // У Купера на графике VO2max, у остальных — повторы: подпись линии говорит, что это.
+  const series = test === 'cooper' ? t('fitness.vo2max') : name
+  const values = useMemo(() => ({ name: series, points }), [series, points])
   const formatValue = useCallback(
     (value: number) => formatNumber(value, i18n.language, test === 'cooper' ? 1 : 0),
     [i18n.language, test],
@@ -274,12 +276,16 @@ function HowTo({ test }: { test: FitnessTest }) {
       open={(test === 'cooper' && timerRunning()) || undefined}
       className="group rounded-xl border bg-card"
     >
-      <summary className="flex min-h-14 cursor-pointer items-center px-4 font-medium">
+      <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-4 font-medium [&::-webkit-details-marker]:hidden">
         {t('fitness.howTo')}
+        <ChevronDown
+          className="size-5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180"
+          aria-hidden="true"
+        />
       </summary>
       <div className="grid gap-4 px-4 pb-4">
         {test !== 'cooper' && (
-          <div className="mx-auto w-full max-w-xs rounded-lg bg-muted p-2">
+          <div className="mx-auto w-full max-w-56 rounded-lg bg-muted p-2">
             <ExerciseFigure preset={DRAWING[test]} />
           </div>
         )}
