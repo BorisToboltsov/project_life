@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
-import { Dumbbell, GlassWater, Ruler, ScanBarcode, Timer, Utensils } from 'lucide-react'
+import { Activity, Dumbbell, GlassWater, Ruler, ScanBarcode, Timer, Utensils } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -19,6 +19,7 @@ import { useOfflineState } from '@/offline/store'
 import { useDeferredAmount } from '@/pages/diary/deferredAmount'
 import { useMealName } from '@/pages/diary/mealName'
 import { useQuantityText } from '@/pages/diary/quantityText'
+import { useRawText } from '@/pages/fitness/fitnessText'
 import { useMetricName } from '@/pages/measurements/metricName'
 
 import { moveToNewWorkout, rejectedSets } from './rescue'
@@ -73,6 +74,7 @@ function RejectedRow({ changes }: { changes: Rejected[] }) {
   if (kind === 'water' || kind === 'waterRemove') return <WaterRow change={changes[0]!} />
   if (kind === 'measurement' || kind === 'measurementRemove')
     return <MeasurementRow change={changes[0]!} />
+  if (kind === 'fitness' || kind === 'fitnessRemove') return <FitnessRow change={changes[0]!} />
   return <WorkoutRow changes={changes} />
 }
 
@@ -223,6 +225,25 @@ function MeasurementRow({ change }: { change: Rejected }) {
               name: name(metric),
               value: `${formatNumber(measurement.value, i18n.language)} ${t(`unitNames.${measurement.unit}`)}`,
             })
+          : t('unsent.changes', { count: 1 })
+      }
+      detail={localDate ? isoToDisplay(localDate) : undefined}
+      change={change}
+    />
+  )
+}
+
+/** Результат теста: какой тест, что внесли и дата. */
+function FitnessRow({ change }: { change: Rejected }) {
+  const { t } = useTranslation()
+  const raw = useRawText()
+  const { fitness, localDate } = change.context
+  return (
+    <Row
+      icon={Activity}
+      title={
+        fitness
+          ? t('unsent.fitness', { name: t(`fitnessTests.${fitness.test}`), value: raw(fitness) })
           : t('unsent.changes', { count: 1 })
       }
       detail={localDate ? isoToDisplay(localDate) : undefined}

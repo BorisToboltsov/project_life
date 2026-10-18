@@ -3,6 +3,7 @@ import { api } from '@/api/client'
 import { copy } from './copy'
 import { resolveDeferred } from './deferred'
 import { type CatalogCopy, DIARY_COPY, diaryCopy } from './diary'
+import { FITNESS_COPY, type FitnessCopy, fitnessCopy } from './fitness'
 import { MEASUREMENT_COPY, type MeasurementsCopy, measurementsCopy } from './measurements'
 import { flush } from './queue'
 import { offlineState } from './store'
@@ -22,7 +23,7 @@ async function reachable(): Promise<boolean> {
 }
 
 /**
- * Обновляет копию — журнал тренировок, дневник и замеры — только при связи и пустой
+ * Обновляет копию — журнал тренировок, дневник, замеры и тесты — только при связи и пустой
  * очереди: иначе ответ сервера стёр бы изменения, которых он ещё не видел. `alive` —
  * отправка ещё работает: после выхода обновление не запрашивает и не пишет дальше.
  */
@@ -47,6 +48,7 @@ export async function refreshCopy(alive: () => boolean = () => true): Promise<vo
       await workoutCopy.replace(recent.data)
     await refreshDiary(ready)
     await refreshMeasurements(ready)
+    await refreshFitness(ready)
   } catch {
     // Сеть пропала посреди обновления — копия остаётся прежней.
   }
@@ -102,6 +104,18 @@ async function refreshMeasurements(ready: () => boolean): Promise<void> {
   if (Array.isArray(metrics.data?.metrics)) await copy.put(MEASUREMENT_COPY.metrics, metrics.data)
   if (Array.isArray(all.data))
     await measurementsCopy.replace({ etag: all.response.headers.get('ETag'), items: all.data })
+}
+
+/** Копия результатов тестов: все результаты — заново, только если они изменились. */
+async function refreshFitness(ready: () => boolean): Promise<void> {
+  if (!ready()) return
+  const known = await copy.get<FitnessCopy>(FITNESS_COPY)
+  const all = await api.GET('/api/fitness-results', {
+    headers: known?.etag ? { 'If-None-Match': known.etag } : {},
+  })
+  if (!ready()) return
+  if (Array.isArray(all.data))
+    await fitnessCopy.replace({ etag: all.response.headers.get('ETag'), items: all.data })
 }
 
 /**
