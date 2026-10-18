@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import type { ErrorKey } from '@/lib/errors'
 import { uuidv7 } from '@/lib/uuid'
+import { useOfflineState } from '@/offline/store'
 
 import { inputUnit, metricSchema, type MetricValues, QUANTITIES } from './entryValues'
 import { useMetricName } from './metricName'
@@ -97,6 +98,7 @@ export function MetricNewPage() {
   const queryClient = useQueryClient()
   const metrics = useMetrics()
   const name = useMetricName()
+  const { online } = useOfflineState()
   const [added, setAdded] = useState<string>()
   const [failure, setFailure] = useState<ErrorKey>()
 
@@ -114,6 +116,18 @@ export function MetricNewPage() {
       name(metric),
     )
 
+  // Список видов меняется только при связи (ADR 0020).
+  if (!online) {
+    return (
+      <div className="grid gap-4">
+        <h1 className="text-2xl font-semibold">{t('metric.newTitle')}</h1>
+        <p className="text-muted-foreground">{t('metric.offline')}</p>
+        <Button asChild variant="ghost" className="h-11 justify-self-start">
+          <Link to="/measurements/new">{t('measurements.add')}</Link>
+        </Button>
+      </div>
+    )
+  }
   if (metrics.isPending) {
     return <p className="text-muted-foreground">{t('common.loading')}</p>
   }

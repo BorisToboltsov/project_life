@@ -22,6 +22,7 @@ import { DIARY_KEY } from '@/api/nutrition'
 import { useUser } from '@/auth/useSession'
 import { Chart } from '@/components/chart/Chart'
 import { FormError, SelectField, TextField } from '@/components/form/fields'
+import { PendingMark } from '@/components/PendingMark'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { isoToDisplay } from '@/lib/dates'
@@ -29,6 +30,7 @@ import type { ErrorKey } from '@/lib/errors'
 import { formatNumber } from '@/lib/numbers'
 import { movingAverage, type Point } from '@/lib/trend'
 import { measuredIn, type Unit } from '@/lib/units'
+import { useOfflineState } from '@/offline/store'
 
 import { AddMetricLink } from './AddMetricLink'
 import { inputUnit, renameSchema, type RenameValues } from './entryValues'
@@ -79,6 +81,7 @@ function MetricTabs({ metrics, current }: { metrics: Metric[]; current: string }
 function HistoryRow({ item, unit }: { item: Measurement; unit: Unit }) {
   const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
+  const { pending } = useOfflineState()
   const [confirming, setConfirming] = useState(false)
   const [failure, setFailure] = useState<ErrorKey>()
 
@@ -95,6 +98,11 @@ function HistoryRow({ item, unit }: { item: Measurement; unit: Unit }) {
         <div>
           <p className="font-medium">
             {formatNumber(measuredIn(item, unit), i18n.language)} {t(`unitNames.${unit}`)}
+            {pending.has(item.id) && (
+              <span className="ml-1.5 inline-block align-[-2px]">
+                <PendingMark />
+              </span>
+            )}
           </p>
           <p className="text-sm text-muted-foreground">{isoToDisplay(item.local_date)}</p>
         </div>
@@ -260,12 +268,14 @@ function RenameForm({ metric, onDone }: { metric: Metric; onDone: () => void }) 
 
 /**
  * Под историей: вид замера убирают из списка, а свой ещё и переименовывают. Убранный вид
- * возвращается с экрана добавления вместе со всеми замерами.
+ * возвращается с экрана добавления вместе со всеми замерами. Без сети список видов не
+ * меняется — действий нет (ADR 0020).
  */
 function MetricActions({ metric }: { metric: Metric }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { online } = useOfflineState()
   const name = useMetricName()(metric)
   const [mode, setMode] = useState<'idle' | 'renaming' | 'confirming'>('idle')
   const [failure, setFailure] = useState<ErrorKey>()
@@ -280,6 +290,7 @@ function MetricActions({ metric }: { metric: Metric }) {
     await navigate({ to: '/measurements' })
   }
 
+  if (!online) return null
   if (mode === 'renaming') return <RenameForm metric={metric} onDone={() => setMode('idle')} />
   return (
     <div className="grid gap-2">

@@ -2,9 +2,15 @@ import { Link } from '@tanstack/react-router'
 import { Plus } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
+import { useOfflineState } from '@/offline/store'
 
-/** Пунктирная кнопка «+»: ведёт к экрану, где в список добавляют вид замера. */
+/**
+ * Пунктирная кнопка «+»: ведёт к экрану, где в список добавляют вид замера. Виды замеров
+ * заводятся только при связи — без неё кнопки нет (ADR 0020).
+ */
 export function AddMetricLink({ label, className }: { label: string; className?: string }) {
+  const { online } = useOfflineState()
+  if (!online) return null
   return (
     <Link
       to="/measurements/metrics/new"

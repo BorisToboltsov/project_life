@@ -1,15 +1,17 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
-import { Dumbbell, GlassWater, ScanBarcode, Timer, Utensils } from 'lucide-react'
+import { Dumbbell, GlassWater, Ruler, ScanBarcode, Timer, Utensils } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { useMetrics } from '@/api/measurements'
 import { useDiaryDay } from '@/api/nutrition'
 import { WORKOUTS_KEY } from '@/api/workouts'
 import { useUser } from '@/auth/useSession'
 import { Button } from '@/components/ui/button'
 import { formatDateTime, isoToDisplay } from '@/lib/dates'
 import type { ErrorKey } from '@/lib/errors'
+import { formatNumber } from '@/lib/numbers'
 import type { Deferred, Rejected } from '@/offline/db'
 import { deferredBarcodes } from '@/offline/deferred'
 import { forget } from '@/offline/queue'
@@ -17,6 +19,7 @@ import { useOfflineState } from '@/offline/store'
 import { useDeferredAmount } from '@/pages/diary/deferredAmount'
 import { useMealName } from '@/pages/diary/mealName'
 import { useQuantityText } from '@/pages/diary/quantityText'
+import { useMetricName } from '@/pages/measurements/metricName'
 
 import { moveToNewWorkout, rejectedSets } from './rescue'
 
@@ -68,6 +71,8 @@ function RejectedRow({ changes }: { changes: Rejected[] }) {
   const kind = changes[0]!.context.kind
   if (kind === 'entry' || kind === 'entryRemove') return <FoodRow change={changes[0]!} />
   if (kind === 'water' || kind === 'waterRemove') return <WaterRow change={changes[0]!} />
+  if (kind === 'measurement' || kind === 'measurementRemove')
+    return <MeasurementRow change={changes[0]!} />
   return <WorkoutRow changes={changes} />
 }
 
@@ -196,6 +201,30 @@ function WaterRow({ change }: { change: Rejected }) {
     <Row
       icon={GlassWater}
       title={waterMl ? t('unsent.water', { amount: waterMl }) : t('unsent.changes', { count: 1 })}
+      detail={localDate ? isoToDisplay(localDate) : undefined}
+      change={change}
+    />
+  )
+}
+
+/** Замер: вид, значение так, как его ввели, и дата. */
+function MeasurementRow({ change }: { change: Rejected }) {
+  const { t, i18n } = useTranslation()
+  const metrics = useMetrics()
+  const name = useMetricName()
+  const { measurement, localDate } = change.context
+  const metric = metrics.data?.metrics.find((item) => item.id === measurement?.metricId)
+  return (
+    <Row
+      icon={Ruler}
+      title={
+        measurement && metric
+          ? t('unsent.measurement', {
+              name: name(metric),
+              value: `${formatNumber(measurement.value, i18n.language)} ${t(`unitNames.${measurement.unit}`)}`,
+            })
+          : t('unsent.changes', { count: 1 })
+      }
       detail={localDate ? isoToDisplay(localDate) : undefined}
       change={change}
     />

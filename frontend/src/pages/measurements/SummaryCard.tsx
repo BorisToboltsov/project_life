@@ -9,11 +9,13 @@ import {
   useMetrics,
 } from '@/api/measurements'
 import { useUser } from '@/auth/useSession'
+import { PendingMark } from '@/components/PendingMark'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { isoToDisplay } from '@/lib/dates'
 import { formatDelta, formatNumber } from '@/lib/numbers'
 import { measuredIn, type UnitSystem } from '@/lib/units'
+import { useOfflineState } from '@/offline/store'
 
 import { AddMetricLink } from './AddMetricLink'
 import { inputUnit } from './entryValues'
@@ -32,6 +34,7 @@ function Tile({
 }) {
   const { t, i18n } = useTranslation()
   const name = useMetricName()
+  const { pending } = useOfflineState()
   const unit = inputUnit(metric, system)
   const unitName = t(`unitNames.${unit}`)
   const delta = latest && previous ? measuredIn(latest, unit) - measuredIn(previous, unit) : null
@@ -48,6 +51,11 @@ function Tile({
           <span className="text-xl font-semibold">
             {formatNumber(measuredIn(latest, unit), i18n.language)}{' '}
             <span className="text-sm font-normal text-muted-foreground">{unitName}</span>
+            {pending.has(latest.id) && (
+              <span className="ml-1.5 inline-block align-[-2px]">
+                <PendingMark />
+              </span>
+            )}
           </span>
           <span className="text-xs text-muted-foreground">
             {isoToDisplay(latest.local_date)}
