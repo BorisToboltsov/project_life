@@ -591,6 +591,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/fitness-results": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Fitness Results
+         * @description Все результаты тестов пользователя, новые первыми. Их немного, поэтому тот же ответ
+         *     ложится в копию для работы без сети (ADR 0020): метка `ETag` меняется, когда результат
+         *     внесли, исправили или удалили; с прежней меткой в `If-None-Match` ответ — 304 без тела.
+         */
+        get: operations["list_fitness_results_api_fitness_results_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/fitness-results/{result_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Save Fitness Result
+         * @description Создаёт результат или заменяет свой же: повтор запроса не плодит дубли (ADR 0002).
+         *     Тест и вариант отжиманий у результата не меняются (инвариант I21).
+         */
+        put: operations["save_fitness_result_api_fitness_results__result_id__put"];
+        post?: never;
+        /** Delete Fitness Result */
+        delete: operations["delete_fitness_result_api_fitness_results__result_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -1118,6 +1162,28 @@ export interface components {
          * @enum {string}
          */
         CardioField: "distance" | "incline" | "level";
+        /**
+         * CardioPoint
+         * @description Лучшее в одной тренировке по кардио: дистанция, время и темп — каждое отдельно.
+         */
+        CardioPoint: {
+            /** Distance Km */
+            distance_km: number | null;
+            /** Duration Seconds */
+            duration_seconds: number | null;
+            /**
+             * Local Date
+             * Format: date
+             */
+            local_date: string;
+            /** Pace Seconds Per Km */
+            pace_seconds_per_km: number | null;
+            /**
+             * Workout Id
+             * Format: uuid
+             */
+            workout_id: string;
+        };
         /** CopyItem */
         CopyItem: {
             /**
@@ -1371,6 +1437,10 @@ export interface components {
         };
         /** ExerciseProgressOut */
         ExerciseProgressOut: {
+            /** Best Pace Seconds Per Km */
+            best_pace_seconds_per_km: number | null;
+            /** Cardio */
+            cardio: components["schemas"]["CardioPoint"][];
             /**
              * Exercise Id
              * Format: uuid
@@ -1390,6 +1460,7 @@ export interface components {
              * @enum {string}
              */
             metric: "weight_kg" | "reps" | "duration_seconds" | "distance_km";
+            pace_unit: components["schemas"]["PaceUnit"] | null;
             /** Points */
             points: components["schemas"]["ProgressPoint"][];
         };
@@ -1432,6 +1503,64 @@ export interface components {
          * @enum {string}
          */
         ExternalSearchStatus: "ok" | "unavailable";
+        /**
+         * FitnessResultIn
+         * @description Результат теста — как его записал человек (ADR 0021). Тест и вариант отжиманий
+         *     задаются при создании и потом не меняются (инвариант I21).
+         */
+        FitnessResultIn: {
+            /** Distance Unit */
+            distance_unit?: ("m" | "mi") | null;
+            /** Distance Value */
+            distance_value?: number | string | null;
+            /**
+             * Local Date
+             * Format: date
+             */
+            local_date: string;
+            /** Reps */
+            reps?: number | null;
+            test: components["schemas"]["FitnessTest"];
+            /**
+             * Tested At
+             * Format: date-time
+             */
+            tested_at: string;
+            variant?: components["schemas"]["PushUpVariant"] | null;
+        };
+        /** FitnessResultOut */
+        FitnessResultOut: {
+            /** Distance M */
+            distance_m: number | null;
+            /** Distance Unit */
+            distance_unit: ("m" | "mi") | null;
+            /** Distance Value */
+            distance_value: number | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Local Date
+             * Format: date
+             */
+            local_date: string;
+            /** Reps */
+            reps: number | null;
+            test: components["schemas"]["FitnessTest"];
+            /**
+             * Tested At
+             * Format: date-time
+             */
+            tested_at: string;
+            variant: components["schemas"]["PushUpVariant"] | null;
+        };
+        /**
+         * FitnessTest
+         * @enum {string}
+         */
+        FitnessTest: "cooper" | "push_ups" | "pull_ups";
         /** FoodEntryIn */
         FoodEntryIn: {
             /** Amount */
@@ -1801,6 +1930,13 @@ export interface components {
             /** Water Ml */
             water_ml: number | null;
         };
+        /**
+         * PaceUnit
+         * @description Как показывать темп кардио — так, как принято на тренажёре. Считается он из времени
+         *     и дистанции подхода и отдельно не хранится.
+         * @enum {string}
+         */
+        PaceUnit: "per_km" | "speed" | "per_500m";
         /** PasswordChangeIn */
         PasswordChangeIn: {
             /** Current Password */
@@ -2039,6 +2175,13 @@ export interface components {
              */
             workout_id: string;
         };
+        /**
+         * PushUpVariant
+         * @description Как отжимались. Задаётся у результата один раз: от него зависит, по какой таблице
+         *     норм его оценивать.
+         * @enum {string}
+         */
+        PushUpVariant: "classic" | "knee";
         /**
          * Quantity
          * @enum {string}
@@ -4104,6 +4247,162 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ExerciseOut"];
                 };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_fitness_results_api_fitness_results_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "if-none-match"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FitnessResultOut"][];
+                };
+            };
+            /** @description Результаты не изменились с прошлого ответа */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_fitness_result_api_fitness_results__result_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                result_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FitnessResultIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FitnessResultOut"];
+                };
+            };
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FitnessResultOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_fitness_result_api_fitness_results__result_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                result_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Unauthorized */
             401: {

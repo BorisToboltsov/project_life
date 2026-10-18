@@ -20,6 +20,7 @@ import { MuscleMap } from '@/components/illustrations/exercise/MuscleMap'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import type { ErrorKey } from '@/lib/errors'
+import { TestLink } from '@/pages/fitness/TestLink'
 
 import { type Shown, useExerciseName, useMuscleList, useSteps } from './exerciseText'
 import { ExerciseProgress } from './ExerciseProgress'
@@ -158,6 +159,7 @@ export function ExercisePage() {
           )}
         </CardContent>
       </Card>
+      {subject.preset && <TestLink preset={subject.preset} />}
       {subject.row && <ExerciseProgress id={subject.row.id} />}
       {confirming ? (
         <div className="grid gap-2">

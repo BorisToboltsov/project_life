@@ -76,6 +76,20 @@ async def _delete_measurement(client: AsyncClient, owner: Account) -> Probe:
     return Probe((await _own_measurement(client, owner)).path)
 
 
+async def _own_fitness_result(client: AsyncClient, owner: Account) -> Probe:
+    from tests.fitness import pull_ups
+
+    body = pull_ups()
+    path = f"/api/fitness-results/{uuid.uuid7()}"
+    created = await client.put(path, headers=owner.headers, json=body)
+    assert created.status_code == 201
+    return Probe(path, body)
+
+
+async def _delete_fitness_result(client: AsyncClient, owner: Account) -> Probe:
+    return Probe((await _own_fitness_result(client, owner)).path)
+
+
 async def _own_metric(client: AsyncClient, owner: Account) -> Probe:
     path = f"/api/metrics/{uuid.uuid7()}"
     created = await client.put(
@@ -272,6 +286,8 @@ async def _delete_water(client: AsyncClient, owner: Account) -> Probe:
 OWNERSHIP: dict[Route, OwnershipCase] = {
     ("PUT", "/api/measurements/{measurement_id}"): _own_measurement,
     ("DELETE", "/api/measurements/{measurement_id}"): _delete_measurement,
+    ("PUT", "/api/fitness-results/{result_id}"): _own_fitness_result,
+    ("DELETE", "/api/fitness-results/{result_id}"): _delete_fitness_result,
     ("PUT", "/api/metrics/{metric_id}"): _own_metric,
     ("DELETE", "/api/metrics/{metric_id}"): _delete_metric,
     ("PUT", "/api/exercises/{exercise_id}"): _own_exercise,

@@ -12,6 +12,7 @@ import { formatDateTime, today } from '@/lib/dates'
 import type { ErrorKey } from '@/lib/errors'
 import { uuidv7 } from '@/lib/uuid'
 import { useOfflineState } from '@/offline/store'
+import { FitnessCard } from '@/pages/fitness/FitnessCard'
 
 import { WorkoutGroups } from './WorkoutGroups'
 
@@ -73,6 +74,7 @@ export function WorkoutsPage() {
           )}
         </CardContent>
       </Card>
+      <FitnessCard />
       <Button asChild variant="outline" className="h-11">
         <Link to="/workouts/exercises">{t('workouts.exercises')}</Link>
       </Button>

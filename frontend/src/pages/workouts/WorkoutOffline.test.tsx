@@ -163,7 +163,8 @@ describe('не отправлено', () => {
     expect(exercise!.body).toEqual({ exercise_id: deadlift.id })
     expect(set!.body).toEqual(rejected.body)
     expect(set!.path.startsWith(`${exercise!.path}/sets/`)).toBe(true)
-    expect(await db.rejected.count()).toBe(0)
+    // Отклонённое убирается после ответа на последний запрос — ждём его, а не проверяем сразу.
+    await waitFor(async () => expect(await db.rejected.count()).toBe(0))
   })
 
   it('убирает отклонённое по просьбе', async () => {

@@ -72,6 +72,18 @@ const screens = {
   ),
   workouts: lazyRouteComponent(() => import('@/pages/workouts/WorkoutsPage'), 'WorkoutsPage'),
   workout: lazyRouteComponent(() => import('@/pages/workouts/WorkoutPage'), 'WorkoutPage'),
+  fitnessTest: lazyRouteComponent(
+    () => import('@/pages/fitness/FitnessTestPage'),
+    'FitnessTestPage',
+  ),
+  fitnessResultNew: lazyRouteComponent(
+    () => import('@/pages/fitness/FitnessResultPage'),
+    'FitnessResultNewPage',
+  ),
+  fitnessResultEdit: lazyRouteComponent(
+    () => import('@/pages/fitness/FitnessResultPage'),
+    'FitnessResultEditPage',
+  ),
   more: lazyRouteComponent(() => import('@/pages/more/MorePage'), 'MorePage'),
   unsent: lazyRouteComponent(() => import('@/pages/unsent/UnsentPage'), 'UnsentPage'),
   profile: lazyRouteComponent(() => import('@/pages/profile/ProfilePage'), 'ProfilePage'),
@@ -289,6 +301,22 @@ const routeTree = rootRoute.addChildren([
       getParentRoute: () => appRoute,
       path: '/workouts/exercises/new',
       component: screens.exerciseNew,
+    }),
+    // `$test` — код теста; есть ли такой, решает экран.
+    createRoute({
+      getParentRoute: () => appRoute,
+      path: '/workouts/tests/$test',
+      component: screens.fitnessTest,
+    }),
+    createRoute({
+      getParentRoute: () => appRoute,
+      path: '/workouts/tests/$test/new',
+      component: screens.fitnessResultNew,
+    }),
+    createRoute({
+      getParentRoute: () => appRoute,
+      path: '/workouts/tests/$test/$id',
+      component: screens.fitnessResultEdit,
     }),
     // `$key` — код штатного упражнения или ключ своего; есть ли такое, решает экран.
     createRoute({

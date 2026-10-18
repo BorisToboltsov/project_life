@@ -201,6 +201,7 @@ EAN-13, собранный без библиотек.
 | I17. Группа не меняет записанную тренировку | `tests/guards/test_workout_group_snapshot.py` |
 | I19. Статистика сравнивает одни и те же дни | `tests/guards/test_diary_statistics.py` |
 | I20. Записанное без сети не теряется молча | `src/offline/offline.guard.test.ts` |
+| I21. Результат теста — сырой и со своим протоколом | `tests/guards/test_fitness_results.py` |
 
 ## CI
 

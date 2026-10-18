@@ -21,6 +21,8 @@ export type ChangeKind =
   | 'waterRemove'
   | 'measurement'
   | 'measurementRemove'
+  | 'fitness'
+  | 'fitnessRemove'
 
 /** Чего не узнать из самого запроса: к какой тренировке и упражнению он относится. */
 export interface ChangeContext {
@@ -40,6 +42,12 @@ export interface ChangeContext {
   waterMl?: number
   /** Замер: какой вид и что внесли — для строки «Не отправлено». */
   measurement?: { metricId: string; value: number; unit: Schemas['Unit'] }
+  /** Результат теста: какой тест и что внесли — для строки «Не отправлено». */
+  fitness?: {
+    test: Schemas['FitnessTest']
+    reps: number | null
+    distance: { value: number; unit: 'm' | 'mi' } | null
+  }
 }
 
 /** Изменение для сервера, отложенное до связи (ADR 0020). */

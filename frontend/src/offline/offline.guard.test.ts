@@ -13,7 +13,7 @@ const sources = import.meta.glob<string>('/src/api/*.ts', {
 })
 
 /** Модули, где через очередь идёт любая запись: так записывается без сети (ADR 0020). */
-const OFFLINE_MODULES = ['/src/api/workouts.ts']
+const OFFLINE_MODULES = ['/src/api/workouts.ts', '/src/api/fitness.ts']
 
 /** Отдельные функции других модулей, которые тоже работают без сети. */
 const OFFLINE_FUNCTIONS: [string, string][] = [

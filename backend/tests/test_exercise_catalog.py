@@ -6,7 +6,9 @@ from app.exercises import (
     ExerciseKind,
     ExercisePreset,
     Muscle,
+    PaceUnit,
     cardio_fields,
+    pace_unit,
 )
 
 
@@ -67,3 +69,30 @@ def test_kinds_of_the_exercises_the_list_was_built_around() -> None:
     assert kinds["plank"] == "time"
     assert kinds["table_tennis"] == "time"
     assert kinds["treadmill_walk"] == "cardio"
+
+
+def test_cardio_with_distance_has_a_pace() -> None:
+    for exercise in CATALOG.values():
+        with_distance = CardioField.DISTANCE in exercise.cardio_fields
+        assert (exercise.pace is not None) == with_distance, exercise.code
+
+
+@pytest.mark.parametrize(
+    ("preset", "expected"),
+    [
+        (ExercisePreset.TREADMILL_WALK, PaceUnit.PER_KM),
+        (ExercisePreset.ELLIPTICAL, PaceUnit.SPEED),
+        (ExercisePreset.EXERCISE_BIKE, PaceUnit.SPEED),
+        (ExercisePreset.ROWING_MACHINE, PaceUnit.PER_500M),
+        (None, PaceUnit.PER_KM),
+    ],
+)
+def test_pace_is_shown_as_the_machine_shows_it(
+    preset: ExercisePreset | None, expected: PaceUnit
+) -> None:
+    assert pace_unit(preset, ExerciseKind.CARDIO) == expected
+
+
+def test_only_cardio_has_a_pace() -> None:
+    assert pace_unit(None, ExerciseKind.REPS) is None
+    assert pace_unit(ExercisePreset.PLANK, ExerciseKind.TIME) is None

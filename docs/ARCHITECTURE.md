@@ -87,7 +87,9 @@
   величина, каноническая единица, допустимый диапазон; общий диапазон своего показателя;
   здесь же пересчёт единиц.
 - `app.exercises` — справочник штатных упражнений: что записывает подход, какие мышцы
-  работают и помогают, какие поля есть у кардио.
+  работают и помогают, какие поля есть у кардио и в чём у него показывать темп.
+- `app.fitness` — справочник физических тестов: коды тестов, варианты отжиманий, пределы
+  дистанции Купера и повторов, пересчёт миль в метры.
 - `app.api.workouts` — время тренировки, её упражнения и подходы; проверка вида подхода,
   предыдущий результат и повтор тренировки. Прогресс считается в `app.api.exercises`.
 - `app.nutrition` — предустановленные приёмы пищи, единицы продукта, источники продукта,
@@ -107,7 +109,7 @@
 | Группа | Маршруты |
 |--------|----------|
 | Открытые | `GET /api/health`; `POST /api/auth/…`: `login`, `register`, `refresh`, `logout`, `invite/check`, `password-reset`, `password-reset/check` |
-| Для вошедших | `GET` и `PATCH /api/me`; `POST /api/auth/password`, `POST /api/auth/logout-all`; `GET /api/metrics`, `POST /api/metrics/presets`, `PUT` и `DELETE /api/metrics/{id}`; `GET /api/measurements`, `GET /api/measurements/summary`, `GET /api/measurements/all`, `PUT` и `DELETE /api/measurements/{id}`; `GET /api/exercises`, `POST /api/exercises/presets`, `PUT` и `DELETE /api/exercises/{id}`; журнал тренировок и группы — в разделах ниже; `GET /api/products`, `GET /api/products/external`, `POST /api/products/lookup`, `GET`, `PUT` и `DELETE /api/products/{id}`, `GET /api/products/catalog`; `GET /api/diary`, `GET /api/diary/recent`, `GET /api/diary/suggestions`, `PUT` и `DELETE /api/diary/entries/{id}`, `PUT` и `DELETE /api/diary/meals/{id}`, `PUT` и `DELETE /api/diary/water/{id}`, `POST /api/diary/copy`, `GET` и `PUT /api/diary/goal`; `POST /api/errors` |
+| Для вошедших | `GET` и `PATCH /api/me`; `POST /api/auth/password`, `POST /api/auth/logout-all`; `GET /api/metrics`, `POST /api/metrics/presets`, `PUT` и `DELETE /api/metrics/{id}`; `GET /api/measurements`, `GET /api/measurements/summary`, `GET /api/measurements/all`, `PUT` и `DELETE /api/measurements/{id}`; `GET /api/exercises`, `POST /api/exercises/presets`, `PUT` и `DELETE /api/exercises/{id}`; `GET /api/fitness-results`, `PUT` и `DELETE /api/fitness-results/{id}`; журнал тренировок и группы — в разделах ниже; `GET /api/products`, `GET /api/products/external`, `POST /api/products/lookup`, `GET`, `PUT` и `DELETE /api/products/{id}`, `GET /api/products/catalog`; `GET /api/diary`, `GET /api/diary/recent`, `GET /api/diary/suggestions`, `PUT` и `DELETE /api/diary/entries/{id}`, `PUT` и `DELETE /api/diary/meals/{id}`, `PUT` и `DELETE /api/diary/water/{id}`, `POST /api/diary/copy`, `GET` и `PUT /api/diary/goal`; `POST /api/errors` |
 | Для администратора | `/api/admin/users`, `/api/admin/users/{id}/password-reset`, `/api/admin/invites`, `/api/admin/invites/{id}`, `/api/admin/errors`, `/api/admin/errors/{id}` |
 
 ### Таблицы
@@ -125,6 +127,7 @@
 | `workouts` | начало, местная дата и окончание тренировки; ссылка на источник повторения |
 | `workout_exercises` | выбранные в тренировке упражнения и их порядок |
 | `workout_sets` | подходы: повторы, вес, время и поля кардио в исходной и канонической единице |
+| `fitness_results` | результаты физических тестов: тест, момент и местная дата, повторы или дистанция Купера в метрах и как её ввели, вариант отжиманий |
 | `products` | общий каталог продуктов: название, единица (г или мл), состав на 100 единиц — калории, белки, жиры, углеводы и необязательные сахара, насыщенные жиры, клетчатка, соль, — необязательные размеры порции и упаковки в единицах продукта, штрихкод (один на продукт), источник, автор |
 | `barcode_misses` | штрихкоды, которых не оказалось в Open Food Facts, и когда их спрашивали |
 | `meals` | приёмы пищи пользователя: код предустановленного или своё название, место в дне, отметка «убран из списка» |
@@ -175,7 +178,19 @@
 Вложенные `PUT` и `DELETE /api/workouts/{id}/exercises/{item_id}` управляют составом,
 а `…/sets/{set_id}` — подходами. Все эти маршруты требуют входа и проверяют владельца.
 `PUT /api/exercises/{id}/rest` сохраняет отдых; `GET /api/exercises/{id}/progress`
-вычисляет график и рекорды по завершённым тренировкам.
+вычисляет график и рекорды по завершённым тренировкам. У кардио ответ несёт ещё единицу
+темпа из справочника, лучший темп по подходам от 1 км и по точке на тренировку — самую
+длинную дистанцию, самое долгое время и лучший темп ([ADR 0021](adr/0021-fitness-tests.md)).
+
+### Физические тесты
+
+Решения — в [ADR 0021](adr/0021-fitness-tests.md). Результат теста — отдельная запись
+`fitness_results`, не подход тренировки. `GET /api/fitness-results` отдаёт все результаты
+пользователя, новыми первыми, с меткой `ETag`: неизменные — ответ 304; тот же ответ лежит
+в копии без сети. `PUT` и `DELETE /api/fitness-results/{id}` вносят, правят и удаляют
+результат. Запись хранит только то, что человек сделал; тест и вариант отжиманий не
+меняются (инвариант I21). VO2max и оценку по нормам считает фронтенд
+(`frontend/src/lib/fitness.ts`).
 
 ### Группы тренировок
 
@@ -292,6 +307,7 @@
   теми же изменениями, что делает сервер (`workouts.ts`); копия дневника — каталог, дни,
   цель, подсказки, — поиск по каталогу и итоги дня по правилам сервера (`diary.ts`); копия
   замеров — список видов и все замеры, — история и сводка по ней (`measurements.ts`);
+  копия результатов тестов (`fitness.ts`);
   проверка связи, отправка очереди
   и обновление копии (`sync.ts`); записи по незнакомым штрихкодам — отдельная таблица,
   поиск, когда вернулась связь, и тело записи для найденного продукта (`deferred.ts`);
@@ -302,7 +318,8 @@
 - `src/lib/` — пересчёт единиц, разбор и формат чисел и дат, линия тренда, генерация
   UUIDv7, сопоставление ошибок API ключам словаря, разбор стека исключения, калории по
   БЖУ для форм, расчёт-подсказка цели по питанию и по воде, проверка штрихкода, пересчёт
-  порций в единицы продукта.
+  порций в единицы продукта, VO2max и таблицы норм физических тестов (`fitness.ts`), темп
+  кардио в единице тренажёра (`pace.ts`).
 - `src/components/ui/` — компоненты shadcn/ui, добавляются из реестра как есть.
 - `src/components/form/` — поля форм с подписью, подсказкой и ошибкой, поле даты, проверка
   числовых полей, калории, которые следуют за БЖУ (`useAutoKcal`), метки выбора одного из
@@ -323,7 +340,8 @@
   воды),
   `products/` (каталог и форма продукта), `measurements/` (ввод, история с графиком,
   правка, добавление вида замера), `exercises/` (список, карточка и форма своего
-  упражнения), `workouts/` (журнал, запись подходов и таймер отдыха), `unsent/` (что сервер
+  упражнения), `workouts/` (журнал, запись подходов и таймер отдыха), `fitness/` (карточка
+  «Тесты», экран теста с таймером Купера, форма результата), `unsent/` (что сервер
   не принял из очереди), `more/` (разделы,
   которым не хватило места в нижней панели), `profile/`,
   `admin/`.
@@ -331,7 +349,8 @@
 Маршруты делятся на гостевые (`/login`, `/invite`, `/reset`) и приложение (`/`,
 `/diary/…`, `/products/…`, `/measurements/…`, `/workouts/…`, `/unsent`, `/more`, `/profile`,
 `/admin`). Раздел «Тренировки» открывает журнал; `/workouts/$id` — одну тренировку,
-`/workouts/exercises` — список упражнений. Адрес карточки упражнения несёт код штатного
+`/workouts/exercises` — список упражнений, `/workouts/tests/$test` — экран теста,
+`…/new` и `…/$id` — новый результат и правка. Адрес карточки упражнения несёт код штатного
 или ключ своего. Проверка на маршруте — удобство, а данные закрывает бэкенд.
 
 Экраны подключаются в `router.tsx` лениво (I12): первая загрузка несёт рамку приложения,

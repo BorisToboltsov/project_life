@@ -1,9 +1,10 @@
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from uuid import UUID, uuid7
 
 from fastapi import APIRouter, Response, status
 from fastapi.exceptions import RequestValidationError
-from sqlalchemy import func, select
+from sqlalchemy import Row, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,9 +12,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import CurrentUser
 from app.db import SessionDep
 from app.errors import ApiError, ErrorCode, error_responses
-from app.exercises import CATALOG, ExerciseKind
+from app.exercises import CATALOG, ExerciseKind, pace_unit
 from app.models import Exercise, Workout, WorkoutExercise, WorkoutSet
 from app.schemas import (
+    CardioPoint,
     ExerciseIn,
     ExerciseListOut,
     ExerciseOut,
@@ -219,6 +221,8 @@ async def exercise_progress(
             best[workout.id] = ProgressPoint(
                 workout_id=workout.id, local_date=workout.local_date, value=value
             )
+    cardio = exercise.kind == ExerciseKind.CARDIO
+    paces = [pace for _, entry in rows if (pace := _pace(entry)) is not None]
     return ExerciseProgressOut(
         exercise_id=exercise.id,
         kind=exercise.kind,
@@ -228,4 +232,45 @@ async def exercise_progress(
         max_reps=max_reps,
         max_duration_seconds=max_duration,
         max_distance_km=max_distance,
+        pace_unit=pace_unit(exercise.preset, exercise.kind),
+        best_pace_seconds_per_km=min(paces, default=None) if cardio else None,
+        cardio=_cardio_points(rows) if cardio else [],
     )
+
+
+# Короткий рывок обогнал бы любой забег: темп считается по подходам от километра.
+_PACE_MIN_KM = 1
+
+
+def _pace(entry: WorkoutSet) -> float | None:
+    """Секунды на километр; без времени, без дистанции или по короткому подходу — нет."""
+    if entry.duration_seconds is None or entry.distance_km is None:
+        return None
+    if entry.distance_km < _PACE_MIN_KM:
+        return None
+    return entry.duration_seconds / float(entry.distance_km)
+
+
+def _cardio_points(rows: Sequence[Row[Workout, WorkoutSet]]) -> list[CardioPoint]:
+    """По точке на тренировку: самая длинная дистанция, самое долгое время и лучший темп."""
+    points: dict[UUID, CardioPoint] = {}
+    for workout, entry in rows:
+        point = points.setdefault(
+            workout.id,
+            CardioPoint(
+                workout_id=workout.id,
+                local_date=workout.local_date,
+                distance_km=None,
+                duration_seconds=None,
+                pace_seconds_per_km=None,
+            ),
+        )
+        if entry.distance_km is not None:
+            point.distance_km = max(point.distance_km or 0, float(entry.distance_km))
+        if entry.duration_seconds is not None:
+            point.duration_seconds = max(point.duration_seconds or 0, entry.duration_seconds)
+        pace = _pace(entry)
+        if pace is not None:
+            current = point.pace_seconds_per_km
+            point.pace_seconds_per_km = pace if current is None else min(current, pace)
+    return list(points.values())

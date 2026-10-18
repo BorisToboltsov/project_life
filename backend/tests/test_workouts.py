@@ -223,6 +223,64 @@ async def test_progress_is_computed_from_finished_sets(
     assert len((await client.get(progress_url, headers=user.headers)).json()["points"]) == 1
 
 
+async def _finished_cardio(
+    client: AsyncClient, user: Account, days: int, sets: list[tuple[int, float]]
+) -> str:
+    """Завершённая тренировка на дорожке с подходами «секунды, километры»; ключ упражнения."""
+    path = await workout(client, user, days)
+    exercise = await item(client, user, path, "treadmill_walk")
+    for seconds, km in sets:
+        saved = await client.put(
+            exercise + f"/sets/{uuid.uuid7()}",
+            headers=user.headers,
+            json={"duration_seconds": seconds, "distance_value": km, "distance_unit": "km"},
+        )
+        assert saved.status_code == 201, saved.text
+    finished_at = (datetime.now(UTC) + timedelta(days=days, hours=1)).isoformat()
+    await client.post(path + "/finish", headers=user.headers, json={"finished_at": finished_at})
+    detail = (await client.get(path, headers=user.headers)).json()
+    return detail["exercises"][0]["exercise"]["id"]
+
+
+async def test_cardio_progress_has_pace_and_records(
+    client: AsyncClient, make_user: MakeUser
+) -> None:
+    user = await make_user()
+    # Короткий быстрый подход в лучший темп не идёт: он короче километра.
+    await _finished_cardio(client, user, -3, [(1800, 5), (150, 0.5)])
+    exercise_id = await _finished_cardio(client, user, -1, [(3000, 8.4)])
+
+    progress = (
+        await client.get(f"/api/exercises/{exercise_id}/progress", headers=user.headers)
+    ).json()
+
+    assert progress["pace_unit"] == "per_km"
+    assert progress["best_pace_seconds_per_km"] == pytest.approx(3000 / 8.4)
+    assert progress["max_distance_km"] == 8.4
+    assert progress["max_duration_seconds"] == 3000
+    assert [
+        (point["distance_km"], point["duration_seconds"], point["pace_seconds_per_km"])
+        for point in progress["cardio"]
+    ] == [(5, 1800, 360), (8.4, 3000, pytest.approx(3000 / 8.4))]
+
+
+async def test_strength_progress_has_no_pace(client: AsyncClient, make_user: MakeUser) -> None:
+    user = await make_user()
+    path = await workout(client, user, -1)
+    await item(client, user, path, "deadlift")
+    exercise_id = (await client.get(path, headers=user.headers)).json()["exercises"][0]["exercise"][
+        "id"
+    ]
+
+    progress = (
+        await client.get(f"/api/exercises/{exercise_id}/progress", headers=user.headers)
+    ).json()
+
+    assert progress["pace_unit"] is None
+    assert progress["best_pace_seconds_per_km"] is None
+    assert progress["cardio"] == []
+
+
 async def finished_with_set(
     client: AsyncClient, user: Account, days: int, preset: str, reps: int
 ) -> tuple[str, str]:
