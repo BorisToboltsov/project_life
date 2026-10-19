@@ -22,6 +22,8 @@ class ErrorCode(StrEnum):
     PRODUCT_NOT_FOUND = "product_not_found"
     MEAL_NOT_FOUND = "meal_not_found"
     METRIC_NOT_FOUND = "metric_not_found"
+    LAB_ANALYTE_NOT_FOUND = "lab_analyte_not_found"
+    LAB_VALUE_TAKEN = "lab_value_taken"
     PORTION_NOT_FOUND = "portion_not_found"
     AMOUNT_OUT_OF_RANGE = "amount_out_of_range"
     BARCODE_TAKEN = "barcode_taken"

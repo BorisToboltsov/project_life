@@ -2,6 +2,7 @@ import { Link, type LinkProps, Outlet, useRouterState } from '@tanstack/react-ro
 import {
   Dumbbell,
   Ellipsis,
+  FlaskConical,
   House,
   type LucideIcon,
   Ruler,
@@ -28,7 +29,7 @@ interface NavItem {
 }
 
 /** Разделы, которые на телефоне живут под «Ещё». */
-const UNDER_MORE = ['/more', '/profile', '/admin', '/unsent']
+const UNDER_MORE = ['/more', '/profile', '/admin', '/unsent', '/labs']
 
 /**
  * Рамка приложения после входа. На телефоне разделы — в панели внизу экрана,
@@ -59,6 +60,7 @@ function AuthenticatedShell() {
     { to: '/workouts', icon: Dumbbell, label: 'nav.workouts' },
     { to: '/measurements', icon: Ruler, label: 'nav.measurements' },
     { to: '/more', icon: Ellipsis, label: 'nav.more', on: 'phone' },
+    { to: '/labs', icon: FlaskConical, label: 'nav.labs', on: 'desktop' },
     { to: '/profile', icon: UserRound, label: 'nav.profile', on: 'desktop' },
     ...(user.role === 'admin'
       ? [{ to: '/admin', icon: ShieldCheck, label: 'nav.admin', on: 'desktop' } satisfies NavItem]

@@ -13,6 +13,8 @@ class Quantity(StrEnum):
     MASS = "mass"
     LENGTH = "length"
     PERCENT = "percent"
+    # Давление: показание — верхнее, нижнее и пульс — лежит отдельной записью (ADR 0022).
+    PRESSURE = "pressure"
 
 
 class Unit(StrEnum):
@@ -21,6 +23,7 @@ class Unit(StrEnum):
     CM = "cm"
     IN = "in"
     PERCENT = "percent"
+    MMHG = "mmhg"
 
 
 class MetricPreset(StrEnum):
@@ -37,6 +40,7 @@ class MetricPreset(StrEnum):
     THIGH = "thigh"
     CALF = "calf"
     BODY_FAT = "body_fat"
+    BLOOD_PRESSURE = "blood_pressure"
 
 
 class Source(StrEnum):
@@ -47,6 +51,7 @@ CANONICAL_UNIT: dict[Quantity, Unit] = {
     Quantity.MASS: Unit.KG,
     Quantity.LENGTH: Unit.CM,
     Quantity.PERCENT: Unit.PERCENT,
+    Quantity.PRESSURE: Unit.MMHG,
 }
 
 # Единица → её величина и множитель перевода в каноническую. Множители фунта и дюйма
@@ -57,6 +62,7 @@ _UNITS: dict[Unit, tuple[Quantity, Decimal]] = {
     Unit.CM: (Quantity.LENGTH, Decimal(1)),
     Unit.IN: (Quantity.LENGTH, Decimal("2.54")),
     Unit.PERCENT: (Quantity.PERCENT, Decimal(1)),
+    Unit.MMHG: (Quantity.PRESSURE, Decimal(1)),
 }
 
 # Точность хранения: грамм и сотая доля миллиметра с запасом — обратный пересчёт в фунты
@@ -87,6 +93,8 @@ CATALOG: dict[MetricPreset, MetricType] = {
         MetricType(MetricPreset.THIGH, Quantity.LENGTH, Decimal(20), Decimal(150)),
         MetricType(MetricPreset.CALF, Quantity.LENGTH, Decimal(15), Decimal(100)),
         MetricType(MetricPreset.BODY_FAT, Quantity.PERCENT, Decimal(1), Decimal(75)),
+        # Пределы верхнего давления; показание проверяет свой эндпоинт (ADR 0022).
+        MetricType(MetricPreset.BLOOD_PRESSURE, Quantity.PRESSURE, Decimal(50), Decimal(300)),
     )
 }
 
@@ -97,6 +105,10 @@ STARTING_PRESETS: tuple[MetricPreset, ...] = (
     MetricPreset.WAIST,
     MetricPreset.HIPS,
 )
+
+# Что может измерять свой вид замера. Давление — только штатный вид: у его показания своя
+# запись (ADR 0022).
+OWN_QUANTITIES: tuple[Quantity, ...] = (Quantity.MASS, Quantity.LENGTH, Quantity.PERCENT)
 
 # Свой показатель: что именно измеряют, приложение не знает, поэтому диапазон — общий для
 # величины.

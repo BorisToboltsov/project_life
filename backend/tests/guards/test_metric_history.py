@@ -125,3 +125,24 @@ async def test_no_route_deletes_a_metric_with_its_measurements(
     async with session_factory() as db:
         assert await db.get(Metric, uuid.UUID(wrist)) is not None
         assert await db.scalar(select(func.count()).select_from(Measurement)) == 1
+
+
+async def test_removing_blood_pressure_keeps_its_readings(
+    client: AsyncClient, make_user: MakeUser
+) -> None:
+    """Показания давления лежат отдельно от вида замера (ADR 0022): убрав вид из списка и
+    вернув его, человек видит прежние показания."""
+    from tests.pressure import bp, put_bp, readings
+
+    user = await make_user()
+    pressure = await metric_id(client, user, "blood_pressure")
+    await put_bp(client, user, bp())
+    before = await readings(client, user)
+
+    await remove_metric(client, user, pressure)
+    kept = await readings(client, user)
+    returned = await add_preset(client, user, "blood_pressure")
+
+    assert kept == before
+    assert returned.json()["id"] == pressure
+    assert await readings(client, user) == before

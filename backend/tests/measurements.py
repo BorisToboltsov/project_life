@@ -12,7 +12,16 @@ NOW = datetime.now(UTC)
 # С этими видами начинает каждый пользователь.
 STARTING = ("weight", "neck", "waist", "hips")
 # Штатные виды, которые человек добавляет сам.
-RECOMMENDED = ("chest", "shoulders", "biceps", "forearm", "thigh", "calf", "body_fat")
+RECOMMENDED = (
+    "chest",
+    "shoulders",
+    "biceps",
+    "forearm",
+    "thigh",
+    "calf",
+    "body_fat",
+    "blood_pressure",
+)
 
 
 async def list_metrics(client: AsyncClient, account: Account) -> dict[str, Any]:

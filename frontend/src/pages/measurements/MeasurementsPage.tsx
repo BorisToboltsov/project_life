@@ -36,6 +36,7 @@ import { AddMetricLink } from './AddMetricLink'
 import { inputUnit, renameSchema, type RenameValues } from './entryValues'
 import { useMetricName } from './metricName'
 import { type Period, PERIODS, periodStart } from './periods'
+import { PressurePanel } from './PressurePanel'
 
 /** Линия тренда имеет смысл, когда есть что сглаживать. */
 const TREND_MIN_POINTS = 3
@@ -333,20 +334,25 @@ export function MeasurementsPage() {
   const metrics = useMetrics()
   const inList = listed(metrics.data?.metrics)
   const metric = inList.find((candidate) => candidate.id === metricId)
+  const pressure = metric?.quantity === 'pressure'
 
   return (
     <div className="grid gap-4">
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">{t('measurements.title')}</h1>
         <Button asChild className="h-11">
-          <Link to="/measurements/new">{t('measurements.add')}</Link>
+          {pressure ? (
+            <Link to="/measurements/pressure/new">{t('pressure.add')}</Link>
+          ) : (
+            <Link to="/measurements/new">{t('measurements.add')}</Link>
+          )}
         </Button>
       </div>
       <MetricTabs metrics={inList} current={metricId} />
       {metrics.isPending && <p className="text-muted-foreground">{t('common.loading')}</p>}
       {metric && (
         <>
-          <History key={metric.id} metric={metric} />
+          {pressure ? <PressurePanel /> : <History key={metric.id} metric={metric} />}
           <MetricActions key={`actions-${metric.id}`} metric={metric} />
         </>
       )}

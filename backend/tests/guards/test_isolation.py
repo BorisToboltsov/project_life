@@ -283,11 +283,67 @@ async def _delete_water(client: AsyncClient, owner: Account) -> Probe:
     return Probe((await _own_water(client, owner)).path)
 
 
+async def _own_blood_pressure(client: AsyncClient, owner: Account) -> Probe:
+    from tests.pressure import bp, put_bp
+
+    body = bp()
+    created = await put_bp(client, owner, body)
+    assert created.status_code == 201
+    return Probe(f"/api/blood-pressure/{created.json()['id']}", body)
+
+
+async def _delete_blood_pressure(client: AsyncClient, owner: Account) -> Probe:
+    return Probe((await _own_blood_pressure(client, owner)).path)
+
+
+async def _own_lab_report(client: AsyncClient, owner: Account) -> Probe:
+    from tests.labs import add_report, report
+
+    return Probe(f"/api/lab-reports/{await add_report(client, owner)}", report(lab="Подменено"))
+
+
+async def _delete_lab_report(client: AsyncClient, owner: Account) -> Probe:
+    return Probe((await _own_lab_report(client, owner)).path)
+
+
+async def _own_lab_value(client: AsyncClient, owner: Account) -> Probe:
+    from tests.labs import preset_value, put_value
+
+    report = await _own_lab_report(client, owner)
+    report_id = report.path.rsplit("/", 1)[1]
+    created = await put_value(client, owner, report_id)
+    assert created.status_code == 201
+    return Probe(f"{report.path}/values/{created.json()['id']}", preset_value(value=99))
+
+
+async def _delete_lab_value(client: AsyncClient, owner: Account) -> Probe:
+    return Probe((await _own_lab_value(client, owner)).path)
+
+
+async def _own_lab_analyte(client: AsyncClient, owner: Account) -> Probe:
+    from tests.labs import add_analyte
+
+    analyte = await add_analyte(client, owner)
+    return Probe(f"/api/lab-analytes/{analyte}", {"name": "Подменено", "unit": "МЕ/мл"})
+
+
+async def _delete_lab_analyte(client: AsyncClient, owner: Account) -> Probe:
+    return Probe((await _own_lab_analyte(client, owner)).path)
+
+
 OWNERSHIP: dict[Route, OwnershipCase] = {
     ("PUT", "/api/measurements/{measurement_id}"): _own_measurement,
     ("DELETE", "/api/measurements/{measurement_id}"): _delete_measurement,
     ("PUT", "/api/fitness-results/{result_id}"): _own_fitness_result,
     ("DELETE", "/api/fitness-results/{result_id}"): _delete_fitness_result,
+    ("PUT", "/api/blood-pressure/{reading_id}"): _own_blood_pressure,
+    ("DELETE", "/api/blood-pressure/{reading_id}"): _delete_blood_pressure,
+    ("PUT", "/api/lab-reports/{report_id}"): _own_lab_report,
+    ("DELETE", "/api/lab-reports/{report_id}"): _delete_lab_report,
+    ("PUT", "/api/lab-reports/{report_id}/values/{value_id}"): _own_lab_value,
+    ("DELETE", "/api/lab-reports/{report_id}/values/{value_id}"): _delete_lab_value,
+    ("PUT", "/api/lab-analytes/{analyte_id}"): _own_lab_analyte,
+    ("DELETE", "/api/lab-analytes/{analyte_id}"): _delete_lab_analyte,
     ("PUT", "/api/metrics/{metric_id}"): _own_metric,
     ("DELETE", "/api/metrics/{metric_id}"): _delete_metric,
     ("PUT", "/api/exercises/{exercise_id}"): _own_exercise,

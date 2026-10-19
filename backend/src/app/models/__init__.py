@@ -4,6 +4,7 @@ from app.models.auth import Invite, LoginFailure, PasswordReset, RefreshToken
 from app.models.error_report import ErrorReport, ErrorSource
 from app.models.exercise import Exercise
 from app.models.fitness import FitnessResult
+from app.models.lab import LabAnalyte, LabReport, LabValue
 from app.models.measurement import Measurement, Metric, preset_metrics
 from app.models.nutrition import (
     BarcodeMiss,
@@ -14,18 +15,23 @@ from app.models.nutrition import (
     WaterIntake,
     preset_meals,
 )
+from app.models.pressure import BloodPressureReading
 from app.models.user import Language, Role, Sex, UnitSystem, User
 from app.models.workout import Workout, WorkoutExercise, WorkoutSet
 from app.models.workout_group import WorkoutGroup, WorkoutGroupExercise
 
 __all__ = [
     "BarcodeMiss",
+    "BloodPressureReading",
     "ErrorReport",
     "ErrorSource",
     "Exercise",
     "FitnessResult",
     "FoodEntry",
     "Invite",
+    "LabAnalyte",
+    "LabReport",
+    "LabValue",
     "Language",
     "LoginFailure",
     "Meal",
