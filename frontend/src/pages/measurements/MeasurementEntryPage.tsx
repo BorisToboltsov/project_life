@@ -10,6 +10,7 @@ import {
   MEASUREMENTS_KEY,
   type Metric,
   saveMeasurement,
+  singleValued,
   useMetrics,
 } from '@/api/measurements'
 import { DIARY_KEY } from '@/api/nutrition'
@@ -141,7 +142,7 @@ export function MeasurementEntryPage() {
   if (metrics.isPending) {
     return <p className="text-muted-foreground">{t('common.loading')}</p>
   }
-  const inList = listed(metrics.data?.metrics)
+  const inList = singleValued(listed(metrics.data?.metrics))
   if (inList.length === 0) {
     return (
       <div className="grid gap-4">

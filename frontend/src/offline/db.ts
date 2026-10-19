@@ -23,6 +23,14 @@ export type ChangeKind =
   | 'measurementRemove'
   | 'fitness'
   | 'fitnessRemove'
+  | 'pressure'
+  | 'pressureRemove'
+  | 'labReport'
+  | 'labReportRemove'
+  | 'labValue'
+  | 'labValueRemove'
+  | 'labAnalyte'
+  | 'labAnalyteRemove'
 
 /** Чего не узнать из самого запроса: к какой тренировке и упражнению он относится. */
 export interface ChangeContext {
@@ -47,6 +55,18 @@ export interface ChangeContext {
     test: Schemas['FitnessTest']
     reps: number | null
     distance: { value: number; unit: 'm' | 'mi' } | null
+  }
+  /** Показание давления — для строки «Не отправлено». */
+  pressure?: { systolic: number; diastolic: number; pulse: number | null }
+  /** Анализ: бланк, показатель и значение — для строки «Не отправлено». */
+  lab?: {
+    lab?: string | null
+    preset?: Schemas['LabPreset'] | null
+    analyteId?: string | null
+    /** Название своего показателя, когда меняют сам показатель. */
+    name?: string
+    value?: number
+    unit?: Schemas['LabUnit'] | null
   }
 }
 

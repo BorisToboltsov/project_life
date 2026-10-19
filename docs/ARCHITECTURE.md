@@ -192,6 +192,24 @@
 меняются (инвариант I21). VO2max и оценку по нормам считает фронтенд
 (`frontend/src/lib/fitness.ts`).
 
+### Анализы и давление
+
+- `app.labs` — справочник 37 показателей, групп, единиц и коэффициентов; `app.pressure` —
+  пределы полей тонометра. Модели — `app.models.lab` и `app.models.pressure`.
+- `lab_reports` — шапки бланков; `lab_values` — дочерние значения с исходными единицами
+  и референсами; `lab_analytes` — свои показатели; `blood_pressure_readings` — показания.
+- `app.api.labs`: `GET /api/lab-analytes`, `PUT/DELETE /api/lab-analytes/{id}`;
+  `GET /api/lab-reports`, `PUT/DELETE /api/lab-reports/{id}` и
+  `PUT/DELETE /api/lab-reports/{id}/values/{value_id}`.
+- `app.api.pressure`: `GET /api/blood-pressure`, `PUT/DELETE /api/blood-pressure/{id}`.
+  Обе истории возвращаются целиком с ETag для копии без сети.
+- Фронтенд: `pages/labs/`, `api/labs.ts`, `offline/labs.ts`, `lib/labs.ts`;
+  давление — `pages/measurements/Pressure*.tsx`, `api/pressure.ts`, `offline/pressure.ts`,
+  `lib/pressure.ts`. Маршруты анализов — `/labs`, `/labs/analytes` и дочерние;
+  формы давления — `/measurements/pressure/new` и `/measurements/pressure/{id}`.
+  Сравнение с референсом, порог давления и среднее вычисляются при выводе.
+  Причины модели — [ADR 0022](adr/0022-lab-results-and-blood-pressure.md).
+
 ### Группы тренировок
 
 `app.api.workout_groups` обслуживает `GET /api/workout-groups` (с необязательным днём

@@ -29,27 +29,31 @@ describe('защита маршрутов', () => {
       within(nav)
         .getAllByRole('link')
         .map((link) => link.textContent),
-    ).toEqual(['Главная', 'Питание', 'Тренировки', 'Замеры', 'Ещё', 'Профиль'])
+    ).toEqual(['Главная', 'Питание', 'Тренировки', 'Замеры', 'Ещё', 'Анализы', 'Профиль'])
   })
 
-  it('под «Ещё» собраны профиль и, у администратора, управление', async () => {
+  it('под «Ещё» собраны анализы, профиль и, у администратора, управление', async () => {
     await renderApp('/more', boris)
 
     expect(await screen.findByRole('heading', { name: 'Ещё' })).toBeInTheDocument()
     const main = within(screen.getByRole('main'))
     expect(main.getAllByRole('link').map((link) => link.textContent)).toEqual([
+      'Анализы',
       'Профиль',
       'Управление',
     ])
     expect(screen.getByRole('link', { name: 'Ещё' })).toHaveAttribute('aria-current', 'page')
   })
 
-  it('обычный пользователь видит под «Ещё» только профиль', async () => {
+  it('обычный пользователь видит под «Ещё» анализы и профиль', async () => {
     await renderApp('/more', anna)
 
     await screen.findByRole('heading', { name: 'Ещё' })
     const main = within(screen.getByRole('main'))
-    expect(main.getAllByRole('link').map((link) => link.textContent)).toEqual(['Профиль'])
+    expect(main.getAllByRole('link').map((link) => link.textContent)).toEqual([
+      'Анализы',
+      'Профиль',
+    ])
   })
 
   it('«Ещё» остаётся отмеченным на экранах, которые под ним собраны', async () => {

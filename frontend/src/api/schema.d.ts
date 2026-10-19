@@ -266,6 +266,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/blood-pressure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Blood Pressure
+         * @description Все показания давления, новые первыми, — и для экрана, и для копии без сети
+         *     (ADR 0020): метка `ETag` меняется, когда показание внесли, исправили или удалили; с
+         *     прежней меткой в `If-None-Match` ответ — 304 без тела.
+         */
+        get: operations["list_blood_pressure_api_blood_pressure_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/blood-pressure/{reading_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Save Blood Pressure
+         * @description Вносит показание или заменяет своё же: повтор запроса не плодит дубли (ADR 0002).
+         */
+        put: operations["save_blood_pressure_api_blood_pressure__reading_id__put"];
+        post?: never;
+        /** Delete Blood Pressure */
+        delete: operations["delete_blood_pressure_api_blood_pressure__reading_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/diary": {
         parameters: {
             query?: never;
@@ -647,6 +690,123 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lab-analytes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Lab Analytes
+         * @description Свои показатели пользователя вместе с убранными и справочник штатных целиком.
+         */
+        get: operations["list_lab_analytes_api_lab_analytes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lab-analytes/{analyte_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Save Lab Analyte
+         * @description Заводит свой показатель или даёт ему новое название: повтор запроса не плодит дубли
+         *     (ADR 0002). Убранный показатель этим же запросом возвращается в список. Единица не
+         *     меняется (инвариант I22).
+         */
+        put: operations["save_lab_analyte_api_lab_analytes__analyte_id__put"];
+        post?: never;
+        /**
+         * Delete Lab Analyte
+         * @description Убирает свой показатель из списка. Внесённые по нему значения остаются в бланках.
+         */
+        delete: operations["delete_lab_analyte_api_lab_analytes__analyte_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lab-reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Lab Reports
+         * @description Все бланки пользователя со значениями, новые первыми. Их немного, поэтому тот же
+         *     ответ ложится в копию для работы без сети (ADR 0020): метка `ETag` меняется, когда
+         *     бланк или значение внесли, исправили или удалили; с прежней меткой в `If-None-Match`
+         *     ответ — 304 без тела.
+         */
+        get: operations["list_lab_reports_api_lab_reports_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lab-reports/{report_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Save Lab Report
+         * @description Заводит бланк или заменяет шапку своего: повтор запроса не плодит дубли (ADR 0002).
+         *     Значения бланка этим запросом не меняются.
+         */
+        put: operations["save_lab_report_api_lab_reports__report_id__put"];
+        post?: never;
+        /**
+         * Delete Lab Report
+         * @description Удаляет бланк вместе с его значениями.
+         */
+        delete: operations["delete_lab_report_api_lab_reports__report_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lab-reports/{report_id}/values/{value_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Save Lab Value
+         * @description Вносит значение показателя в бланк или заменяет своё же: повтор запроса не плодит
+         *     дубли (ADR 0002). Показатель значения не меняется (инвариант I22); в бланке он
+         *     встречается один раз.
+         */
+        put: operations["save_lab_value_api_lab_reports__report_id__values__value_id__put"];
+        post?: never;
+        /** Delete Lab Value */
+        delete: operations["delete_lab_value_api_lab_reports__report_id__values__value_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1157,6 +1317,52 @@ export interface components {
             status: components["schemas"]["LookupStatus"];
         };
         /**
+         * BloodPressureIn
+         * @description Показание тонометра (ADR 0022): верхнее и нижнее давление, пульс — если есть.
+         */
+        BloodPressureIn: {
+            /** Diastolic */
+            diastolic: number;
+            /**
+             * Local Date
+             * Format: date
+             */
+            local_date: string;
+            /**
+             * Measured At
+             * Format: date-time
+             */
+            measured_at: string;
+            /** Pulse */
+            pulse?: number | null;
+            /** Systolic */
+            systolic: number;
+        };
+        /** BloodPressureOut */
+        BloodPressureOut: {
+            /** Diastolic */
+            diastolic: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Local Date
+             * Format: date
+             */
+            local_date: string;
+            /**
+             * Measured At
+             * Format: date-time
+             */
+            measured_at: string;
+            /** Pulse */
+            pulse: number | null;
+            /** Systolic */
+            systolic: number;
+        };
+        /**
          * CardioField
          * @description Необязательные поля подхода у кардио; время есть всегда.
          * @enum {string}
@@ -1286,7 +1492,7 @@ export interface components {
          * @description Коды ошибок API. Текст для пользователя подбирает фронтенд по коду.
          * @enum {string}
          */
-        ErrorCode: "not_authenticated" | "forbidden" | "not_found" | "invalid_credentials" | "too_many_attempts" | "invite_invalid" | "reset_invalid" | "email_taken" | "wrong_password" | "invalid_recipe" | "product_not_found" | "meal_not_found" | "metric_not_found" | "portion_not_found" | "amount_out_of_range" | "barcode_taken" | "invalid_workout_group" | "workout_active" | "workout_finished" | "invalid_workout_set" | "invalid_workout_repeat" | "workout_source_changed";
+        ErrorCode: "not_authenticated" | "forbidden" | "not_found" | "invalid_credentials" | "too_many_attempts" | "invite_invalid" | "reset_invalid" | "email_taken" | "wrong_password" | "invalid_recipe" | "product_not_found" | "meal_not_found" | "metric_not_found" | "lab_analyte_not_found" | "lab_value_taken" | "portion_not_found" | "amount_out_of_range" | "barcode_taken" | "invalid_workout_group" | "workout_active" | "workout_finished" | "invalid_workout_set" | "invalid_workout_repeat" | "workout_source_changed";
         /** ErrorFrameIn */
         ErrorFrameIn: {
             /** Column */
@@ -1717,6 +1923,146 @@ export interface components {
             role: components["schemas"]["Role"];
         };
         /**
+         * LabAnalyteIn
+         * @description Свой показатель. Единицу задают один раз, при создании (инвариант I22).
+         */
+        LabAnalyteIn: {
+            /** Name */
+            name: string;
+            /** Unit */
+            unit: string;
+        };
+        /** LabAnalyteListOut */
+        LabAnalyteListOut: {
+            /** Analytes */
+            analytes: components["schemas"]["LabAnalyteOut"][];
+            /** Catalog */
+            catalog: components["schemas"]["LabPresetOut"][];
+        };
+        /** LabAnalyteOut */
+        LabAnalyteOut: {
+            /** Archived */
+            archived: boolean;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Unit */
+            unit: string;
+        };
+        /**
+         * LabGroup
+         * @description Группа показателей — так их перечисляют бланки и экран выбора.
+         * @enum {string}
+         */
+        LabGroup: "cbc" | "biochemistry" | "lipids" | "iron_vitamins" | "thyroid" | "hormones";
+        /**
+         * LabPreset
+         * @description Штатные показатели в порядке экрана выбора: по группам, как на бланках.
+         * @enum {string}
+         */
+        LabPreset: "hemoglobin" | "rbc" | "hematocrit" | "mcv" | "mch" | "mchc" | "wbc" | "neutrophils" | "lymphocytes" | "monocytes" | "eosinophils" | "basophils" | "platelets" | "esr" | "glucose" | "hba1c" | "alt" | "ast" | "bilirubin_total" | "creatinine" | "urea" | "uric_acid" | "total_protein" | "crp" | "cholesterol_total" | "ldl" | "hdl" | "triglycerides" | "ferritin" | "iron" | "vitamin_d" | "vitamin_b12" | "folate" | "tsh" | "ft4" | "ft3" | "testosterone";
+        /**
+         * LabPresetOut
+         * @description Штатный показатель: группа, каноническая единица, единицы бланков, диапазон.
+         */
+        LabPresetOut: {
+            code: components["schemas"]["LabPreset"];
+            group: components["schemas"]["LabGroup"];
+            /** Max Value */
+            max_value: number;
+            /** Min Value */
+            min_value: number;
+            unit: components["schemas"]["LabUnit"];
+            /** Units */
+            units: components["schemas"]["LabUnitOut"][];
+        };
+        /**
+         * LabReportIn
+         * @description Шапка бланка анализа: день забора, лаборатория и заметка (ADR 0022).
+         */
+        LabReportIn: {
+            /** Lab */
+            lab?: string | null;
+            /**
+             * Local Date
+             * Format: date
+             */
+            local_date: string;
+            /** Note */
+            note?: string | null;
+        };
+        /** LabReportOut */
+        LabReportOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Lab */
+            lab: string | null;
+            /**
+             * Local Date
+             * Format: date
+             */
+            local_date: string;
+            /** Note */
+            note: string | null;
+            /** Values */
+            values: components["schemas"]["LabValueOut"][];
+        };
+        /**
+         * LabUnit
+         * @enum {string}
+         */
+        LabUnit: "g_l" | "g_dl" | "mmol_l" | "mg_dl" | "umol_l" | "u_l" | "percent" | "e12_l" | "e9_l" | "fl" | "pg" | "mm_h" | "mg_l" | "ug_l" | "ng_ml" | "pg_ml" | "pmol_l" | "nmol_l" | "uiu_ml" | "miu_l" | "ng_dl" | "ug_dl";
+        /** LabUnitOut */
+        LabUnitOut: {
+            /** Factor */
+            factor: number;
+            unit: components["schemas"]["LabUnit"];
+        };
+        /**
+         * LabValueIn
+         * @description Значение показателя — как напечатано на бланке (инвариант I22). Показатель задаётся
+         *     при создании и потом не меняется.
+         */
+        LabValueIn: {
+            /** Analyte Id */
+            analyte_id?: string | null;
+            preset?: components["schemas"]["LabPreset"] | null;
+            /** Ref High */
+            ref_high?: number | string | null;
+            /** Ref Low */
+            ref_low?: number | string | null;
+            unit?: components["schemas"]["LabUnit"] | null;
+            /** Value */
+            value: number | string;
+        };
+        /** LabValueOut */
+        LabValueOut: {
+            /** Analyte Id */
+            analyte_id: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            original_unit: components["schemas"]["LabUnit"] | null;
+            /** Original Value */
+            original_value: number;
+            preset: components["schemas"]["LabPreset"] | null;
+            /** Ref High */
+            ref_high: number | null;
+            /** Ref Low */
+            ref_low: number | null;
+            /** Value */
+            value: number;
+        };
+        /**
          * Language
          * @enum {string}
          */
@@ -1816,7 +2162,8 @@ export interface components {
         };
         /**
          * MetricIn
-         * @description Свой вид замера. Величину задают один раз, при создании.
+         * @description Свой вид замера. Величину задают один раз, при создании. Давление — только штатный
+         *     вид (ADR 0022).
          */
         MetricIn: {
             /** Name */
@@ -1857,7 +2204,7 @@ export interface components {
          * @description Штатные показатели: название и подсказку «как измерять» подбирает интерфейс.
          * @enum {string}
          */
-        MetricPreset: "weight" | "neck" | "waist" | "hips" | "chest" | "shoulders" | "biceps" | "forearm" | "thigh" | "calf" | "body_fat";
+        MetricPreset: "weight" | "neck" | "waist" | "hips" | "chest" | "shoulders" | "biceps" | "forearm" | "thigh" | "calf" | "body_fat" | "blood_pressure";
         /** MetricPresetIn */
         MetricPresetIn: {
             preset: components["schemas"]["MetricPreset"];
@@ -2186,7 +2533,7 @@ export interface components {
          * Quantity
          * @enum {string}
          */
-        Quantity: "mass" | "length" | "percent";
+        Quantity: "mass" | "length" | "percent" | "pressure";
         /** RecipeOut */
         RecipeOut: {
             /** Ingredients */
@@ -2317,7 +2664,7 @@ export interface components {
          * Unit
          * @enum {string}
          */
-        Unit: "kg" | "lb" | "cm" | "in" | "percent";
+        Unit: "kg" | "lb" | "cm" | "in" | "percent" | "mmhg";
         /**
          * UnitSystem
          * @enum {string}
@@ -3330,6 +3677,162 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_blood_pressure_api_blood_pressure_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "if-none-match"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BloodPressureOut"][];
+                };
+            };
+            /** @description Показания не изменились с прошлого ответа */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_blood_pressure_api_blood_pressure__reading_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                reading_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BloodPressureIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BloodPressureOut"];
+                };
+            };
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BloodPressureOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_blood_pressure_api_blood_pressure__reading_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                reading_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4457,6 +4960,420 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    list_lab_analytes_api_lab_analytes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabAnalyteListOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    save_lab_analyte_api_lab_analytes__analyte_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                analyte_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LabAnalyteIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabAnalyteOut"];
+                };
+            };
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabAnalyteOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_lab_analyte_api_lab_analytes__analyte_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                analyte_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_lab_reports_api_lab_reports_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "if-none-match"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabReportOut"][];
+                };
+            };
+            /** @description Бланки не изменились с прошлого ответа */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_lab_report_api_lab_reports__report_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LabReportIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabReportOut"];
+                };
+            };
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabReportOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_lab_report_api_lab_reports__report_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_lab_value_api_lab_reports__report_id__values__value_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: string;
+                value_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LabValueIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabValueOut"];
+                };
+            };
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabValueOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_lab_value_api_lab_reports__report_id__values__value_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: string;
+                value_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };

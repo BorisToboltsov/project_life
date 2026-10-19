@@ -84,6 +84,33 @@ const screens = {
     () => import('@/pages/fitness/FitnessResultPage'),
     'FitnessResultEditPage',
   ),
+  pressureNew: lazyRouteComponent(
+    () => import('@/pages/measurements/PressureEntryPage'),
+    'PressureNewPage',
+  ),
+  pressureEdit: lazyRouteComponent(
+    () => import('@/pages/measurements/PressureEntryPage'),
+    'PressureEditPage',
+  ),
+  labs: lazyRouteComponent(() => import('@/pages/labs/LabsPage'), 'LabsPage'),
+  labAnalytes: lazyRouteComponent(() => import('@/pages/labs/LabsPage'), 'LabAnalytesPage'),
+  labAnalyte: lazyRouteComponent(() => import('@/pages/labs/LabAnalytePage'), 'LabAnalytePage'),
+  labReportNew: lazyRouteComponent(
+    () => import('@/pages/labs/LabReportFormPage'),
+    'LabReportNewPage',
+  ),
+  labReportEdit: lazyRouteComponent(
+    () => import('@/pages/labs/LabReportFormPage'),
+    'LabReportEditPage',
+  ),
+  labReport: lazyRouteComponent(() => import('@/pages/labs/LabReportPage'), 'LabReportPage'),
+  labPicker: lazyRouteComponent(() => import('@/pages/labs/LabPickerPage'), 'LabPickerPage'),
+  labOwnAnalyte: lazyRouteComponent(
+    () => import('@/pages/labs/LabPickerPage'),
+    'LabOwnAnalytePage',
+  ),
+  labValueNew: lazyRouteComponent(() => import('@/pages/labs/LabValuePage'), 'LabValueNewPage'),
+  labValueEdit: lazyRouteComponent(() => import('@/pages/labs/LabValuePage'), 'LabValueEditPage'),
   more: lazyRouteComponent(() => import('@/pages/more/MorePage'), 'MorePage'),
   unsent: lazyRouteComponent(() => import('@/pages/unsent/UnsentPage'), 'UnsentPage'),
   profile: lazyRouteComponent(() => import('@/pages/profile/ProfilePage'), 'ProfilePage'),
@@ -236,6 +263,17 @@ const routeTree = rootRoute.addChildren([
       path: '/measurements/metrics/new',
       component: screens.metricNew,
     }),
+    // Давление — раньше `/measurements/$metric/$id`: у вида замера ключ, а не слово.
+    createRoute({
+      getParentRoute: () => appRoute,
+      path: '/measurements/pressure/new',
+      component: screens.pressureNew,
+    }),
+    createRoute({
+      getParentRoute: () => appRoute,
+      path: '/measurements/pressure/$id',
+      component: screens.pressureEdit,
+    }),
     measurementsRoute,
     measurementEditRoute,
     createRoute({
@@ -328,6 +366,53 @@ const routeTree = rootRoute.addChildren([
       getParentRoute: () => appRoute,
       path: '/workouts/exercises/$key/edit',
       component: screens.exerciseEdit,
+    }),
+    createRoute({ getParentRoute: () => appRoute, path: '/labs', component: screens.labs }),
+    createRoute({
+      getParentRoute: () => appRoute,
+      path: '/labs/analytes',
+      component: screens.labAnalytes,
+    }),
+    // `$key` — код штатного показателя или ключ своего; есть ли такой, решает экран.
+    createRoute({
+      getParentRoute: () => appRoute,
+      path: '/labs/analytes/$key',
+      component: screens.labAnalyte,
+    }),
+    createRoute({
+      getParentRoute: () => appRoute,
+      path: '/labs/new',
+      component: screens.labReportNew,
+    }),
+    createRoute({
+      getParentRoute: () => appRoute,
+      path: '/labs/$id',
+      component: screens.labReport,
+    }),
+    createRoute({
+      getParentRoute: () => appRoute,
+      path: '/labs/$id/edit',
+      component: screens.labReportEdit,
+    }),
+    createRoute({
+      getParentRoute: () => appRoute,
+      path: '/labs/$id/add',
+      component: screens.labPicker,
+    }),
+    createRoute({
+      getParentRoute: () => appRoute,
+      path: '/labs/$id/add/own',
+      component: screens.labOwnAnalyte,
+    }),
+    createRoute({
+      getParentRoute: () => appRoute,
+      path: '/labs/$id/add/$key',
+      component: screens.labValueNew,
+    }),
+    createRoute({
+      getParentRoute: () => appRoute,
+      path: '/labs/$id/values/$valueId',
+      component: screens.labValueEdit,
     }),
     createRoute({ getParentRoute: () => appRoute, path: '/more', component: screens.more }),
     createRoute({ getParentRoute: () => appRoute, path: '/unsent', component: screens.unsent }),

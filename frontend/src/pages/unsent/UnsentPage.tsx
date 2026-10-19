@@ -1,9 +1,19 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
-import { Activity, Dumbbell, GlassWater, Ruler, ScanBarcode, Timer, Utensils } from 'lucide-react'
+import {
+  Activity,
+  FlaskConical,
+  Dumbbell,
+  GlassWater,
+  Ruler,
+  ScanBarcode,
+  Timer,
+  Utensils,
+} from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { useLabAnalytes } from '@/api/labs'
 import { useMetrics } from '@/api/measurements'
 import { useDiaryDay } from '@/api/nutrition'
 import { WORKOUTS_KEY } from '@/api/workouts'
@@ -75,6 +85,8 @@ function RejectedRow({ changes }: { changes: Rejected[] }) {
   if (kind === 'measurement' || kind === 'measurementRemove')
     return <MeasurementRow change={changes[0]!} />
   if (kind === 'fitness' || kind === 'fitnessRemove') return <FitnessRow change={changes[0]!} />
+  if (kind === 'pressure' || kind === 'pressureRemove') return <PressureRow change={changes[0]!} />
+  if (kind.startsWith('lab')) return <LabRow change={changes[0]!} />
   return <WorkoutRow changes={changes} />
 }
 
@@ -250,6 +262,43 @@ function FitnessRow({ change }: { change: Rejected }) {
       change={change}
     />
   )
+}
+
+function PressureRow({ change }: { change: Rejected }) {
+  const { t } = useTranslation()
+  const { pressure, localDate } = change.context
+  return (
+    <Row
+      icon={Activity}
+      title={
+        pressure
+          ? t('unsent.pressure', { value: t('pressure.value', pressure) })
+          : t('pressure.title')
+      }
+      detail={localDate ? isoToDisplay(localDate) : undefined}
+      change={change}
+    />
+  )
+}
+
+function LabRow({ change }: { change: Rejected }) {
+  const { t, i18n } = useTranslation()
+  const analytes = useLabAnalytes()
+  const { lab, kind, localDate } = change.context
+  const own = analytes.data?.analytes.find((item) => item.id === lab?.analyteId)
+  const name = lab?.preset
+    ? t(`labAnalytes.${lab.preset}`)
+    : (lab?.name ?? own?.name ?? t('labs.ownTitle'))
+  const unit = lab?.unit ? t(`labUnits.${lab.unit}`) : (own?.unit ?? '')
+  const title = kind.startsWith('labReport')
+    ? t('unsent.labReport', { date: localDate ? isoToDisplay(localDate) : '' })
+    : kind.startsWith('labAnalyte')
+      ? t('unsent.labAnalyte', { name })
+      : t('unsent.labValue', {
+          name,
+          value: lab?.value == null ? '' : `${formatNumber(lab.value, i18n.language, 4)} ${unit}`,
+        })
+  return <Row icon={FlaskConical} title={title} detail={lab?.lab ?? undefined} change={change} />
 }
 
 function WorkoutRow({ changes }: { changes: Rejected[] }) {

@@ -44,6 +44,11 @@ export function listed(metrics: Metric[] | undefined): Metric[] {
   return (metrics ?? []).filter((metric) => !metric.archived)
 }
 
+/** Виды, которые вносят одним числом: у давления своя форма и своя запись (ADR 0022). */
+export function singleValued(metrics: Metric[]): Metric[] {
+  return metrics.filter((metric) => metric.quantity !== 'pressure')
+}
+
 /** Свой вид замера: создаёт, переименовывает или возвращает убранный в список. */
 export function saveMetric(id: string, body: Schemas['MetricIn']) {
   return attempt(() =>

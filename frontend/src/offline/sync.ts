@@ -4,7 +4,9 @@ import { copy } from './copy'
 import { resolveDeferred } from './deferred'
 import { type CatalogCopy, DIARY_COPY, diaryCopy } from './diary'
 import { FITNESS_COPY, type FitnessCopy, fitnessCopy } from './fitness'
+import { LAB_COPY, labCopy, type LabReportsCopy } from './labs'
 import { MEASUREMENT_COPY, type MeasurementsCopy, measurementsCopy } from './measurements'
+import { PRESSURE_COPY, type PressureCopy, pressureCopy } from './pressure'
 import { flush } from './queue'
 import { offlineState } from './store'
 import { WORKOUT_COPY, workoutCopy } from './workouts'
@@ -23,7 +25,8 @@ async function reachable(): Promise<boolean> {
 }
 
 /**
- * Обновляет копию — журнал тренировок, дневник, замеры и тесты — только при связи и пустой
+ * Обновляет копию — журнал тренировок, дневник, замеры, давление, тесты и анализы — только
+ * при связи и пустой
  * очереди: иначе ответ сервера стёр бы изменения, которых он ещё не видел. `alive` —
  * отправка ещё работает: после выхода обновление не запрашивает и не пишет дальше.
  */
@@ -49,6 +52,8 @@ export async function refreshCopy(alive: () => boolean = () => true): Promise<vo
     await refreshDiary(ready)
     await refreshMeasurements(ready)
     await refreshFitness(ready)
+    await refreshPressure(ready)
+    await refreshLabs(ready)
   } catch {
     // Сеть пропала посреди обновления — копия остаётся прежней.
   }
@@ -116,6 +121,37 @@ async function refreshFitness(ready: () => boolean): Promise<void> {
   if (!ready()) return
   if (Array.isArray(all.data))
     await fitnessCopy.replace({ etag: all.response.headers.get('ETag'), items: all.data })
+}
+
+/** Копия показаний давления: все показания — заново, только если они изменились. */
+async function refreshPressure(ready: () => boolean): Promise<void> {
+  if (!ready()) return
+  const known = await copy.get<PressureCopy>(PRESSURE_COPY)
+  const all = await api.GET('/api/blood-pressure', {
+    headers: known?.etag ? { 'If-None-Match': known.etag } : {},
+  })
+  if (!ready()) return
+  if (Array.isArray(all.data))
+    await pressureCopy.replace({ etag: all.response.headers.get('ETag'), items: all.data })
+}
+
+/** Копия анализов: свои показатели со справочником и все бланки — заново, если изменились. */
+async function refreshLabs(ready: () => boolean): Promise<void> {
+  if (!ready()) return
+  const known = await copy.get<LabReportsCopy>(LAB_COPY.reports)
+  const [analytes, reports] = await Promise.all([
+    api.GET('/api/lab-analytes'),
+    api.GET('/api/lab-reports', {
+      headers: known?.etag ? { 'If-None-Match': known.etag } : {},
+    }),
+  ])
+  if (!ready()) return
+  if (Array.isArray(analytes.data?.catalog)) await copy.put(LAB_COPY.analytes, analytes.data)
+  if (Array.isArray(reports.data))
+    await labCopy.replaceReports({
+      etag: reports.response.headers.get('ETag'),
+      items: reports.data,
+    })
 }
 
 /**

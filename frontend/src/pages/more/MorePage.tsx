@@ -1,5 +1,5 @@
 import { Link, type LinkProps } from '@tanstack/react-router'
-import { ChevronRight, type LucideIcon, ShieldCheck, UserRound } from 'lucide-react'
+import { ChevronRight, FlaskConical, type LucideIcon, ShieldCheck, UserRound } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { useUser } from '@/auth/useSession'
@@ -12,13 +12,14 @@ interface Item {
 }
 
 /**
- * Разделы, которым не хватило места в нижней панели телефона: профиль и, у
+ * Разделы, которым не хватило места в нижней панели телефона: анализы, профиль и, у
  * администратора, управление.
  */
 export function MorePage() {
   const { t } = useTranslation()
   const user = useUser()
   const items: Item[] = [
+    { to: '/labs', icon: FlaskConical, label: 'nav.labs' },
     { to: '/profile', icon: UserRound, label: 'nav.profile' },
     ...(user.role === 'admin'
       ? [{ to: '/admin', icon: ShieldCheck, label: 'nav.admin' } satisfies Item]

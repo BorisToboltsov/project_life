@@ -8,6 +8,7 @@ import {
   useMeasurementSummary,
   useMetrics,
 } from '@/api/measurements'
+import { usePressureReadings } from '@/api/pressure'
 import { useUser } from '@/auth/useSession'
 import { PendingMark } from '@/components/PendingMark'
 import { Button } from '@/components/ui/button'
@@ -20,6 +21,46 @@ import { useOfflineState } from '@/offline/store'
 import { AddMetricLink } from './AddMetricLink'
 import { inputUnit } from './entryValues'
 import { useMetricName } from './metricName'
+import { PressureMark } from './PressurePanel'
+import { usePressureText } from './pressureText'
+
+/** Плитка давления: последнее показание и отметка «выше 135/85» (ADR 0022). */
+function PressureTile({ metric }: { metric: Metric }) {
+  const { t } = useTranslation()
+  const name = useMetricName()
+  const text = usePressureText()
+  const { pending } = useOfflineState()
+  const readings = usePressureReadings()
+  const [latest] = readings.data ?? []
+
+  return (
+    <Link
+      to="/measurements/$metric"
+      params={{ metric: metric.id }}
+      className="grid gap-0.5 rounded-lg border p-3 transition-colors hover:bg-muted/50"
+    >
+      <span className="text-sm text-muted-foreground">{name(metric)}</span>
+      {latest ? (
+        <>
+          <span className="text-xl font-semibold">
+            {text(latest)}
+            {pending.has(latest.id) && (
+              <span className="ml-1.5 inline-block align-[-2px]">
+                <PendingMark />
+              </span>
+            )}
+          </span>
+          <span className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+            {isoToDisplay(latest.local_date)}
+            <PressureMark reading={latest} />
+          </span>
+        </>
+      ) : (
+        <span className="text-sm text-muted-foreground">{t('pressure.never')}</span>
+      )}
+    </Link>
+  )
+}
 
 function Tile({
   metric,
@@ -91,6 +132,8 @@ export function SummaryCard() {
       </CardHeader>
       <CardContent className="grid grid-cols-2 gap-3">
         {listed(metrics.data?.metrics).map((metric) => {
+          if (metric.quantity === 'pressure')
+            return <PressureTile key={metric.id} metric={metric} />
           const item = summary.data?.find((entry) => entry.metric_id === metric.id)
           return (
             <Tile

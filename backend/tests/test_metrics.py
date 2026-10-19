@@ -45,6 +45,7 @@ def test_each_unit_measures_one_quantity() -> None:
         Unit.CM: Quantity.LENGTH,
         Unit.IN: Quantity.LENGTH,
         Unit.PERCENT: Quantity.PERCENT,
+        Unit.MMHG: Quantity.PRESSURE,
     }
 
 
@@ -57,10 +58,11 @@ def test_catalog_describes_every_preset() -> None:
     assert set(CATALOG) == set(MetricPreset)
     assert CATALOG[MetricPreset.WEIGHT].quantity == Quantity.MASS
     assert CATALOG[MetricPreset.BODY_FAT].quantity == Quantity.PERCENT
+    assert CATALOG[MetricPreset.BLOOD_PRESSURE].quantity == Quantity.PRESSURE
     assert {
         metric_type.quantity
         for preset, metric_type in CATALOG.items()
-        if preset not in (MetricPreset.WEIGHT, MetricPreset.BODY_FAT)
+        if preset not in (MetricPreset.WEIGHT, MetricPreset.BODY_FAT, MetricPreset.BLOOD_PRESSURE)
     } == {Quantity.LENGTH}
     assert all(metric_type.min_value < metric_type.max_value for metric_type in CATALOG.values())
 

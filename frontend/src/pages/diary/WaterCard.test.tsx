@@ -118,6 +118,8 @@ describe('вода на главной', () => {
     expect(await water.findByRole('alert')).toHaveTextContent('Что-то пошло не так')
     await userEvent.click(glass)
     await waitFor(() => expect(water.queryByRole('alert')).not.toBeInTheDocument())
+    // Ошибка исчезает в начале запроса; следующая порция доступна после его окончания.
+    await waitFor(() => expect(glass).toBeEnabled())
     await userEvent.click(glass)
 
     await waitFor(() => expect(callsTo(calls, SAVE)).toHaveLength(3))

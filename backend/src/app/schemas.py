@@ -35,11 +35,18 @@ from app.fitness import (
     PushUpVariant,
     to_meters,
 )
-from app.metrics import MetricPreset, Quantity, Unit, to_canonical
+from app.labs import CATALOG as LAB_CATALOG
+from app.labs import OWN_MAX as LAB_OWN_MAX
+from app.labs import LabGroup, LabPreset, LabUnit
+from app.labs import to_canonical as lab_canonical
+from app.metrics import OWN_QUANTITIES, MetricPreset, Quantity, Unit, to_canonical
 from app.models import (
     ErrorSource,
     Exercise,
     FoodEntry,
+    LabAnalyte,
+    LabReport,
+    LabValue,
     Language,
     Meal,
     Metric,
@@ -61,6 +68,7 @@ from app.nutrition import (
     ProductUnit,
     energy_kcal,
 )
+from app.pressure import DIASTOLIC, PULSE, SYSTOLIC
 from app.services.open_food_facts import OffListing, OffProduct
 
 
@@ -235,11 +243,18 @@ def _check_moment(moment: datetime, local_date: date) -> None:
 MetricName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=40)]
 
 
+def _own_quantity(value: Quantity) -> Quantity:
+    if value not in OWN_QUANTITIES:
+        raise ValueError("own metric cannot measure this quantity")
+    return value
+
+
 class MetricIn(Strict):
-    """Свой вид замера. Величину задают один раз, при создании."""
+    """Свой вид замера. Величину задают один раз, при создании. Давление — только штатный
+    вид (ADR 0022)."""
 
     name: MetricName
-    quantity: Quantity
+    quantity: Annotated[Quantity, AfterValidator(_own_quantity)]
 
 
 class MetricPresetIn(Strict):
@@ -375,6 +390,193 @@ class FitnessResultOut(BaseModel):
     distance_value: float | None
     distance_unit: Literal["m", "mi"] | None
     variant: PushUpVariant | None
+
+
+def _check_day(value: date) -> date:
+    """День записи без времени правдоподобен: не раньше 1900 года и не из будущего — с
+    запасом в сутки на любой часовой пояс."""
+    if value < date(1900, 1, 1) or value > datetime.now(UTC).date() + timedelta(days=1):
+        raise ValueError("date out of range")
+    return value
+
+
+def _blank_to_none(value: str | None) -> str | None:
+    return value or None
+
+
+LabNumber = Annotated[Decimal, Field(ge=0, max_digits=10, decimal_places=4)]
+LabText = Annotated[str, StringConstraints(strip_whitespace=True, max_length=80)]
+
+
+class LabReportIn(Strict):
+    """Шапка бланка анализа: день забора, лаборатория и заметка (ADR 0022)."""
+
+    local_date: Annotated[date, AfterValidator(_check_day)]
+    lab: Annotated[LabText | None, AfterValidator(_blank_to_none)] = None
+    note: Annotated[
+        Annotated[str, StringConstraints(strip_whitespace=True, max_length=500)] | None,
+        AfterValidator(_blank_to_none),
+    ] = None
+
+
+class LabValueIn(Strict):
+    """Значение показателя — как напечатано на бланке (инвариант I22). Показатель задаётся
+    при создании и потом не меняется."""
+
+    # Штатный показатель по коду или свой по ключу — ровно одно из двух.
+    preset: LabPreset | None = None
+    analyte_id: UUID | None = None
+    value: LabNumber
+    # Единица бланка — у штатного; у своего её нет в запросе: она записана в показателе.
+    unit: LabUnit | None = None
+    # Границы референса в единице бланка; любой из них может не быть.
+    ref_low: LabNumber | None = None
+    ref_high: LabNumber | None = None
+
+    @property
+    def canonical_value(self) -> Decimal:
+        """Значение для графика: у штатного — в канонической единице, у своего — как есть."""
+        if self.preset is None or self.unit is None:
+            return self.value
+        canonical = lab_canonical(self.preset, self.value, self.unit)
+        if canonical is None:
+            raise ValueError("unit does not fit the analyte")
+        return canonical
+
+    @model_validator(mode="after")
+    def _fits_the_analyte(self) -> Self:
+        if (self.preset is None) == (self.analyte_id is None):
+            raise ValueError("value needs exactly one of preset and analyte_id")
+        if self.preset is None:
+            if self.unit is not None:
+                raise ValueError("own analyte keeps its unit itself")
+            if self.value > LAB_OWN_MAX:
+                raise ValueError("value out of range")
+        else:
+            preset = LAB_CATALOG[self.preset]
+            if self.unit is None or self.unit not in preset.units:
+                raise ValueError("unit does not fit the analyte")
+            if not preset.min_value <= self.canonical_value <= preset.max_value:
+                raise ValueError("value out of range")
+        if self.ref_low is not None and self.ref_high is not None and self.ref_low > self.ref_high:
+            raise ValueError("reference low bound above the high one")
+        return self
+
+
+class LabValueOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    preset: LabPreset | None
+    analyte_id: UUID | None
+    # Для графика: у штатного — в канонической единице, у своего — как ввели.
+    value: float
+    # Как на бланке.
+    original_value: float
+    original_unit: LabUnit | None
+    ref_low: float | None
+    ref_high: float | None
+
+
+class LabReportOut(BaseModel):
+    id: UUID
+    local_date: date
+    lab: str | None
+    note: str | None
+    # В порядке внесения.
+    values: list[LabValueOut]
+
+    @classmethod
+    def of(cls, report: LabReport, values: list[LabValue]) -> Self:
+        return cls(
+            id=report.id,
+            local_date=report.local_date,
+            lab=report.lab,
+            note=report.note,
+            values=[LabValueOut.model_validate(value) for value in values],
+        )
+
+
+LabAnalyteName = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=60)
+]
+
+
+class LabAnalyteIn(Strict):
+    """Свой показатель. Единицу задают один раз, при создании (инвариант I22)."""
+
+    name: LabAnalyteName
+    unit: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=20)]
+
+
+class LabAnalyteOut(BaseModel):
+    id: UUID
+    name: str
+    unit: str
+    # Убран из списка: значения по нему остаются, а при выборе показателя его нет.
+    archived: bool
+
+    @classmethod
+    def of(cls, analyte: LabAnalyte) -> Self:
+        return cls(
+            id=analyte.id,
+            name=analyte.name,
+            unit=analyte.unit,
+            archived=analyte.archived_at is not None,
+        )
+
+
+class LabUnitOut(BaseModel):
+    unit: LabUnit
+    # Сколько канонических единиц показателя в одной такой.
+    factor: float
+
+
+class LabPresetOut(BaseModel):
+    """Штатный показатель: группа, каноническая единица, единицы бланков, диапазон."""
+
+    code: LabPreset
+    group: LabGroup
+    unit: LabUnit
+    # Все единицы показателя; каноническая — первой.
+    units: list[LabUnitOut]
+    min_value: float
+    max_value: float
+
+
+class LabAnalyteListOut(BaseModel):
+    # Свои показатели по порядку создания, вместе с убранными.
+    analytes: list[LabAnalyteOut]
+    # Справочник штатных показателей по группам, в порядке экрана выбора.
+    catalog: list[LabPresetOut]
+
+
+class BloodPressureIn(Strict):
+    """Показание тонометра (ADR 0022): верхнее и нижнее давление, пульс — если есть."""
+
+    measured_at: AwareDatetime
+    local_date: date
+    systolic: Annotated[int, Field(ge=SYSTOLIC[0], le=SYSTOLIC[1])]
+    diastolic: Annotated[int, Field(ge=DIASTOLIC[0], le=DIASTOLIC[1])]
+    pulse: Annotated[int, Field(ge=PULSE[0], le=PULSE[1])] | None = None
+
+    @model_validator(mode="after")
+    def _plausible(self) -> Self:
+        _check_moment(self.measured_at, self.local_date)
+        if self.systolic <= self.diastolic:
+            raise ValueError("systolic pressure must be above diastolic")
+        return self
+
+
+class BloodPressureOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    measured_at: datetime
+    local_date: date
+    systolic: int
+    diastolic: int
+    pulse: int | None
 
 
 ExerciseName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=60)]

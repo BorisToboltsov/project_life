@@ -73,7 +73,10 @@ class Metric(Base):
         return limits(self.preset, self.quantity)
 
     def accepts(self, value: Decimal, unit: Unit) -> bool:
-        """Годится ли значение: единица той же величины, число в допустимом диапазоне."""
+        """Годится ли значение: единица той же величины, число в допустимом диапазоне.
+        Давление одним числом не вносится: у показания своя запись (ADR 0022)."""
+        if self.quantity == Quantity.PRESSURE:
+            return False
         low, high = self.limits
         return quantity_of(unit) == self.quantity and low <= to_canonical(value, unit) <= high
 
@@ -97,7 +100,8 @@ class Measurement(Base):
 
     __tablename__ = "measurements"
     __table_args__ = (
-        one_of("original_unit", Unit),
+        # Давление в эту таблицу не попадает: показание лежит отдельно (ADR 0022).
+        one_of("original_unit", Unit, exclude={Unit.MMHG}),
         one_of("source", Source),
         # История и график одного показателя пользователя за период.
         Index("ix_measurements_user_metric_date", "user_id", "metric_id", "local_date"),
