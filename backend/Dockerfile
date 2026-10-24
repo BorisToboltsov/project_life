@@ -10,8 +10,15 @@ COPY src ./src
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev --no-editable
 
+FROM postgres:18 AS postgres-tools
 FROM python:3.14-slim
-RUN useradd --system --uid 10001 --no-create-home app
+RUN apt-get update && apt-get install -y --no-install-recommends age libpq5 liblz4-1 libzstd1 && rm -rf /var/lib/apt/lists/*
+COPY --from=postgres-tools /usr/lib/postgresql/18/bin/pg_dump /usr/local/bin/pg_dump
+COPY --from=postgres-tools /usr/lib/postgresql/18/bin/psql /usr/local/bin/psql
+COPY --from=postgres-tools /usr/lib/*/libpq.so.5* /usr/local/lib/
+ENV LD_LIBRARY_PATH="/usr/local/lib"
+RUN psql --version && pg_dump --version
+RUN useradd --system --uid 10001 --no-create-home app && mkdir /scratch && chown app /scratch
 WORKDIR /srv
 COPY --from=build /srv/.venv ./.venv
 COPY alembic.ini ./

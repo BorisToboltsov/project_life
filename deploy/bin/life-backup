@@ -22,6 +22,33 @@ fi
 
 umask 077
 mkdir -p backups
+# From 0.13, a successful backup includes the database AND immutable file objects.
+# Older databases still use the legacy dump below during the first upgrade.
+compose() { docker compose --progress quiet --env-file .env -f compose.yaml "$@"; }
+has_files="$(compose exec -T db psql -U life -d life -v ON_ERROR_STOP=1 -Atc "SELECT to_regclass('public.attachments') IS NOT NULL")"
+if [ "$has_files" != t ] && [ "$has_files" != f ]; then
+  echo 'life-backup: cannot determine backup format' >&2
+  exit 1
+fi
+if [ "$has_files" = t ]; then
+  exec 8>"$LIFE_HOME/.backup.lock"
+  flock 8
+  mount_source="${LIFE_BACKUP_VOLUME:-$LIFE_HOME/backups}"
+  bundle="$(compose run --rm -T --no-deps --user 0 \
+    -e BACKUP_RECIPIENT="$recipient" \
+    -v "$mount_source:/backups" backend \
+    python -m app.file_backup backup --label "$label")"
+  if [ -n "$remote" ]; then
+    # Objects are copied before manifests/complete. Local completion is not enough
+    # to report success when an external backup destination has been configured.
+    rclone copy "$LIFE_HOME/backups/files/objects" "$remote/files/objects"
+    rclone copy "$LIFE_HOME/backups/files" "$remote/files" --exclude 'objects/**' --exclude '**/complete'
+    rclone copy "$LIFE_HOME/backups/files" "$remote/files" --include '**/complete'
+  fi
+  printf '%s\n' "$LIFE_HOME/backups${bundle#/backups}"
+  exit 0
+fi
+
 target="backups/life-$(date -u +%Y%m%dT%H%M%SZ)-$label.sql.gz.age"
 trap 'rm -f "$target.part"' EXIT
 

@@ -2,7 +2,7 @@ FROM node:24-slim AS build
 RUN corepack enable
 WORKDIR /src
 # Зависимости отдельным слоем: он пересобирается только при смене lock-файла.
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
     pnpm install --frozen-lockfile
 COPY . .

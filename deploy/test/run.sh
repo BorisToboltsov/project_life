@@ -9,6 +9,7 @@ REGISTRY="localhost:5055"
 PROJECT="life-deploy-test"
 
 cleanup() {
+  docker volume rm life-deploy-backups >/dev/null 2>&1 || true
   docker compose -p "$PROJECT" down --volumes --remove-orphans >/dev/null 2>&1 || true
   docker rm -f life-deploy-registry life-deploy-restore >/dev/null 2>&1 || true
 }
@@ -27,7 +28,10 @@ done
 # Проверка положит её в реестр под тегом latest, когда дойдёт до обновления.
 docker build --quiet --label revision=next -t "$REGISTRY/life-backend:next" backend >/dev/null
 
+docker volume create life-deploy-backups >/dev/null
 docker run --rm \
+  --volume life-deploy-backups:/opt/life/backups \
+  --env LIFE_BACKUP_VOLUME=life-deploy-backups \
   --volume /var/run/docker.sock:/var/run/docker.sock \
   --volume "$PWD":/src:ro \
   --add-host host.docker.internal:host-gateway \

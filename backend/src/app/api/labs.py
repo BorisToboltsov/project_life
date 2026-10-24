@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import CurrentUser
 from app.db import SessionDep
 from app.errors import ApiError, ErrorCode, error_responses
+from app.files import file_mutation
 from app.labs import CATALOG
 from app.models import LabAnalyte, LabReport, LabValue
 from app.schemas import (
@@ -244,6 +245,7 @@ async def save_lab_report(
 )
 async def delete_lab_report(report_id: RecordId, user: CurrentUser, db: SessionDep) -> None:
     """Удаляет бланк вместе с его значениями."""
+    await file_mutation(db)
     report = await _require_report(db, report_id, user.id)
     await db.delete(report)
     await db.commit()

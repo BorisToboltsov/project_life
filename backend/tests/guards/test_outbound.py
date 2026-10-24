@@ -31,7 +31,7 @@ MARKER = "leak-5c1d8e2a"
 OUTBOUND_MODULE = "services/open_food_facts.py"
 NETWORK_IMPORT = re.compile(
     r"^\s*(?:import|from)\s+"
-    r"(httpx|urllib\.request|urllib3|http\.client|aiohttp|requests|websockets|socket|smtplib|ftplib)\b",
+    r"(httpx|urllib\.request|urllib3|http\.client|aiohttp|requests|websockets|socket|smtplib|ftplib|boto3)\b",
     re.MULTILINE,
 )
 
@@ -146,4 +146,4 @@ def test_only_one_module_opens_connections() -> None:
     }
 
     assert len(sources) > 20, "обход пакета пуст или неполон"
-    assert offenders == {OUTBOUND_MODULE: ["httpx"]}
+    assert offenders == {OUTBOUND_MODULE: ["httpx"], "services/file_storage.py": ["boto3"]}

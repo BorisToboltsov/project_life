@@ -4,8 +4,8 @@ COMPOSE_DEV := docker compose -f compose.dev.yaml
 COMPOSE_E2E := docker compose -p life-e2e -f deploy/compose.yaml -f deploy/compose.build.yaml --env-file deploy/e2e.env
 OPENAPI_TMP := frontend/node_modules/.tmp
 
-.PHONY: install db dev-backend dev-frontend admin-invite api-client version stand stand-down \
-        check check-version check-backend check-api-client check-frontend e2e check-deploy clean
+.PHONY: install db storage dev-backend dev-frontend admin-invite api-client version stand stand-down \
+        check check-version check-backend check-api-client check-frontend e2e check-deploy check-imaging-archives clean
 
 install: ## Поставить зависимости бэкенда и фронтенда
 	cd backend && uv sync
@@ -14,6 +14,9 @@ install: ## Поставить зависимости бэкенда и фрон
 
 db: ## Поднять базу для разработки и тестов
 	$(COMPOSE_DEV) up -d --wait
+
+storage: ## Поднять Garage для загрузок из локального Vite
+	$(COMPOSE_DEV) -f compose.storage.yaml up -d --build --wait
 
 dev-backend: db ## Бэкенд с автоперезагрузкой на :8000
 	cd backend && uv run alembic upgrade head && uv run uvicorn app.main:app --reload
@@ -67,10 +70,13 @@ stand-down: ## Погасить стенд вместе с его данными
 e2e: stand ## Сквозной смоук против собранного стенда
 	cd frontend && pnpm e2e; status=$$?; cd .. && $(COMPOSE_E2E) down -v; exit $$status
 
+check-imaging-archives: stand ## Полные публичные CT/MR и SIGKILL обработчика (нужна сеть)
+	backend/.venv/bin/python scripts/check_imaging_archives.py
+
 check-deploy: ## Серверные скрипты на Ubuntu 24.04: установка, бэкап, обновление, восстановление
 	deploy/test/run.sh
 
 clean: ## Убрать всё, что оставил прогон
 	-$(COMPOSE_E2E) down -v
 	rm -rf backend/.pytest_cache backend/.ruff_cache backend/.coverage
-	rm -rf frontend/dist frontend/coverage frontend/playwright-report frontend/test-results
+	rm -rf frontend/dist frontend/coverage frontend/playwright-report frontend/test-results frontend/public/pdfjs

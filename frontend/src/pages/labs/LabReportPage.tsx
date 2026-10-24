@@ -13,6 +13,7 @@ import type { ErrorKey } from '@/lib/errors'
 import { type LabGroup, type LabReport, type LabValue, outOfRange } from '@/lib/labs'
 import { useOfflineState } from '@/offline/store'
 
+import { FilesPanel } from './FilesPanel'
 import { ReportMissing } from './LabReportFormPage'
 import { useValueName, useValueUnit } from './labText'
 import { VALUE_ROW, ValueLine } from './LabValueLine'
@@ -149,6 +150,7 @@ export function LabReportPage() {
         <Plus aria-hidden="true" className="size-5" />
         {t('labs.addValue')}
       </Link>
+      <FilesPanel reportId={report.id} />
       <ReportActions report={report} />
       <Button asChild variant="ghost" className="h-11 justify-self-start">
         <Link to="/labs">{t('labs.toReports')}</Link>

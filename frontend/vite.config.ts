@@ -43,13 +43,15 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
+        // The online-only DICOM engine is fetched on entry, not during PWA installation.
+        globIgnores: ['**/viewerEngine-*.js'],
         // Запросы к API не должны подменяться оболочкой приложения из кэша.
-        navigateFallbackDenylist: [/^\/api\//],
+        navigateFallbackDenylist: [/^\/api\//, /^\/life-uploads\//],
       },
     }),
   ],
-  resolve: { alias: { '@': path.resolve(import.meta.dirname, 'src') } },
-  server: { proxy: { '/api': 'http://localhost:8000' } },
+  resolve: { alias: { '@': path.resolve(import.meta.dirname, 'src'), events: 'events/' } },
+  server: { proxy: { '/api': 'http://localhost:8000', '/life-uploads': 'http://localhost:3900' } },
   test: {
     environment: 'jsdom',
     setupFiles: ['src/test/setup.ts'],

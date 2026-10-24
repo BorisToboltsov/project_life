@@ -20,6 +20,18 @@
 		-Server
 	}
 
+	handle /life-uploads/* {
+        # Presigned multipart only. Private originals are served through the API.
+        @write method PUT
+        handle @write {
+            request_body {
+                max_size 8388608
+            }
+            reverse_proxy storage:3900
+        }
+        respond 405
+    }
+
 	handle /api/* {
 		reverse_proxy backend:8000
 	}

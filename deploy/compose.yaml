@@ -13,18 +13,74 @@ x-logging: &logging
 x-backend: &backend
   image: ${BACKEND_IMAGE:-ghcr.io/boristoboltsov/project_life-backend}:${IMAGE_TAG:-latest}
   logging: *logging
-  environment:
+  environment: &backend-environment
     LIFE_ENVIRONMENT: prod
     LIFE_DATABASE_URL: postgresql+psycopg://life:${POSTGRES_PASSWORD:?}@db:5432/life
     LIFE_JWT_SECRET: ${JWT_SECRET:?}
     LIFE_PUBLIC_URL: ${PUBLIC_URL:?}
+    LIFE_STORAGE_URL: http://storage:3900
+    LIFE_STORAGE_KEY: ${STORAGE_KEY:?}
+    LIFE_STORAGE_SECRET: ${STORAGE_SECRET:?}
     # Где искать продукт по штрихкоду; пустое значение в .env оставляет только свой каталог.
     LIFE_OFF_URL: ${OFF_URL-https://world.openfoodfacts.org}
     # Где искать продукт по названию; пустое значение выключает только этот поиск.
     LIFE_OFF_SEARCH_URL: ${OFF_SEARCH_URL-https://search.openfoodfacts.org}
 
 services:
+  storage-config:
+    <<: *backend
+    user: "0"
+    command: ["python", "-m", "app.storage_setup", "config"]
+    volumes:
+      - storage_config:/config
+  storage:
+    networks: [default, imaging]
+    image: dxflrs/garage:v2.4.1
+    restart: unless-stopped
+    logging: *logging
+    command: ["/garage", "server", "--single-node", "--default-bucket"]
+    environment:
+      GARAGE_DEFAULT_ACCESS_KEY: ${STORAGE_KEY:?}
+      GARAGE_DEFAULT_SECRET_KEY: ${STORAGE_SECRET:?}
+      GARAGE_DEFAULT_BUCKET: life-uploads
+    volumes:
+      - storage_config:/etc:ro
+      - storage_data:/data
+    depends_on:
+      storage-config:
+        condition: service_completed_successfully
+  storage-init:
+    <<: *backend
+    command: ["python", "-m", "app.storage_setup", "buckets"]
+    depends_on:
+      storage:
+        condition: service_started
+  file-cleanup:
+    <<: *backend
+    command: ["python", "-m", "app.file_maintenance"]
+    restart: unless-stopped
+    depends_on:
+      storage-init:
+        condition: service_completed_successfully
+      migrate:
+        condition: service_completed_successfully
+  imaging-worker:
+    <<: *backend
+    environment:
+      <<: *backend-environment
+      TMPDIR: /scratch
+    command: ["python", "-m", "app.imaging.queue"]
+    restart: unless-stopped
+    mem_limit: 2g
+    cpus: 1
+    networks: [imaging]
+    depends_on:
+      storage-init:
+        condition: service_completed_successfully
+      migrate:
+        condition: service_completed_successfully
   db:
+    networks: [default, imaging]
     image: postgres:18
     restart: unless-stopped
     logging: *logging
@@ -55,6 +111,8 @@ services:
     <<: *backend
     restart: unless-stopped
     depends_on:
+      storage-init:
+        condition: service_completed_successfully
       migrate:
         condition: service_completed_successfully
     healthcheck:
@@ -82,6 +140,12 @@ services:
         condition: service_healthy
 
 volumes:
+  storage_config:
+  storage_data:
   db:
   caddy_data:
   caddy_config:
+
+networks:
+  imaging:
+    internal: true

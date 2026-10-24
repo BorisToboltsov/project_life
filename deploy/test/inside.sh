@@ -11,7 +11,7 @@ fail() {
   echo "ПРОВАЛ: $*" >&2
   exit 1
 }
-backups() { find "$BACKUPS" -name "life-*-$1.sql.gz.age" | wc -l; }
+backups() { find "$BACKUPS" -path "*/files/*-${1//-/}/complete" | wc -l; }
 image_of() { docker inspect --format '{{.Image}}' "$(cd /opt/life && docker compose ps --quiet "$1")"; }
 users_in() { "$@" psql --username life --dbname life --tuples-only --no-align --command 'SELECT count(*) FROM users'; }
 
@@ -31,7 +31,7 @@ step "первая установка"
 age-keygen --output /root/backup.key 2>/dev/null
 recipient="$(age-keygen -y /root/backup.key)"
 # «:80» вместо домена — простой HTTP: получать сертификат в проверке не у кого.
-HTTP_PORT=8080 HTTPS_PORT=8443 \
+PUBLIC_URL="$APP" HTTP_PORT=8080 HTTPS_PORT=8443 \
   BACKEND_IMAGE="$REGISTRY/life-backend" WEB_IMAGE="$REGISTRY/life-web" \
   bash /src/deploy/install.sh :80 "$recipient" >/dev/null
 [ "$(stat --format %a /opt/life/.env)" = 600 ] || fail ".env доступен не только владельцу"
@@ -61,9 +61,13 @@ started="$(docker inspect --format '{{.State.StartedAt}}' "$(docker compose ps -
   || fail "контейнер перезапущен без причины"
 [ "$(backups pre-update)" = 0 ] || fail "сделан лишний бэкап"
 
+step "добавление синтетического файла в тестовый бланк"
+docker compose exec -T backend python - seed < /src/deploy/test/files.py
+
 step "ручной бэкап зашифрован"
 backup="$(/opt/life/bin/life-backup manual)"
-[ -s "$backup" ] || fail "файл бэкапа пуст"
+[ -s "$backup/complete" ] || fail "комплект бэкапа не завершён"
+backup="$backup/database.sql.gz.age"
 [ "$(stat --format %a "$backup")" = 600 ] || fail "бэкап доступен не только владельцу"
 head --bytes 21 "$backup" | grep -q 'age-encryption.org' || fail "бэкап не зашифрован age"
 gunzip --test "$backup" 2>/dev/null && fail "бэкап читается без ключа"
@@ -89,12 +93,12 @@ curl --fail --silent "$APP/api/health" | grep -q '"status":"ok"' || fail "пос
 [ "$(users_in docker compose exec -T db)" = 1 ] || fail "данные потеряны при обновлении"
 
 step "повторная установка обновляет файлы и сохраняет секреты"
-secrets="$(grep -E '^(JWT_SECRET|POSTGRES_PASSWORD)=' .env)"
+secrets="$(grep -E '^(JWT_SECRET|POSTGRES_PASSWORD|STORAGE_KEY|STORAGE_SECRET)=' .env)"
 bash /src/deploy/install.sh >/dev/null
-[ "$(grep -E '^(JWT_SECRET|POSTGRES_PASSWORD)=' .env)" = "$secrets" ] || fail "секреты перезаписаны"
+[ "$(grep -E '^(JWT_SECRET|POSTGRES_PASSWORD|STORAGE_KEY|STORAGE_SECRET)=' .env)" = "$secrets" ] || fail "секреты перезаписаны"
 
 step "восстановление из бэкапа в чистую базу"
-latest="$(find "$BACKUPS" -name 'life-*.sql.gz.age' | sort | tail -n 1)"
+latest="$(find "$BACKUPS/files" -name 'database.sql.gz.age' | sort | tail -n 1)"
 docker run --detach --name life-deploy-restore \
   --env POSTGRES_USER=life --env POSTGRES_PASSWORD=restore --env POSTGRES_DB=life postgres:18 >/dev/null
 # Готовность спрашиваем по TCP: пока образ создаёт базу, в контейнере работает временный
@@ -104,8 +108,17 @@ for _ in $(seq 30); do
     >/dev/null 2>&1 && break
   sleep 1
 done
-age --decrypt --identity /root/backup.key "$latest" | gunzip \
-  | docker exec -i life-deploy-restore psql --username life --dbname life --quiet --set ON_ERROR_STOP=1 >/dev/null
+docker network connect "${COMPOSE_PROJECT_NAME}_default" life-deploy-restore
+# Remove only the synthetic test object, then restore into the empty PostgreSQL instance.
+docker compose exec -T backend python - remove-test-object < /src/deploy/test/files.py
+bundle="/backups/files/$(basename "$(dirname "$latest")")"
+cat /root/backup.key | docker compose run --rm -T --no-deps --user 0 \
+  -e LIFE_DATABASE_URL=postgresql+psycopg://life:restore@life-deploy-restore:5432/life \
+  -v "$LIFE_BACKUP_VOLUME:/backups:ro" backend sh -c \
+  'umask 077; cat > /tmp/identity; python -m app.file_backup restore --bundle "$1" --identity /tmp/identity' sh "$bundle"
+docker compose run --rm -T --no-deps \
+  -e LIFE_DATABASE_URL=postgresql+psycopg://life:restore@life-deploy-restore:5432/life \
+  backend python - verify < /src/deploy/test/files.py
 [ "$(users_in docker exec life-deploy-restore)" = 1 ] || fail "в восстановленной базе нет пользователя"
 restored_email="$(docker exec life-deploy-restore psql --username life --dbname life --tuples-only --no-align --command 'SELECT email FROM users')"
 [ "$restored_email" = "deploy@example.com" ] || fail "восстановлены не те данные"

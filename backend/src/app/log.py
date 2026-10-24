@@ -30,3 +30,9 @@ def configure_logging(level: str) -> None:
         logger = logging.getLogger(name)
         logger.handlers = []
         logger.propagate = True
+
+    # SDK/parser diagnostics can contain signed URLs, document fields or object keys.
+    for name in ("boto3", "botocore", "s3transfer", "pypdf", "pydicom", "procrastinate"):
+        logger = logging.getLogger(name)
+        logger.handlers = [logging.NullHandler()]
+        logger.propagate = False
