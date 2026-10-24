@@ -2,6 +2,14 @@
 # отвечать за Open Food Facts самим. Используется стендом для e2e (make stand); на сервере
 # этого файла нет.
 services:
+  storage-config:
+    build: ../backend
+  storage-init:
+    build: ../backend
+  file-cleanup:
+    build: ../backend
+  imaging-worker:
+    build: ../backend
   # Подменный Open Food Facts: бэкенд стенда ходит сюда (OFF_URL и OFF_SEARCH_URL в
   # e2e.env), а не наружу.
   off:

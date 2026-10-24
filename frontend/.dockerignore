@@ -4,3 +4,4 @@ coverage
 e2e
 playwright-report
 test-results
+public/pdfjs

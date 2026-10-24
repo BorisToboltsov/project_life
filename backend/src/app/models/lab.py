@@ -4,7 +4,16 @@ from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import CheckConstraint, ForeignKey, Index, Numeric, String, func, text
+from sqlalchemy import (
+    CheckConstraint,
+    ForeignKey,
+    Index,
+    Numeric,
+    String,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
@@ -21,7 +30,10 @@ class LabReport(Base):
     """Бланк анализа: дата забора, лаборатория и заметка. Значения лежат в `lab_values`."""
 
     __tablename__ = "lab_reports"
-    __table_args__ = (Index("ix_lab_reports_user_date", "user_id", "local_date"),)
+    __table_args__ = (
+        Index("ix_lab_reports_user_date", "user_id", "local_date"),
+        UniqueConstraint("id", "user_id"),
+    )
 
     # Ключ приходит от клиента (UUIDv7), поэтому значения по умолчанию нет (ADR 0002).
     id: Mapped[UUID] = mapped_column(primary_key=True)

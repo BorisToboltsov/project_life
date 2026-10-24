@@ -21,6 +21,7 @@ from app.schemas import (
     TokenIn,
     UserOut,
 )
+from app.security import downloads
 from app.security.passwords import hash_password, verify_password
 from app.services import links, login_limit, sessions
 from app.services.sessions import IssuedSession
@@ -38,6 +39,7 @@ RefreshCookie = Annotated[str | None, Cookie(alias=COOKIE_NAME)]
 
 
 def _open_session(response: Response, issued: IssuedSession) -> SessionOut:
+    downloads.clear(response)
     response.set_cookie(
         COOKIE_NAME,
         issued.refresh_token,
@@ -55,6 +57,7 @@ def _open_session(response: Response, issued: IssuedSession) -> SessionOut:
 
 
 def _clear_cookie(response: Response) -> None:
+    downloads.clear(response)
     response.delete_cookie(
         COOKIE_NAME, path=COOKIE_PATH, httponly=True, secure=True, samesite="strict"
     )

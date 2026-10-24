@@ -20,6 +20,9 @@ import { ScreenLoading } from './ScreenLoading'
 // Экраны подгружаются при переходе, а не вместе с рамкой приложения (инвариант I12):
 // статический импорт из `@/pages` вернул бы экран в первую загрузку.
 const screens = {
+  viewer: lazyRouteComponent(() => import('@/pages/studies/ViewerPage'), 'ViewerPage'),
+  studies: lazyRouteComponent(() => import('@/pages/studies/StudiesPage'), 'StudiesPage'),
+  study: lazyRouteComponent(() => import('@/pages/studies/StudiesPage'), 'StudyPage'),
   login: lazyRouteComponent(() => import('@/pages/auth/LoginPage'), 'LoginPage'),
   invite: lazyRouteComponent(() => import('@/pages/auth/InvitePage'), 'InvitePage'),
   reset: lazyRouteComponent(() => import('@/pages/auth/ResetPage'), 'ResetPage'),
@@ -414,6 +417,13 @@ const routeTree = rootRoute.addChildren([
       path: '/labs/$id/values/$valueId',
       component: screens.labValueEdit,
     }),
+    createRoute({
+      getParentRoute: () => appRoute,
+      path: '/studies/$id/viewer',
+      component: screens.viewer,
+    }),
+    createRoute({ getParentRoute: () => appRoute, path: '/studies', component: screens.studies }),
+    createRoute({ getParentRoute: () => appRoute, path: '/studies/$id', component: screens.study }),
     createRoute({ getParentRoute: () => appRoute, path: '/more', component: screens.more }),
     createRoute({ getParentRoute: () => appRoute, path: '/unsent', component: screens.unsent }),
     createRoute({ getParentRoute: () => appRoute, path: '/profile', component: screens.profile }),

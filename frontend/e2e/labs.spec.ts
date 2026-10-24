@@ -13,7 +13,7 @@ test('анализы и давление: ввод без сети, отправ
   )
   const more = page.getByRole('link', { name: 'Ещё' })
   if (await more.isVisible()) await more.click()
-  await page.getByRole('link', { name: 'Анализы', exact: true }).click()
+  await page.getByRole('main').getByRole('link', { name: 'Анализы', exact: true }).click()
   await page.evaluate(() => navigator.serviceWorker.ready)
   await page.reload()
   await page.waitForLoadState('networkidle')

@@ -23,6 +23,13 @@ class Settings(BaseSettings):
     # Адрес приложения для ссылок, которые печатает CLI.
     public_url: str = "http://localhost:5173"
 
+    storage_url: str = "http://localhost:3900"
+    storage_key: str = "GK11111111111111111111111111111111"
+    storage_secret: SecretStr = SecretStr("dev-only-storage-secret")
+    storage_staging_bucket: str = "life-uploads"
+    storage_objects_bucket: str = "life-files"
+    storage_quota_bytes: int = 20 * 1024 * 1024 * 1024
+
     jwt_secret: SecretStr = SecretStr(DEV_JWT_SECRET)
     access_ttl_minutes: int = 15
     refresh_ttl_days: int = 30

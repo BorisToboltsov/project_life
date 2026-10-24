@@ -9,6 +9,14 @@ from pydantic import BaseModel
 class ErrorCode(StrEnum):
     """Коды ошибок API. Текст для пользователя подбирает фронтенд по коду."""
 
+    FILE_UPLOAD_CLOSED = "file_upload_closed"
+    FILE_CHANGED = "file_changed"
+    FILE_QUOTA = "file_quota"
+    FILE_STORAGE_UNAVAILABLE = "file_storage_unavailable"
+    FILE_INCOMPLETE = "file_incomplete"
+    FILE_INVALID = "file_invalid"
+    IMAGING_UNSUPPORTED = "imaging_unsupported"
+    FILE_RANGE = "file_range"
     NOT_AUTHENTICATED = "not_authenticated"
     FORBIDDEN = "forbidden"
     NOT_FOUND = "not_found"

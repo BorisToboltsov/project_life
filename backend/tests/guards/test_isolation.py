@@ -331,7 +331,165 @@ async def _delete_lab_analyte(client: AsyncClient, owner: Account) -> Probe:
     return Probe((await _own_lab_analyte(client, owner)).path)
 
 
+async def _attachment_case(client: AsyncClient, owner: Account) -> Probe:
+    from datetime import timedelta
+
+    from app.db import session_factory
+    from app.models import Attachment
+    from tests.labs import add_report
+
+    report_id = await add_report(client, owner)
+    file_id = uuid.uuid7()
+    async with session_factory() as db:
+        db.add(
+            Attachment(
+                id=file_id,
+                user_id=uuid.UUID(owner.id),
+                report_id=uuid.UUID(report_id),
+                name="file.pdf",
+                size=10,
+                sha256="0" * 64,
+                state="uploading",
+                object_key=str(uuid.uuid7()),
+                upload_id="test-upload",
+                expires_at=datetime.now(UTC) + timedelta(hours=1),
+            )
+        )
+        await db.commit()
+    return Probe(f"/api/files/{file_id}", {"report_id": report_id})
+
+
+async def _attachment_put(client: AsyncClient, owner: Account) -> Probe:
+    item = await _attachment_case(client, owner)
+    assert item.json is not None
+    file_id = item.path.rsplit("/", 1)[1]
+    return Probe(
+        f"/api/lab-reports/{item.json['report_id']}/files/{file_id}",
+        {"name": "file.pdf", "size": 10, "sha256": "0" * 64},
+    )
+
+
+async def _attachment_list(client: AsyncClient, owner: Account) -> Probe:
+    return Probe((await _own_lab_report(client, owner)).path + "/files")
+
+
+async def _attachment_parts(client: AsyncClient, owner: Account) -> Probe:
+    return Probe((await _attachment_case(client, owner)).path + "/parts")
+
+
+async def _attachment_complete(client: AsyncClient, owner: Account) -> Probe:
+    return Probe((await _attachment_case(client, owner)).path + "/complete")
+
+
+async def _attachment_content(client: AsyncClient, owner: Account) -> Probe:
+    return Probe((await _attachment_case(client, owner)).path + "/content")
+
+
+async def _attachment_delete(client: AsyncClient, owner: Account) -> Probe:
+    return Probe((await _attachment_case(client, owner)).path)
+
+
+async def _own_study(client: AsyncClient, owner: Account) -> Probe:
+    body = {"title": "CT", "local_date": "2026-10-20"}
+    path = f"/api/studies/{uuid.uuid7()}"
+    created = await client.put(path, headers=owner.headers, json=body)
+    assert created.status_code == 201
+    return Probe(path, body)
+
+
+async def _study_files(client: AsyncClient, owner: Account) -> Probe:
+    return Probe((await _own_study(client, owner)).path + "/files")
+
+
+async def _study_file_put(client: AsyncClient, owner: Account) -> Probe:
+    return Probe(
+        (await _own_study(client, owner)).path + f"/files/{uuid.uuid7()}",
+        {"name": "conclusion.pdf", "size": 10, "sha256": "0" * 64},
+    )
+
+
+async def _study_imports(client: AsyncClient, owner: Account) -> Probe:
+    return Probe((await _own_study(client, owner)).path + "/imports")
+
+
+async def _study_import_put(client: AsyncClient, owner: Account) -> Probe:
+    return Probe(
+        (await _study_imports(client, owner)).path + f"/{uuid.uuid7()}",
+        {"name": "study.zip", "size": 100, "sha256": "a" * 64},
+    )
+
+
+def _import_route(suffix: str = "") -> OwnershipCase:
+    async def prepare(client: AsyncClient, owner: Account) -> Probe:
+        from app.db import session_factory
+        from app.models import ImagingImport
+
+        study = await _own_study(client, owner)
+        import_id = uuid.uuid7()
+        async with session_factory() as db:
+            db.add(
+                ImagingImport(
+                    id=import_id,
+                    user_id=uuid.UUID(owner.id),
+                    anchor_id=uuid.UUID(study.path.rsplit("/", 1)[1]),
+                    name="study.zip",
+                    size=100,
+                    sha256="a" * 64,
+                    object_key=str(uuid.uuid7()),
+                    state="uploading",
+                    reserved_bytes=100,
+                    expires_at=datetime.now(UTC),
+                )
+            )
+            await db.commit()
+        body = {"studies": {"1.2.3": str(uuid.uuid7())}} if suffix == "/confirm" else None
+        return Probe(f"/api/imaging-imports/{import_id}{suffix}", body)
+
+    return prepare
+
+
+def _viewer_route(suffix: str) -> OwnershipCase:
+    async def prepare(client: AsyncClient, owner: Account) -> Probe:
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+
+        from app.db import session_factory
+        from tests.imaging_viewer import ready
+
+        with TemporaryDirectory() as directory:
+            async with session_factory() as db:
+                row, _ = await ready(db, owner, Path(directory))
+                return Probe(f"/api/studies/{row.anchor_id}{suffix}")
+
+    return prepare
+
+
 OWNERSHIP: dict[Route, OwnershipCase] = {
+    ("GET", "/api/studies/{study_id}/viewer"): _viewer_route("/viewer"),
+    ("GET", "/api/studies/{study_id}/viewer/{series}/{number}"): _viewer_route("/viewer/0/0"),
+    ("GET", "/api/studies/{study_id}/viewer/{series}/{number}/pixels"): _viewer_route(
+        "/viewer/0/0/pixels"
+    ),
+    ("GET", "/api/studies/{study_id}/original"): _viewer_route("/original"),
+    ("POST", "/api/studies/{study_id}/original-download"): _viewer_route("/original-download"),
+    ("GET", "/api/studies/{study_id}/imports"): _study_imports,
+    ("PUT", "/api/studies/{study_id}/imports/{import_id}"): _study_import_put,
+    ("GET", "/api/imaging-imports/{import_id}"): _import_route(),
+    ("DELETE", "/api/imaging-imports/{import_id}"): _import_route(),
+    ("POST", "/api/imaging-imports/{import_id}/parts"): _import_route("/parts"),
+    ("POST", "/api/imaging-imports/{import_id}/complete"): _import_route("/complete"),
+    ("POST", "/api/imaging-imports/{import_id}/confirm"): _import_route("/confirm"),
+    ("GET", "/api/studies/{study_id}"): _own_study,
+    ("PUT", "/api/studies/{study_id}"): _own_study,
+    ("DELETE", "/api/studies/{study_id}"): _own_study,
+    ("GET", "/api/studies/{study_id}/files"): _study_files,
+    ("PUT", "/api/studies/{study_id}/files/{file_id}"): _study_file_put,
+    ("GET", "/api/lab-reports/{report_id}/files"): _attachment_list,
+    ("PUT", "/api/lab-reports/{report_id}/files/{file_id}"): _attachment_put,
+    ("POST", "/api/files/{file_id}/parts"): _attachment_parts,
+    ("POST", "/api/files/{file_id}/complete"): _attachment_complete,
+    ("GET", "/api/files/{file_id}/content"): _attachment_content,
+    ("DELETE", "/api/files/{file_id}"): _attachment_delete,
     ("PUT", "/api/measurements/{measurement_id}"): _own_measurement,
     ("DELETE", "/api/measurements/{measurement_id}"): _delete_measurement,
     ("PUT", "/api/fitness-results/{result_id}"): _own_fitness_result,

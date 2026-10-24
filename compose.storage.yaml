@@ -1,0 +1,38 @@
+# Optional file services for host-based development: make storage.
+# Credentials are development-only; deploy/install.sh generates production keys.
+services:
+  storage-config:
+    build: backend
+    user: "0"
+    environment:
+      LIFE_ENVIRONMENT: dev
+    command: ["python", "-m", "app.storage_setup", "config"]
+    volumes:
+      - storage_config:/config
+  storage:
+    image: dxflrs/garage:v2.4.1
+    command: ["/garage", "server", "--single-node", "--default-bucket"]
+    environment:
+      GARAGE_DEFAULT_ACCESS_KEY: GK11111111111111111111111111111111
+      GARAGE_DEFAULT_SECRET_KEY: dev-only-storage-secret
+      GARAGE_DEFAULT_BUCKET: life-uploads
+    ports:
+      - "127.0.0.1:3900:3900"
+    volumes:
+      - storage_config:/etc:ro
+      - storage_data:/data
+    depends_on:
+      storage-config:
+        condition: service_completed_successfully
+  storage-init:
+    build: backend
+    environment:
+      LIFE_ENVIRONMENT: dev
+      LIFE_STORAGE_URL: http://storage:3900
+    command: ["python", "-m", "app.storage_setup", "buckets"]
+    depends_on:
+      storage:
+        condition: service_started
+volumes:
+  storage_config:
+  storage_data:

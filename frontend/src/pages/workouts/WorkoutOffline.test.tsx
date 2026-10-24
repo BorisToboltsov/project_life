@@ -107,7 +107,7 @@ describe('тренировка без сети', () => {
       await screen.findByText('Добавьте упражнение, чтобы записать первый подход.'),
     ).toBeInTheDocument()
     await userEvent.selectOptions(
-      screen.getByRole('combobox', { name: 'Выберите упражнение' }),
+      await screen.findByRole('combobox', { name: 'Выберите упражнение' }),
       deadlift.id,
     )
     await userEvent.click(screen.getByRole('button', { name: 'Добавить упражнение' }))

@@ -3,17 +3,21 @@ from fastapi import APIRouter, Depends, FastAPI
 from app import __version__
 from app.api import (
     admin,
+    attachments,
     auth,
     diary,
     error_reports,
     exercises,
     fitness,
     health,
+    imaging,
+    imaging_viewer,
     labs,
     me,
     measurements,
     pressure,
     products,
+    studies,
     workout_groups,
     workouts,
 )
@@ -51,6 +55,10 @@ def create_app() -> FastAPI:
     private.include_router(fitness.router)
     private.include_router(pressure.router)
     private.include_router(labs.router)
+    private.include_router(attachments.router)
+    private.include_router(studies.router)
+    private.include_router(imaging.router)
+    private.include_router(imaging_viewer.router)
     private.include_router(products.router)
     private.include_router(diary.router)
     private.include_router(error_reports.router)

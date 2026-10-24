@@ -49,7 +49,7 @@ if [ ! -f "$LIFE_HOME/.env" ]; then
     umask 077
     cat >"$LIFE_HOME/.env" <<ENV
 SITE_ADDRESS=$domain
-PUBLIC_URL=https://$domain
+PUBLIC_URL=${PUBLIC_URL:-https://$domain}
 JWT_SECRET=$(openssl rand -hex 32)
 POSTGRES_PASSWORD=$(openssl rand -hex 24)
 IMAGE_TAG=latest
@@ -62,6 +62,10 @@ ${BACKEND_IMAGE:+BACKEND_IMAGE=$BACKEND_IMAGE}
 ${WEB_IMAGE:+WEB_IMAGE=$WEB_IMAGE}
 ENV
   )
+fi
+# New secrets are added on upgrade without replacing the existing database/auth keys.
+if ! grep -q '^STORAGE_KEY=' "$LIFE_HOME/.env"; then
+  printf '\nSTORAGE_KEY=GK%s\nSTORAGE_SECRET=%s\n' "$(openssl rand -hex 16)" "$(openssl rand -hex 32)" >> "$LIFE_HOME/.env"
 fi
 chmod 600 "$LIFE_HOME/.env"
 

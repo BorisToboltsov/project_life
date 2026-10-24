@@ -1,0 +1,107 @@
+{
+  "repository": "https://github.com/neurolabusc/dcm_qa_enh",
+  "revision": "e007caf8c7f49438eb52ccbf1b98db1441209cec",
+  "samples": [
+    {
+      "path": "In/Canon/DTI_PA.dcm",
+      "sha256": "ebfad113841ab111ffdbb0b3f45ac6b224aac0b2b677ebae44a1cd4eac9c0a88",
+      "frames": 520,
+      "stacks": [
+        40,
+        40,
+        40,
+        40,
+        40,
+        40,
+        40,
+        40,
+        40,
+        40,
+        40,
+        40,
+        40
+      ],
+      "warnings": [],
+      "issues": 0
+    },
+    {
+      "path": "In/Philips/IM_0006_T1.dcm",
+      "sha256": "9ddc3677819a65d408681c4d1738981dc4bbcecd380bd24bb5b5fef8a8276ba7",
+      "frames": 64,
+      "stacks": [
+        32,
+        32
+      ],
+      "warnings": [],
+      "issues": 0
+    },
+    {
+      "path": "In/Philips/IM_0027_fMAP.dcm",
+      "sha256": "5ff1b65a0ddcf686d7ad32410b150bf6d6c5a2ba73f24994149e2f0b342c8c15",
+      "frames": 64,
+      "stacks": [
+        32,
+        32
+      ],
+      "warnings": [],
+      "issues": 0
+    },
+    {
+      "path": "In/Philips/IM_0035_fMRI.dcm",
+      "sha256": "d74336daea5e8bff81e1936c68a89fbcd1e9cf08b541e42325605ccfad3ed72e",
+      "frames": 256,
+      "stacks": [
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32,
+        32
+      ],
+      "warnings": [],
+      "issues": 0
+    },
+    {
+      "path": "In/Siemens/XA10/6_1.dcm",
+      "sha256": "7c4bd9fc823338d4e1ce1b7719f870872a13c050842c5d5d088fc362cf6661b2",
+      "frames": 6,
+      "stacks": [
+        6
+      ],
+      "warnings": [],
+      "issues": 0
+    },
+    {
+      "path": "In/Siemens/XA10/6_2.dcm",
+      "sha256": "88856188b5df102aee16af36e5b1278fccb4a191f2d7a8df553ebb0c3a2b2bdf",
+      "frames": 6,
+      "stacks": [
+        6
+      ],
+      "warnings": [],
+      "issues": 0
+    },
+    {
+      "path": "In/Siemens/XA10/6_3.dcm",
+      "sha256": "f36302a377bbb5e6fa0b97774c92505b2af19ee610981f51bd212ee5c30188a9",
+      "frames": 6,
+      "stacks": [
+        6
+      ],
+      "warnings": [],
+      "issues": 0
+    },
+    {
+      "path": "In/Siemens/XA10/6_4.dcm",
+      "sha256": "c5571ae47452211361da3381d96768c9644f2e7f3fad6a0e88b081e2a750287b",
+      "frames": 6,
+      "stacks": [
+        6
+      ],
+      "warnings": [],
+      "issues": 0
+    }
+  ]
+}

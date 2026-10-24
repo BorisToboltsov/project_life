@@ -1,0 +1,30 @@
+[
+  {
+    "name": "dcm_qa_ct",
+    "revision": "642cc07925fc2b3a6925f8c0aa79856ca50770fa",
+    "sha256": "4869d3d483801a4a3a942566972410cb792cf994e87aee2024666637b496dcdd",
+    "instances": 450,
+    "studies": 3,
+    "frames": 450,
+    "stacks": 8,
+    "issues": 43,
+    "issue_codes": {
+      "not_dicom": 19,
+      "invalid_dicom": 13,
+      "unsupported_sop": 11
+    }
+  },
+  {
+    "name": "dcm_qa_enh",
+    "revision": "e007caf8c7f49438eb52ccbf1b98db1441209cec",
+    "sha256": "24cce9de09e2cb0559d1d1ab2dc2293834b277c8694daaaeba20975dc4e703aa",
+    "instances": 8,
+    "studies": 3,
+    "frames": 928,
+    "stacks": 29,
+    "issues": 22,
+    "issue_codes": {
+      "not_dicom": 22
+    }
+  }
+]

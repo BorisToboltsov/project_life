@@ -6,6 +6,7 @@ import { today } from '@/lib/dates'
 
 import { DiaryCard } from './diary/DiaryCard'
 import { WaterCard } from './diary/WaterCard'
+import { HealthCard } from './labs/HealthCard'
 import { SummaryCard } from './measurements/SummaryCard'
 import { WorkoutHomeCard } from './workouts/WorkoutHomeCard'
 
@@ -23,6 +24,7 @@ export function HomePage() {
       <WorkoutHomeCard />
       <WaterCard date={date} day={day.data} title={t('water.todayTitle')} goalLink />
       <SummaryCard />
+      <HealthCard />
     </div>
   )
 }

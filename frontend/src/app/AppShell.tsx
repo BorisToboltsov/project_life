@@ -54,6 +54,16 @@ function AuthenticatedShell() {
   const path = useRouterState({ select: (state) => state.location.pathname })
   useOfflineSync(user)
 
+  if (/^\/studies\/[^/]+\/viewer$/.test(path))
+    return (
+      <div className="min-h-svh">
+        <OfflineBar />
+        <main>
+          <Outlet />
+        </main>
+      </div>
+    )
+
   const items: NavItem[] = [
     { to: '/', icon: House, label: 'nav.home' },
     { to: '/diary', icon: Utensils, label: 'nav.diary' },

@@ -1,9 +1,11 @@
 """Все модели импортируются здесь, чтобы Alembic видел их в метаданных."""
 
+from app.models.attachment import Attachment
 from app.models.auth import Invite, LoginFailure, PasswordReset, RefreshToken
 from app.models.error_report import ErrorReport, ErrorSource
 from app.models.exercise import Exercise
 from app.models.fitness import FitnessResult
+from app.models.imaging import ImagingImport, ImagingObject, StudyImaging
 from app.models.lab import LabAnalyte, LabReport, LabValue
 from app.models.measurement import Measurement, Metric, preset_metrics
 from app.models.nutrition import (
@@ -16,11 +18,13 @@ from app.models.nutrition import (
     preset_meals,
 )
 from app.models.pressure import BloodPressureReading
+from app.models.study import HealthStudy
 from app.models.user import Language, Role, Sex, UnitSystem, User
 from app.models.workout import Workout, WorkoutExercise, WorkoutSet
 from app.models.workout_group import WorkoutGroup, WorkoutGroupExercise
 
 __all__ = [
+    "Attachment",
     "BarcodeMiss",
     "BloodPressureReading",
     "ErrorReport",
@@ -28,6 +32,9 @@ __all__ = [
     "Exercise",
     "FitnessResult",
     "FoodEntry",
+    "HealthStudy",
+    "ImagingImport",
+    "ImagingObject",
     "Invite",
     "LabAnalyte",
     "LabReport",
@@ -43,6 +50,7 @@ __all__ = [
     "RefreshToken",
     "Role",
     "Sex",
+    "StudyImaging",
     "UnitSystem",
     "User",
     "WaterIntake",
